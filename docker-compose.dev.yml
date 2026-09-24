@@ -1,0 +1,40 @@
+name: esma-upload-service-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: gus-postgres-dev
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gus}
+      POSTGRES_DB: ${POSTGRES_DB:-gus}
+    ports:
+      - "5432:5432"
+    volumes:
+      - gus_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-gus} -d $${POSTGRES_DB:-gus}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: gus-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - gus_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  gus_postgres_data:
+    name: gus_postgres_data
+  gus_redis_data:
+    name: gus_redis_data

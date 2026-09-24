@@ -74,6 +74,7 @@ export const rawConfigSchema = z.object({
     .default('http://esma-identity-service:7071/identity'),
 
   // --- Database and cache ---
+  DB_ENABLED: booleanCoerce.default(false),
   DATABASE_URL: z.string().default('postgres://gus:gus@localhost:5432/gus'),
   DATABASE_POOL_MAX: intCoerce(10).default(10),
   REDIS_URL: z.string().default('redis://localhost:6379'),
