@@ -29,7 +29,7 @@ export class AppConfigService {
       }
     } catch (err) {
       if (err instanceof ConfigValidationError) {
-        console.error(err.message);
+        process.stderr.write(`${err.message}\n`);
         if (env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'test') {
           process.exit(1);
         }

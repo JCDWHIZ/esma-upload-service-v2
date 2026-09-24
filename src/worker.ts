@@ -27,6 +27,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err: unknown) => {
-  console.error('Fatal error during worker bootstrap', err);
+  process.stderr.write(`Fatal error during worker bootstrap: ${String(err)}\n`);
   process.exit(1);
 });

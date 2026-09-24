@@ -96,6 +96,36 @@ describe('App & Endpoints (e2e)', () => {
           expect(body.error).toBe('NOT_IMPLEMENTED');
           expect(body.statusCode).toBe(501);
           expect(body.correlationId).toBeDefined();
+          expect(res.headers['x-correlation-id']).toBe(body.correlationId);
+        });
+    });
+
+    it('should echo custom x-correlation-id header when valid', () => {
+      const server = app.getHttpServer() as unknown as Parameters<
+        typeof request
+      >[0];
+      const customId = 'custom-correlation-123456';
+      return request(server)
+        .get('/health/live')
+        .set('x-correlation-id', customId)
+        .expect(200)
+        .expect((res) => {
+          expect(res.headers['x-correlation-id']).toBe(customId);
+        });
+    });
+
+    it('should generate UUIDv7 correlation ID when missing', () => {
+      const server = app.getHttpServer() as unknown as Parameters<
+        typeof request
+      >[0];
+      return request(server)
+        .get('/health/live')
+        .expect(200)
+        .expect((res) => {
+          expect(res.headers['x-correlation-id']).toBeDefined();
+          expect(res.headers['x-correlation-id']).toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+          );
         });
     });
   });
