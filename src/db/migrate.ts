@@ -17,6 +17,7 @@ export const MIGRATION_LOCK_ID = '5138122394595213138';
 export interface MigrationOptions {
   migrationFolder?: string;
   allowLockWait?: boolean;
+  migrationTableSchema?: string;
 }
 
 function getMigrationFolder(): string {
@@ -37,6 +38,8 @@ function getMigrationFolder(): string {
   return srcMigrations;
 }
 
+import { pathToFileURL } from 'url';
+
 export function createMigrator(
   db: Kysely<Database>,
   options?: MigrationOptions,
@@ -45,10 +48,24 @@ export function createMigrator(
 
   return new Migrator({
     db,
+    migrationTableSchema: options?.migrationTableSchema,
     provider: new FileMigrationProvider({
       fs,
       path,
       migrationFolder,
+      import: async (
+        migrationPath: string,
+      ): Promise<Record<string, unknown>> => {
+        try {
+          return (await import(pathToFileURL(migrationPath).href)) as Record<
+            string,
+            unknown
+          >;
+        } catch {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          return require(migrationPath) as Record<string, unknown>;
+        }
+      },
     }),
   });
 }

@@ -8,6 +8,7 @@ export interface TestDatabaseContext {
   pool: Pool;
   db: Kysely<Database>;
   connectionString: string;
+  schemaName?: string;
   cleanup: () => Promise<void>;
 }
 
@@ -107,6 +108,7 @@ export async function createTestDatabase(): Promise<TestDatabaseContext> {
     pool,
     db,
     connectionString,
+    schemaName: schemaName ?? undefined,
     cleanup,
   };
 }
