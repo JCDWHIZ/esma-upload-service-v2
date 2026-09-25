@@ -1,6 +1,16 @@
 import type { ColumnType, Generated } from 'kysely';
 
-export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+export type Timestamp = ColumnType<
+  Date,
+  Date | string | undefined,
+  Date | string
+>;
+
+export type NullableTimestamp = ColumnType<
+  Date | null,
+  Date | string | null | undefined,
+  Date | string | null
+>;
 
 export interface FilesTable {
   id: string; // uuid
@@ -30,9 +40,9 @@ export interface FilesTable {
   idempotency_key: string | null;
   correlation_id: string;
   version: Generated<number>;
-  created_at: Generated<Timestamp>;
-  updated_at: Generated<Timestamp>;
-  deleted_at: Timestamp | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+  deleted_at: NullableTimestamp;
 }
 
 export interface FileReplicasTable {
@@ -47,9 +57,9 @@ export interface FileReplicasTable {
   etag: string | null;
   attempts: Generated<number>;
   last_error: string | null;
-  synced_at: Timestamp | null;
-  created_at: Generated<Timestamp>;
-  updated_at: Generated<Timestamp>;
+  synced_at: NullableTimestamp;
+  created_at: Timestamp;
+  updated_at: Timestamp;
 }
 
 export interface OutboxEventsTable {
@@ -58,9 +68,9 @@ export interface OutboxEventsTable {
   partition_key: string;
   event_type: string;
   envelope: Record<string, unknown>;
-  created_at: Generated<Timestamp>;
-  available_at: Generated<Timestamp>;
-  published_at: Timestamp | null;
+  created_at: Timestamp;
+  available_at: Timestamp;
+  published_at: NullableTimestamp;
   attempts: Generated<number>;
   last_error: string | null;
 }
@@ -68,12 +78,12 @@ export interface OutboxEventsTable {
 export interface ProcessedEventsTable {
   consumer: string;
   event_id: string;
-  processed_at: Generated<Timestamp>;
+  processed_at: Timestamp;
 }
 
 export interface AuditLogTable {
   id: string;
-  occurred_at: Generated<Timestamp>;
+  occurred_at: Timestamp;
   action: string;
   outcome: 'SUCCESS' | 'DENIED' | 'FAILURE';
   actor_id: string;
@@ -98,10 +108,10 @@ export interface ApiClientsTable {
   allow_any_tenant: Generated<boolean>;
   scopes: string[];
   status: Generated<'ACTIVE' | 'REVOKED'>;
-  expires_at: Timestamp | null;
-  last_used_at: Timestamp | null;
-  created_at: Generated<Timestamp>;
-  revoked_at: Timestamp | null;
+  expires_at: NullableTimestamp;
+  last_used_at: NullableTimestamp;
+  created_at: Timestamp;
+  revoked_at: NullableTimestamp;
 }
 
 export interface TenantUsageTable {
@@ -111,7 +121,7 @@ export interface TenantUsageTable {
   file_count: Generated<number | string>;
   max_bytes: number | string | null;
   max_files: number | string | null;
-  updated_at: Generated<Timestamp>;
+  updated_at: Timestamp;
 }
 
 export interface Database {
