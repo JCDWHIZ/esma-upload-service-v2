@@ -277,3 +277,15 @@ export class PermanentError extends AppError {
     });
   }
 }
+
+export class OptimisticLockError extends ConflictError {
+  constructor(
+    message = 'The resource has been modified concurrently',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'OPTIMISTIC_LOCK_CONFLICT',
+      ...options,
+    });
+  }
+}

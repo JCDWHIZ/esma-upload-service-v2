@@ -10,7 +10,7 @@ describe('P1-05 Schema Migrations & Constraints', () => {
 
   beforeAll(async () => {
     ctx = await createTestDatabase();
-  });
+  }, 30000);
 
   afterAll(async () => {
     if (ctx) {
