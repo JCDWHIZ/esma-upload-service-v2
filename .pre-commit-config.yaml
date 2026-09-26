@@ -1,0 +1,13 @@
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.2
+    hooks:
+      - id: gitleaks
+  - repo: local
+    hooks:
+      - id: check-env-example
+        name: Check .env.example matches config schema
+        entry: npm run env:check
+        language: system
+        files: ^(src/config/.*|\.env\.example)$
+        pass_filenames: false

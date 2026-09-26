@@ -1,0 +1,17 @@
+title = "ESMA Upload Service v2 Gitleaks Configuration"
+
+[extend]
+# Extends default gitleaks rules when run with gitleaks CLI
+
+[allowlist]
+description = "Allowlist for templates, test fixtures and placeholder tokens"
+paths = [
+  '''^\.env\.example$''',
+  '''^test/.*''',
+  '''^scripts/generate-env-example\.ts$''',
+]
+regexes = [
+  '''dev-insecure-.*''',
+  '''example-.*''',
+  '''postgres://gus:gus@localhost:5432/gus''',
+]
