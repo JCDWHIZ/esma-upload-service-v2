@@ -10,6 +10,7 @@ import {
 import { UnauthenticatedError } from '../../core/errors/app-error.js';
 import { getCorrelationId } from '../../observability/correlation-context.js';
 import { resolveOrGenerateCorrelationId } from '../../observability/correlation-id.interceptor.js';
+import { normalizePermissions } from '../../authz/permissions.js';
 
 @Injectable()
 export class EsmaAdminContextResolver implements ContextResolver {
@@ -51,9 +52,11 @@ export class EsmaAdminContextResolver implements ContextResolver {
       const directPerms = Array.isArray(token.permissions)
         ? token.permissions
         : [];
-      const permissions = Array.from(
-        new Set([...orgPerms, ...globalPerms, ...directPerms]),
-      );
+      const permissions = normalizePermissions([
+        ...orgPerms,
+        ...globalPerms,
+        ...directPerms,
+      ]);
 
       // Actor ID: deterministic fallback
       const actorId =

@@ -48,6 +48,8 @@ export interface RequestContextActor {
   readonly permissions?: readonly string[];
   readonly scopes: readonly string[];
   readonly isPlatformAdmin?: boolean;
+  readonly branchGrants?: readonly string[];
+  readonly isSchoolAdmin?: boolean;
 }
 
 export interface RequestContext {
@@ -163,6 +165,9 @@ export function freezeContext(ctx: RequestContext): RequestContext {
     }
     if (Array.isArray(ctx.actor.scopes)) {
       Object.freeze(ctx.actor.scopes);
+    }
+    if (Array.isArray(ctx.actor.branchGrants)) {
+      Object.freeze(ctx.actor.branchGrants);
     }
     Object.freeze(ctx.actor);
   }

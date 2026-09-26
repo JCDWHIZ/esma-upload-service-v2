@@ -14,6 +14,10 @@ import {
 import { assertSafeSegment } from '../../core/storage-key.service.js';
 import { getCorrelationId } from '../../observability/correlation-context.js';
 import { resolveOrGenerateCorrelationId } from '../../observability/correlation-id.interceptor.js';
+import {
+  UploadPermissions,
+  normalizePermissions,
+} from '../../authz/permissions.js';
 
 @Injectable()
 export class EsmaTenantContextResolver implements ContextResolver {
@@ -53,10 +57,7 @@ export class EsmaTenantContextResolver implements ContextResolver {
 
       assertSafeSegment(tokenTenantId, 'tenantId');
 
-      // Sub-tenant / Branch mapping
-      const rawHeaderBranch = req.headers?.['x-branch-id'];
-      const headerBranchId =
-        typeof rawHeaderBranch === 'string' ? rawHeaderBranch : undefined;
+      // Branch mapping from token claims
       const tokenBranchId = token.branchId;
       const tokenBranches = Array.isArray(token.branches) ? token.branches : [];
 
@@ -80,33 +81,12 @@ export class EsmaTenantContextResolver implements ContextResolver {
           tokenBranchIds.push(b.id.trim());
         }
       }
-
-      let subTenantId: string | undefined;
-
-      if (headerBranchId && headerBranchId.trim().length > 0) {
-        const trimmedBranch = headerBranchId.trim();
-        assertSafeSegment(trimmedBranch, 'x-branch-id');
-        if (
-          tokenBranchIds.length > 0 &&
-          !tokenBranchIds.includes(trimmedBranch)
-        ) {
-          throw new TenantMismatchError(
-            `Header x-branch-id (${trimmedBranch}) is not among user's allowed branch grants`,
-          );
-        }
-        subTenantId = trimmedBranch;
-      } else if (tokenBranchIds.length > 0) {
-        subTenantId = tokenBranchIds[0];
-      }
-
-      if (subTenantId) {
-        assertSafeSegment(subTenantId, 'subTenantId');
-      }
+      const uniqueBranchGrants = Array.from(new Set(tokenBranchIds));
 
       // Actor ID: deterministic fallback
       const actorId = token.userId ?? token.sub ?? `token:${tokenTenantId}`;
 
-      // Roles and Permissions normalization
+      // Roles normalization
       const orgRoles = Array.isArray(token.access?.organization?.roles)
         ? token.access.organization.roles
         : [];
@@ -119,9 +99,16 @@ export class EsmaTenantContextResolver implements ContextResolver {
           ? [token.role.trim()]
           : [];
       const roles = Array.from(
-        new Set([...orgRoles, ...globalRoles, ...directRoles]),
+        new Set(
+          [...orgRoles, ...globalRoles, ...directRoles]
+            .filter(
+              (r): r is string => typeof r === 'string' && r.trim().length > 0,
+            )
+            .map((r) => r.trim()),
+        ),
       );
 
+      // Permissions normalization (canonical lowercase snake_case)
       const orgPerms = Array.isArray(token.access?.organization?.permissions)
         ? token.access.organization.permissions
         : [];
@@ -131,9 +118,15 @@ export class EsmaTenantContextResolver implements ContextResolver {
       const directPerms = Array.isArray(token.permissions)
         ? token.permissions
         : [];
-      const permissions = Array.from(
-        new Set([...orgPerms, ...globalPerms, ...directPerms]),
-      );
+      const permissions = normalizePermissions([
+        ...orgPerms,
+        ...globalPerms,
+        ...directPerms,
+      ]);
+
+      const isSchoolAdmin =
+        permissions.includes(UploadPermissions.BRANCHES_MANAGE) ||
+        permissions.includes(UploadPermissions.QUOTAS_VIEW);
 
       // Attributes parsing
       const rawAttributes =
@@ -154,7 +147,7 @@ export class EsmaTenantContextResolver implements ContextResolver {
       const context: RequestContext = {
         namespace: 'esma-tenant',
         tenantId: tokenTenantId,
-        subTenantId,
+        subTenantId: undefined,
         actor: {
           id: String(actorId),
           type: 'user',
@@ -162,6 +155,8 @@ export class EsmaTenantContextResolver implements ContextResolver {
           permissions,
           scopes: [],
           isPlatformAdmin: Boolean(token.platformAdmin),
+          branchGrants: uniqueBranchGrants,
+          isSchoolAdmin,
         },
         correlationId,
         ipAddress,

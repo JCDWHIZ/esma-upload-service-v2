@@ -148,12 +148,14 @@ describe('RequestContext & Resolvers (P1-08)', () => {
       const ctx = await resolver.resolve(req);
       expect(ctx.namespace).toBe('esma-tenant');
       expect(ctx.tenantId).toBe('d4530b09-703e-4759-bac9-f2aa192f1beb');
-      expect(ctx.subTenantId).toBe('branch-north');
+      expect(ctx.subTenantId).toBeUndefined();
       expect(ctx.actor.id).toBe('df6bc72b-da11-4811-b3fb-d64dc47b497c');
       expect(ctx.actor.type).toBe('user');
       expect(ctx.actor.roles).toEqual(['TEACHER', 'MEMBER']);
-      expect(ctx.actor.permissions).toEqual(['UPLOAD_FILES', 'VIEW_FILES']);
+      expect(ctx.actor.permissions).toEqual(['upload_files', 'view_files']);
       expect(ctx.actor.isPlatformAdmin).toBe(false);
+      expect(ctx.actor.branchGrants).toEqual(['branch-north', 'branch-south']);
+      expect(ctx.actor.isSchoolAdmin).toBe(false);
       expect(ctx.correlationId).toBe('018f1a2b-3c4d-7e8f-9a0b-1c2d3e4f5a6b');
       expect(ctx.ipAddress).toBe('192.168.1.10');
       expect(ctx.userAgent).toBe('JestTestRunner/1.0');
@@ -174,9 +176,10 @@ describe('RequestContext & Resolvers (P1-08)', () => {
 
       const ctx = await resolver.resolve(req);
       expect(ctx.tenantId).toBe('sch_999');
-      expect(ctx.subTenantId).toBe('br_west');
+      expect(ctx.subTenantId).toBeUndefined();
       expect(ctx.actor.id).toBe('user_456');
       expect(ctx.actor.roles).toEqual(['ADMIN']);
+      expect(ctx.actor.branchGrants).toEqual(['br_west']);
     });
 
     it('provides deterministic actor.id when userId / sub are missing', async () => {
@@ -191,10 +194,10 @@ describe('RequestContext & Resolvers (P1-08)', () => {
       expect(ctx.actor.id).toBe('token:sch_abc');
     });
 
-    it('enforces matching x-branch-id header with token branches', async () => {
+    it('completely ignores x-branch-id header and populates branchGrants from token', async () => {
       const req = {
         headers: {
-          'x-branch-id': 'branch-south',
+          'x-branch-id': 'branch-arbitrary',
         },
         user: {
           schoolId: 'sch_1',
@@ -203,21 +206,26 @@ describe('RequestContext & Resolvers (P1-08)', () => {
       } as unknown as AuthenticatedHttpRequest;
 
       const ctx = await resolver.resolve(req);
-      expect(ctx.subTenantId).toBe('branch-south');
+      expect(ctx.subTenantId).toBeUndefined();
+      expect(ctx.actor.branchGrants).toEqual(['branch-north', 'branch-south']);
     });
 
-    it('rejects x-branch-id header that does not match token branch grants', async () => {
+    it('identifies school admin when token has quotas_view or branches_manage permission', async () => {
       const req = {
-        headers: {
-          'x-branch-id': 'branch-unauthorized',
-        },
+        headers: {},
         user: {
           schoolId: 'sch_1',
-          branches: ['branch-north', 'branch-south'],
+          access: {
+            organization: {
+              permissions: ['QUOTAS_VIEW'],
+            },
+          },
         },
       } as unknown as AuthenticatedHttpRequest;
 
-      await expect(resolver.resolve(req)).rejects.toThrow(TenantMismatchError);
+      const ctx = await resolver.resolve(req);
+      expect(ctx.actor.isSchoolAdmin).toBe(true);
+      expect(ctx.actor.permissions).toEqual(['quotas_view']);
     });
 
     it('rejects mismatch between x-school-id header and token organizationId', async () => {
@@ -246,10 +254,10 @@ describe('RequestContext & Resolvers (P1-08)', () => {
 
       const reqNullByte = {
         headers: {
-          'x-branch-id': 'branch\0null',
+          'x-school-id': 'sch\0null',
         },
         user: {
-          schoolId: 'sch_valid',
+          schoolId: 'sch\0null',
         },
       } as unknown as AuthenticatedHttpRequest;
       await expect(resolver.resolve(reqNullByte)).rejects.toThrow(
@@ -300,8 +308,8 @@ describe('RequestContext & Resolvers (P1-08)', () => {
       expect(ctx.actor.id).toBe('admin_guid_1');
       expect(ctx.actor.roles).toEqual(['SUPER ADMIN']);
       expect(ctx.actor.permissions).toEqual([
-        'STORAGE_QUOTA_EDIT',
-        'STORAGE_FILES_MANAGE',
+        'storage_quota_edit',
+        'storage_files_manage',
       ]);
       expect(ctx.actor.isPlatformAdmin).toBe(true);
       expect(ctx.attributes).toEqual({ audit_reason: 'support_inspection' });
