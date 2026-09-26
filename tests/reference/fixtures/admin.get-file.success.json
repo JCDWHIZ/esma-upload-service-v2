@@ -1,0 +1,24 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "file": {
+      "bytes": 67,
+      "created_at": "<TS>",
+      "format": "png",
+      "public_id": "admin/banners/sample.png",
+      "secure_url": "<URL>"
+    },
+    "message": "File retrieved successfully"
+  },
+  "bodyShape": {
+    "file": {
+      "bytes": "number",
+      "created_at": "string",
+      "format": "string",
+      "public_id": "string",
+      "secure_url": "string"
+    },
+    "message": "string"
+  }
+}

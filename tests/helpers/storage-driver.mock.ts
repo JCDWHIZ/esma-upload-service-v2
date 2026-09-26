@@ -161,6 +161,10 @@ export class FakeStorageDriver {
     this.calls.length = 0;
     this.nextError = undefined;
   }
+
+  reset(): void {
+    this.clear();
+  }
 }
 
 /**

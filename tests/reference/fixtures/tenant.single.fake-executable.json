@@ -1,0 +1,28 @@
+{
+  "status": 400,
+  "contentType": "application/problem+json",
+  "body": {
+    "code": "BAD_REQUEST",
+    "correlationId": "unknown",
+    "detail": "Disallowed file content: executable files are rejected",
+    "error": "BAD_REQUEST",
+    "errors": [],
+    "message": "Disallowed file content: executable files are rejected",
+    "status": 400,
+    "statusCode": 400,
+    "title": "Bad request",
+    "type": "<URL>"
+  },
+  "bodyShape": {
+    "code": "string",
+    "correlationId": "string",
+    "detail": "string",
+    "error": "string",
+    "errors": "array<unknown>",
+    "message": "string",
+    "status": "number",
+    "statusCode": "number",
+    "title": "string",
+    "type": "string"
+  }
+}

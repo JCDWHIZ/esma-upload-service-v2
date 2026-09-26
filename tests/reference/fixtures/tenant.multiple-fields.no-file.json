@@ -1,0 +1,28 @@
+{
+  "status": 500,
+  "contentType": "application/problem+json",
+  "body": {
+    "code": "INTERNAL",
+    "correlationId": "unknown",
+    "detail": "An unexpected internal error occurred",
+    "error": "INTERNAL",
+    "errors": [],
+    "message": "An unexpected internal error occurred",
+    "status": 500,
+    "statusCode": 500,
+    "title": "Internal server error",
+    "type": "<URL>"
+  },
+  "bodyShape": {
+    "code": "string",
+    "correlationId": "string",
+    "detail": "string",
+    "error": "string",
+    "errors": "array<unknown>",
+    "message": "string",
+    "status": "number",
+    "statusCode": "number",
+    "title": "string",
+    "type": "string"
+  }
+}

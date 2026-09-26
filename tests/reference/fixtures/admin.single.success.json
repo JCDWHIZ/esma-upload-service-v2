@@ -1,0 +1,20 @@
+{
+  "status": 201,
+  "contentType": "application/json",
+  "body": {
+    "data": {
+      "public_id": "admin/banners/01a0df82-sample.png",
+      "secure_url": "<URL>"
+    },
+    "folder": "admin/banners",
+    "message": "File uploaded successfully"
+  },
+  "bodyShape": {
+    "data": {
+      "public_id": "string",
+      "secure_url": "string"
+    },
+    "folder": "string",
+    "message": "string"
+  }
+}

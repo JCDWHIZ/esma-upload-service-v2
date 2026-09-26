@@ -1,0 +1,28 @@
+{
+  "status": 403,
+  "contentType": "application/problem+json",
+  "body": {
+    "code": "FORBIDDEN",
+    "correlationId": "unknown",
+    "detail": "Forbidden: tenant mismatch",
+    "error": "FORBIDDEN",
+    "errors": [],
+    "message": "Forbidden: tenant mismatch",
+    "status": 403,
+    "statusCode": 403,
+    "title": "Forbidden",
+    "type": "<URL>"
+  },
+  "bodyShape": {
+    "code": "string",
+    "correlationId": "string",
+    "detail": "string",
+    "error": "string",
+    "errors": "array<unknown>",
+    "message": "string",
+    "status": "number",
+    "statusCode": "number",
+    "title": "string",
+    "type": "string"
+  }
+}

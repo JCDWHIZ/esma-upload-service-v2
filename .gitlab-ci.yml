@@ -37,6 +37,7 @@ unit:
   script:
     - pnpm run test
     - pnpm run test:integration
+    - pnpm run test:reference
 
 audit:
   <<: *verify_template

@@ -1,0 +1,30 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "files": [
+      {
+        "created_at": "<TS>",
+        "public_id": "uploads/schools/sch-01/branches/br-01/01a0df82-sample.png",
+        "secure_url": "<URL>"
+      }
+    ],
+    "message": "Files retrieved successfully",
+    "tenant": {
+      "branchId": "br-01",
+      "schoolId": "sch-01",
+      "schoolName": "Test School"
+    },
+    "total": 1
+  },
+  "bodyShape": {
+    "files": "array<[object Object]>",
+    "message": "string",
+    "tenant": {
+      "branchId": "string",
+      "schoolId": "string",
+      "schoolName": "string"
+    },
+    "total": "number"
+  }
+}

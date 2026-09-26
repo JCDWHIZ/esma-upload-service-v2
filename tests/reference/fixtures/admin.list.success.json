@@ -1,0 +1,25 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "files": [
+      {
+        "created_at": "<TS>",
+        "format": "png",
+        "public_id": "admin/banners/01a0df82-sample.png",
+        "secure_url": "<URL>"
+      }
+    ],
+    "message": "Files retrieved successfully",
+    "next_cursor": null,
+    "rate_limit_allowed": 500,
+    "total": 1
+  },
+  "bodyShape": {
+    "files": "array<[object Object]>",
+    "message": "string",
+    "next_cursor": "null",
+    "rate_limit_allowed": "number",
+    "total": "number"
+  }
+}
