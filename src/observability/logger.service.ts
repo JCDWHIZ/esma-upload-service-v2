@@ -1,48 +1,56 @@
 import { Injectable, LoggerService } from '@nestjs/common';
+import { Logger } from 'nestjs-pino';
+import { getCorrelationContext } from './correlation-context.js';
 
 @Injectable()
 export class StructuredLogger implements LoggerService {
-  log(message: unknown, ...optionalParams: unknown[]) {
-    console.log(
-      JSON.stringify({
-        level: 'info',
-        message: typeof message === 'string' ? message : String(message),
-        timestamp: new Date().toISOString(),
-        extra: optionalParams,
-      }),
-    );
+  constructor(private readonly pinoLogger: Logger) {}
+
+  log(message: unknown, ...optionalParams: unknown[]): void {
+    const ctx = getCorrelationContext();
+    this.pinoLogger.log({
+      message: typeof message === 'string' ? message : String(message),
+      correlationId: ctx?.correlationId,
+      namespace: ctx?.namespace,
+      tenantId: ctx?.tenantId,
+      fileId: ctx?.fileId,
+      extra: optionalParams.length > 0 ? optionalParams : undefined,
+    });
   }
 
-  error(message: unknown, ...optionalParams: unknown[]) {
-    console.error(
-      JSON.stringify({
-        level: 'error',
-        message: typeof message === 'string' ? message : String(message),
-        timestamp: new Date().toISOString(),
-        extra: optionalParams,
-      }),
-    );
+  error(message: unknown, ...optionalParams: unknown[]): void {
+    const ctx = getCorrelationContext();
+    this.pinoLogger.error({
+      message: typeof message === 'string' ? message : String(message),
+      correlationId: ctx?.correlationId,
+      namespace: ctx?.namespace,
+      tenantId: ctx?.tenantId,
+      fileId: ctx?.fileId,
+      extra: optionalParams.length > 0 ? optionalParams : undefined,
+    });
   }
 
-  warn(message: unknown, ...optionalParams: unknown[]) {
-    console.warn(
-      JSON.stringify({
-        level: 'warn',
-        message: typeof message === 'string' ? message : String(message),
-        timestamp: new Date().toISOString(),
-        extra: optionalParams,
-      }),
-    );
+  warn(message: unknown, ...optionalParams: unknown[]): void {
+    const ctx = getCorrelationContext();
+    this.pinoLogger.warn({
+      message: typeof message === 'string' ? message : String(message),
+      correlationId: ctx?.correlationId,
+      namespace: ctx?.namespace,
+      tenantId: ctx?.tenantId,
+      fileId: ctx?.fileId,
+      extra: optionalParams.length > 0 ? optionalParams : undefined,
+    });
   }
 
-  debug?(message: unknown, ...optionalParams: unknown[]) {
-    console.debug(
-      JSON.stringify({
-        level: 'debug',
-        message: typeof message === 'string' ? message : String(message),
-        timestamp: new Date().toISOString(),
-        extra: optionalParams,
-      }),
-    );
+  debug?(message: unknown, ...optionalParams: unknown[]): void {
+    const ctx = getCorrelationContext();
+    this.pinoLogger.debug({
+      message: typeof message === 'string' ? message : String(message),
+      correlationId: ctx?.correlationId,
+      namespace: ctx?.namespace,
+      tenantId: ctx?.tenantId,
+      fileId: ctx?.fileId,
+      extra: optionalParams.length > 0 ? optionalParams : undefined,
+    });
   }
 }

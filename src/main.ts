@@ -40,7 +40,7 @@ async function bootstrap() {
   logger.log(`ESMA Upload Service API listening on port ${config.port}`);
 }
 
-bootstrap().catch((err) => {
-  console.error('Fatal error during API bootstrap', err);
+bootstrap().catch((err: unknown) => {
+  process.stderr.write(`Fatal error during API bootstrap: ${String(err)}\n`);
   process.exit(1);
 });
