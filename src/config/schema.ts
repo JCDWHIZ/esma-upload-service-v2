@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 export const SECRET_KEYS = new Set<string>([
   'JWT_SECRET',
+  'JWT_KEYS',
   'SIGNED_URL_SECRET',
   'DATABASE_URL',
   'REDIS_URL',
@@ -59,6 +60,7 @@ export const rawConfigSchema = z.object({
     .string()
     .default('dev-insecure-jwt-secret-do-not-use-in-production-min-32-chars'),
   JWT_ALGORITHMS: z.string().default('HS256'),
+  JWT_KEYS: z.string().optional(),
   JWT_CLOCK_TOLERANCE_SECONDS: intCoerce(5).default(5),
   ADMIN_ALLOWED_ROLES: z.string().default('superadmin'),
   ADMIN_AUTH_MODE: z.enum(['off', 'report', 'enforce']).default('enforce'),
@@ -328,6 +330,54 @@ export function runCrossFieldGuards(
     );
   }
 
+  // JWT_KEYS JSON validation
+  if (
+    data.JWT_KEYS &&
+    typeof data.JWT_KEYS === 'string' &&
+    data.JWT_KEYS.trim() !== ''
+  ) {
+    try {
+      const parsed: unknown = JSON.parse(data.JWT_KEYS);
+      if (!Array.isArray(parsed)) {
+        addIssue('JWT_KEYS', 'JWT_KEYS must be a JSON array of key objects');
+      } else {
+        for (let i = 0; i < parsed.length; i++) {
+          const k: unknown = parsed[i];
+          if (!k || typeof k !== 'object') {
+            addIssue('JWT_KEYS', `JWT_KEYS[${i}] must be an object`);
+          } else {
+            const entry = k as Record<string, unknown>;
+            if (!entry.kid || typeof entry.kid !== 'string') {
+              addIssue(
+                'JWT_KEYS',
+                `JWT_KEYS[${i}].kid is required and must be a string`,
+              );
+            }
+            if (!entry.secret || typeof entry.secret !== 'string') {
+              addIssue(
+                'JWT_KEYS',
+                `JWT_KEYS[${i}].secret is required and must be a string`,
+              );
+            } else if (isProd && entry.secret.length < 32) {
+              addIssue(
+                'JWT_KEYS',
+                `JWT_KEYS[${i}].secret must be at least 32 characters in production`,
+              );
+            }
+            if (entry.status !== 'active' && entry.status !== 'verify-only') {
+              addIssue(
+                'JWT_KEYS',
+                `JWT_KEYS[${i}].status must be "active" or "verify-only"`,
+              );
+            }
+          }
+        }
+      }
+    } catch {
+      addIssue('JWT_KEYS', 'JWT_KEYS must be valid JSON');
+    }
+  }
+
   // Production guards
   if (isProd) {
     if (!data.JWT_SECRET || String(data.JWT_SECRET).length < 32) {
@@ -434,7 +484,7 @@ export function redactConfig(
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(config)) {
     if (SECRET_KEYS.has(key)) {
-      result[key] = '[REDACTED]';
+      result[key] = value !== undefined ? '[REDACTED]' : undefined;
     } else {
       result[key] = value;
     }

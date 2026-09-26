@@ -9,9 +9,9 @@ import {
   UsageRepository,
   ProcessedEventsRepository,
 } from './repositories/index.js';
+import { PG_POOL, KYSELY_DB } from './constants.js';
 
-export const PG_POOL = 'PG_POOL';
-export const KYSELY_DB = 'KYSELY_DB';
+export { PG_POOL, KYSELY_DB } from './constants.js';
 
 const repositories = [
   FileRepository,

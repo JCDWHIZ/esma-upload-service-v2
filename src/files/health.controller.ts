@@ -2,8 +2,10 @@ import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { DatabaseService } from '../db/database.service.js';
+import { Public } from '../auth/decorators/public.decorator.js';
 
 @ApiTags('health')
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly databaseService: DatabaseService) {}

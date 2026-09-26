@@ -63,6 +63,41 @@ export class ApiClientRepository extends BaseRepository {
     return Number(result.numUpdatedRows) > 0;
   }
 
+  async revokeByPrefix(
+    keyPrefix: string,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<boolean> {
+    const result = await this.getExecutor(trx)
+      .updateTable('api_clients')
+      .set({
+        status: 'REVOKED',
+        revoked_at: sql`now()`,
+      })
+      .where('key_prefix', '=', keyPrefix)
+      .where('status', '<>', 'REVOKED')
+      .executeTakeFirst();
+
+    return Number(result.numUpdatedRows) > 0;
+  }
+
+  async list(
+    options: { limit?: number; offset?: number } = {},
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<ApiClient[]> {
+    const limit = options.limit ?? 50;
+    const offset = options.offset ?? 0;
+
+    const rows = await this.getExecutor(trx)
+      .selectFrom('api_clients')
+      .selectAll()
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .offset(offset)
+      .execute();
+
+    return rows.map(mapApiClientRow);
+  }
+
   async touchLastUsed(
     id: string,
     trx?: Transaction<Database> | Kysely<Database>,

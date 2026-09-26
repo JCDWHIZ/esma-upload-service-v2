@@ -1,7 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { Kysely, Transaction } from 'kysely';
 import type { Database } from '../types.js';
-import { KYSELY_DB } from '../database.module.js';
+import { KYSELY_DB } from '../constants.js';
 
 @Injectable()
 export abstract class BaseRepository {

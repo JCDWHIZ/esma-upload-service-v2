@@ -42,6 +42,14 @@ export class AppConfigService {
     return this.config;
   }
 
+  get(): AppConfig {
+    return this.config;
+  }
+
+  get jwtKeys(): string | undefined {
+    return this.config.JWT_KEYS;
+  }
+
   toSafeObject(): Record<string, unknown> {
     return redactConfig(this.config);
   }
