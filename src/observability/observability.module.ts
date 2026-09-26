@@ -10,6 +10,7 @@ import {
 } from './correlation-id.interceptor.js';
 import { getCorrelationContext } from './correlation-context.js';
 import { StructuredLogger } from './logger.service.js';
+import { HealthController } from './health.controller.js';
 
 interface SerializedReq {
   id?: unknown;
@@ -101,6 +102,7 @@ interface SerializedRes {
       }),
     }),
   ],
+  controllers: [HealthController],
   providers: [
     {
       provide: APP_INTERCEPTOR,

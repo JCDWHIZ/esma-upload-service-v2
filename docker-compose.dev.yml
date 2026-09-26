@@ -33,8 +33,50 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ── Application (optional: used for local container smoke-testing) ───────────
+  # Run `docker compose -f docker-compose.dev.yml up app` to boot the service
+  # against the local Postgres and Redis instances.
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: gus-app-dev
+    # init: true ensures SIGTERM is forwarded correctly to the Node process
+    # (prevents PID 1 zombie issues when using `docker stop`).
+    init: true
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://${POSTGRES_USER:-gus}:${POSTGRES_PASSWORD:-gus}@postgres:5432/${POSTGRES_DB:-gus}
+      REDIS_URL: redis://redis:6379
+      STAGING_DIR: /tmp/esma-staging
+    ports:
+      - "${PORT:-7030}:${PORT:-7030}"
+    volumes:
+      # Staging directory: files uploaded but not yet committed to storage.
+      # A named volume keeps the container stateless while persisting in-flight
+      # uploads across restarts (useful in dev; use ephemeral tmpfs in prod).
+      - gus_staging_data:/tmp/esma-staging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const http = require('http'); http.get('http://localhost:${PORT:-7030}/health/live', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+
 volumes:
   gus_postgres_data:
     name: gus_postgres_data
   gus_redis_data:
     name: gus_redis_data
+  gus_staging_data:
+    name: gus_staging_data
+
