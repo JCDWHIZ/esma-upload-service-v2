@@ -142,6 +142,9 @@ export class AppConfigService {
   get defaultMaxFileSizeBytes(): number {
     return this.config.DEFAULT_MAX_FILE_SIZE_BYTES;
   }
+  get policiesFile(): string | undefined {
+    return this.config.POLICIES_FILE;
+  }
 
   // --- Storage ---
   get storageDriver(): 'local' | 'cloudinary' | 'seaweedfs' | 'hybrid' {

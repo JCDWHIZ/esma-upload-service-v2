@@ -85,6 +85,7 @@ export const rawConfigSchema = z.object({
   STAGING_DIR: z.string().default('/tmp/gus-staging'),
   STAGING_MAX_AGE_MINUTES: intCoerce(60).default(60),
   DEFAULT_MAX_FILE_SIZE_BYTES: intCoerce(20971520).default(20971520),
+  POLICIES_FILE: z.string().optional(),
 
   // --- Storage selection: local | cloudinary | seaweedfs | hybrid ---
   STORAGE_DRIVER: z
