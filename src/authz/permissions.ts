@@ -7,6 +7,8 @@ export const UploadPermissions = {
   QUOTAS_VIEW: 'quotas_view',
   SYSTEM_FILES_UPLOAD: 'system_files_upload',
   SYSTEM_FILES_DELETE: 'system_files_delete',
+  SYSTEM_FILES_READ: 'system_files_read',
+  SYSTEM_FILES_LIST: 'system_files_list',
   TENANTS_USAGE_VIEW: 'tenants_usage_view',
   AUDIT_VIEW: 'audit_view',
   FILES_BULK_DELETE: 'files_bulk_delete',
@@ -14,7 +16,9 @@ export const UploadPermissions = {
   // --- School / Organization Scope (esma-tenant namespace) ---
   FILES_UPLOAD: 'files_upload',
   FILES_READ: 'files_read',
+  FILES_LIST: 'files_list',
   FILES_DELETE: 'files_delete',
+  FILES_ADMIN: 'files_admin',
   BRANCHES_MANAGE: 'branches_manage',
 } as const;
 

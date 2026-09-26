@@ -1,6 +1,6 @@
 import { Request } from 'express';
 import { ValidationError } from '../core/errors/app-error.js';
-import { ApiClient } from '../core/types.js';
+import { ApiClient, FileRecord } from '../core/types.js';
 
 export type ActorType = 'user' | 'service';
 export type ContextNamespace =
@@ -39,6 +39,7 @@ export interface AuthenticatedHttpRequest extends Request {
   token?: VerifiedTokenClaims;
   apiClient?: ApiClient;
   ctx?: RequestContext;
+  fileRecord?: FileRecord;
 }
 
 export interface RequestContextActor {

@@ -1,21 +1,55 @@
 import { Injectable } from '@nestjs/common';
 import { RequestContext } from '../core/request-context.js';
+import { AppConfigService } from '../config/config.service.js';
+import {
+  AuthzAction,
+  AuthzDecision,
+  AuthzResource,
+  authorize,
+  isEsmaAdminActor,
+} from './authorize.js';
+import { FileVisibility } from '../core/types.js';
 
-export type FileVisibility = 'public' | 'tenant' | 'private';
+export type { FileVisibility };
 
 export interface FileAccessDescriptor {
   visibility: FileVisibility;
   tenantId: string;
+  subTenantId?: string | null;
+  namespace?: string;
   ownerId?: string;
 }
 
 @Injectable()
 export class AuthorizationService {
+  constructor(private readonly configService: AppConfigService) {}
+
+  /**
+   * Evaluates the authorization decision for a given action on a resource.
+   */
+  authorize(
+    ctx: RequestContext,
+    action: AuthzAction,
+    resource: AuthzResource,
+  ): AuthzDecision {
+    const adminRolesConfig = this.configService.get().ADMIN_ALLOWED_ROLES;
+    const adminAllowedRoles = adminRolesConfig
+      ? adminRolesConfig.split(',').map((r) => r.trim())
+      : ['superadmin', 'super admin', 'admin'];
+
+    return authorize(ctx, action, resource, adminAllowedRoles);
+  }
+
   /**
    * Check if the caller can access data for a specific organization/tenant
    */
   canAccessTenant(context: RequestContext, targetTenantId: string): boolean {
-    if (context.actor.isPlatformAdmin) {
+    const adminRolesConfig = this.configService.get().ADMIN_ALLOWED_ROLES;
+    const adminAllowedRoles = adminRolesConfig
+      ? adminRolesConfig.split(',').map((r) => r.trim())
+      : ['superadmin', 'super admin', 'admin'];
+
+    if (isEsmaAdminActor(context, adminAllowedRoles)) {
       return true;
     }
     return context.tenantId === targetTenantId;
@@ -38,21 +72,15 @@ export class AuthorizationService {
       return false;
     }
 
-    // 2. Platform admins have global access across organizations
-    if (context.actor.isPlatformAdmin) {
-      return true;
-    }
+    const resource: AuthzResource = {
+      namespace: file.namespace ?? context.namespace,
+      tenantId: file.tenantId,
+      subTenantId: file.subTenantId,
+      uploadedBy: file.ownerId,
+      visibility: file.visibility,
+    };
 
-    // 3. Organization files are accessible to members of that organization
-    if (file.visibility === 'tenant') {
-      return context.tenantId === file.tenantId;
-    }
-
-    // 4. Private files are only accessible to the original uploader (or via signed URL)
-    if (file.visibility === 'private') {
-      return context.actor.id === file.ownerId;
-    }
-
-    return false;
+    const decision = this.authorize(context, 'read', resource);
+    return decision.allowed;
   }
 }
