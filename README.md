@@ -31,6 +31,21 @@
 $ pnpm install
 ```
 
+## Local Development Stack
+
+Start PostgreSQL 17 and Redis 7 using Docker Compose:
+
+```bash
+# Start Postgres 17 and Redis 7 in background
+$ docker compose -f docker-compose.dev.yml up -d
+
+# Check database migration status
+$ pnpm run db:status
+
+# Run forward-only database migrations
+$ pnpm run db:migrate
+```
+
 ## Compile and run the project
 
 ```bash

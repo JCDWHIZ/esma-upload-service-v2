@@ -23,7 +23,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "env:example": "ts-node scripts/generate-env-example.ts",
     "env:check": "ts-node scripts/generate-env-example.ts --check",
-    "secret:scan": "ts-node scripts/scan-secrets.ts"
+    "secret:scan": "ts-node scripts/scan-secrets.ts",
+    "db:migrate": "node dist/src/db/migrate.js migrate",
+    "db:status": "node dist/src/db/migrate.js status"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -31,7 +33,9 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.4.7",
     "helmet": "^8.3.0",
+    "kysely": "^0.29.6",
     "nestjs-pino": "^5.2.0",
+    "pg": "^8.23.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "reflect-metadata": "^0.2.2",
@@ -45,9 +49,11 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
+    "@testcontainers/postgresql": "^12.1.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
+    "@types/pg": "^8.23.1",
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^11.0.0",
     "eslint": "^9.18.0",
@@ -76,6 +82,9 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
+    "transformIgnorePatterns": [
+      "[/\\\\]node_modules[/\\\\](?!.*kysely)"
+    ],
     "moduleNameMapper": {
       "^(\\.\\.?/.*)\\.js$": "$1"
     },

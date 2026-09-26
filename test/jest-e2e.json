@@ -6,6 +6,9 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
+  "transformIgnorePatterns": [
+    "[/\\\\]node_modules[/\\\\](?!.*kysely)"
+  ],
   "moduleNameMapper": {
     "^(\\.\\.?/.*)\\.js$": "$1"
   }
