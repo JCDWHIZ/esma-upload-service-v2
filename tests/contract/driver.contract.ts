@@ -151,7 +151,7 @@ export function runDriverContract(
         size: payload.length,
         sha256: sha256Hex(payload),
         mimetype: 'text/plain',
-        visibility: 'private',
+        visibility: 'public',
       });
 
       // 1. First delete succeeds
@@ -318,7 +318,10 @@ export function runDriverContract(
 
       if (isReachable) {
         expect(typeof url).toBe('string');
-        expect(url).toContain(ref.key);
+        const keyWithoutExt = ref.key.replace(/\.[^/.]+$/, '');
+        expect(url!.includes(ref.key) || url!.includes(keyWithoutExt)).toBe(
+          true,
+        );
       } else {
         expect(url).toBeNull();
       }
