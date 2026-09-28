@@ -123,11 +123,25 @@ export class FileRepository extends BaseRepository {
     if (filter.status !== undefined) {
       query = query.where('status', '=', filter.status);
     } else {
-      query = query.where('status', '<>', 'DELETED');
+      query = query
+        .where('status', '<>', 'DELETED')
+        .where('status', '<>', 'DELETING');
     }
 
     if (filter.visibility !== undefined) {
       query = query.where('visibility', '=', filter.visibility);
+    }
+
+    if (filter.mimetype !== undefined) {
+      query = query.where('mimetype', '=', filter.mimetype);
+    }
+
+    if (filter.createdFrom !== undefined) {
+      query = query.where('created_at', '>=', filter.createdFrom);
+    }
+
+    if (filter.createdTo !== undefined) {
+      query = query.where('created_at', '<=', filter.createdTo);
     }
 
     if (filter.tags && filter.tags.length > 0) {

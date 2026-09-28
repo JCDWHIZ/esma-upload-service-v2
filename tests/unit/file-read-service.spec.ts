@@ -433,9 +433,7 @@ describe('FileReadService Unit Tests [P2-07]', () => {
         const chunks: Buffer[] = [];
         for await (const chunk of res.stream) {
           chunks.push(
-            Buffer.isBuffer(chunk)
-              ? chunk
-              : Buffer.from(chunk as Uint8Array),
+            Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array),
           );
         }
         const slice = Buffer.concat(chunks);
@@ -459,9 +457,7 @@ describe('FileReadService Unit Tests [P2-07]', () => {
         const chunks: Buffer[] = [];
         for await (const chunk of res.stream) {
           chunks.push(
-            Buffer.isBuffer(chunk)
-              ? chunk
-              : Buffer.from(chunk as Uint8Array),
+            Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array),
           );
         }
         const slice = Buffer.concat(chunks);
@@ -485,9 +481,7 @@ describe('FileReadService Unit Tests [P2-07]', () => {
         const chunks: Buffer[] = [];
         for await (const chunk of res.stream) {
           chunks.push(
-            Buffer.isBuffer(chunk)
-              ? chunk
-              : Buffer.from(chunk as Uint8Array),
+            Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array),
           );
         }
         const slice = Buffer.concat(chunks);

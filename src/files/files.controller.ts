@@ -19,12 +19,37 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FilesService } from './files.service.js';
 import { FileReadService, type FileReadAuth } from './file-read.service.js';
 import { SignedUrlService } from './signed-url.service.js';
+import { DeleteService } from './delete.service.js';
+import { FileQueryService } from './file-query.service.js';
 import { FileRepository } from '../db/repositories/file.repository.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { Public } from '../auth/decorators/public.decorator.js';
 import type { AuthenticatedHttpRequest } from '../auth/context.js';
+import type { RequestContext } from '../core/request-context.js';
 import type { ProviderName } from '../storage/types.js';
 import { ForbiddenError, NotFoundError } from '../core/errors/app-error.js';
+
+function getRequestContext(
+  req?: AuthenticatedHttpRequest,
+  defaultCorrelationId = 'req',
+): RequestContext {
+  if (req?.ctx) {
+    return req.ctx;
+  }
+  return {
+    namespace: 'esma-tenant',
+    tenantId: 'default',
+    actor: {
+      id: 'anonymous',
+      type: 'user',
+      roles: [],
+      scopes: [],
+    },
+    correlationId: defaultCorrelationId,
+    ipAddress: req?.ip ?? '127.0.0.1',
+    attributes: {},
+  };
+}
 
 @ApiTags('files')
 @Controller('api/v1/files')
@@ -33,6 +58,8 @@ export class FilesController {
     private readonly filesService: FilesService,
     private readonly fileReadService: FileReadService,
     private readonly signedUrlService: SignedUrlService,
+    private readonly deleteService: DeleteService,
+    private readonly fileQueryService: FileQueryService,
     private readonly fileRepo: FileRepository,
     private readonly authzService: AuthorizationService,
   ) {}
@@ -50,8 +77,23 @@ export class FilesController {
   @Get()
   @ApiOperation({ summary: 'List files for tenant' })
   @ApiResponse({ status: 200, description: 'List of files' })
-  listFiles() {
-    return this.filesService.listFiles('default');
+  listFiles(
+    @Query('folder') folder?: string,
+    @Query('subTenantId') subTenantId?: string,
+    @Query('mimetype') mimetype?: string,
+    @Query('tag') tag?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const ctx = getRequestContext(req, 'req-list');
+    const parsedLimit = limit ? parseInt(limit, 10) : 20;
+    return this.fileQueryService.list(
+      ctx,
+      { folder, subTenantId, mimetype, tag },
+      cursor,
+      isNaN(parsedLimit) ? 20 : parsedLimit,
+    );
   }
 
   @Public()
@@ -148,8 +190,15 @@ export class FilesController {
 
   @Get(':fileId/metadata')
   @ApiOperation({ summary: 'Get file metadata manifest' })
-  getMetadata(@Param('fileId') fileId: string) {
-    return this.filesService.getFileMetadata(fileId);
+  @ApiResponse({ status: 200, description: 'File metadata manifest' })
+  @ApiResponse({ status: 404, description: 'File not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden access to file' })
+  getMetadata(
+    @Param('fileId') fileId: string,
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const ctx = getRequestContext(req, 'req-meta');
+    return this.fileQueryService.getMetadata(ctx, fileId);
   }
 
   @Post(':fileId/signed-url')
@@ -201,16 +250,27 @@ export class FilesController {
   @Delete(':fileId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Purge file and replicas' })
-  deleteFile(@Param('fileId') fileId: string) {
-    throw new NotImplementedException(
-      `Delete service for ${fileId} scheduled for Phase 2`,
-    );
+  @ApiResponse({ status: 204, description: 'File deleted successfully' })
+  @ApiResponse({ status: 404, description: 'File not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden access to file' })
+  async deleteFile(
+    @Param('fileId') fileId: string,
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const ctx = getRequestContext(req, 'req-delete');
+    await this.deleteService.delete(ctx, fileId);
   }
 
   @Post('bulk-delete')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Bulk delete files' })
-  bulkDelete() {
-    throw new NotImplementedException('Bulk delete scheduled for Phase 2');
+  @ApiResponse({ status: 200, description: 'Bulk delete outcome' })
+  @ApiResponse({ status: 400, description: 'Invalid fileIds input' })
+  async bulkDelete(
+    @Body() body?: { fileIds?: string[] },
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const ctx = getRequestContext(req, 'req-bulk-delete');
+    return this.deleteService.bulkDelete(ctx, body?.fileIds ?? []);
   }
 }

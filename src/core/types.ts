@@ -81,6 +81,9 @@ export interface FileListFilter {
   status?: FileStatus;
   visibility?: FileVisibility;
   tags?: string[];
+  mimetype?: string;
+  createdFrom?: Date;
+  createdTo?: Date;
 }
 
 export interface KeysetCursor {
