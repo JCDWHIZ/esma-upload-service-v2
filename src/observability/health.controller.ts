@@ -12,6 +12,9 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { AppConfigService } from '../config/config.service.js';
 import { Public } from '../auth/decorators/public.decorator.js';
+import { StorageRegistry } from '../storage/registry.js';
+import type { StorageTopology } from '../storage/topology.js';
+import type { DriverHealth, ProviderName } from '../storage/types.js';
 
 interface HealthCheck {
   status: 'ok' | 'error';
@@ -29,7 +32,10 @@ interface ReadinessChecks {
 export class HealthController {
   private readonly logger = new Logger(HealthController.name);
 
-  constructor(private readonly config: AppConfigService) {}
+  constructor(
+    private readonly config: AppConfigService,
+    private readonly storageRegistry: StorageRegistry,
+  ) {}
 
   /**
    * Liveness probe — confirms the process is running.
@@ -46,7 +52,7 @@ export class HealthController {
 
   /**
    * Readiness probe — checks the staging directory is writable and
-   * the configured storage driver has the minimum required config.
+   * the primary storage driver is configured and healthy.
    * Returns 503 when any check fails.
    */
   @Get('ready')
@@ -65,6 +71,25 @@ export class HealthController {
     return { status: healthy ? 'ok' : 'error', checks };
   }
 
+  /**
+   * Storage drivers health probe status (ARCH §6.3).
+   */
+  @Get('drivers')
+  @Public()
+  @ApiOperation({ summary: 'Storage drivers health status' })
+  @ApiResponse({ status: 200, description: 'Driver health status' })
+  drivers(): {
+    status: string;
+    topology: StorageTopology;
+    drivers: Record<ProviderName, DriverHealth>;
+  } {
+    return {
+      status: 'ok',
+      topology: this.storageRegistry.getTopology(),
+      drivers: this.storageRegistry.health(),
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
@@ -72,7 +97,7 @@ export class HealthController {
   private async runReadinessChecks(): Promise<ReadinessChecks> {
     const [stagingDir, storageConfig] = await Promise.all([
       this.checkStagingDir(),
-      Promise.resolve(this.checkStorageConfig()),
+      this.checkStorageDriver(),
     ]);
     return { stagingDir, storageConfig };
   }
@@ -99,36 +124,36 @@ export class HealthController {
     }
   }
 
-  private checkStorageConfig(): HealthCheck {
-    const driver = this.config.storageDriver;
-    let configured: boolean;
+  private async checkStorageDriver(): Promise<HealthCheck> {
+    const topology = this.storageRegistry.getTopology();
+    const primary = topology.primary;
 
-    switch (driver) {
-      case 'local':
-        configured = Boolean(this.config.localStoragePath);
-        break;
-      case 'cloudinary':
-        configured =
-          Boolean(this.config.cloudinaryCloudName) &&
-          Boolean(this.config.cloudinaryApiKey) &&
-          Boolean(this.config.cloudinaryApiSecret);
-        break;
-      case 'seaweedfs':
-      case 'hybrid':
-        configured = Boolean(this.config.seaweedfsS3Endpoint);
-        break;
-      default:
-        configured = false;
-    }
-
-    if (!configured) {
+    if (!this.storageRegistry.has(primary)) {
       return {
         status: 'error',
-        message: `storage driver '${driver}' configuration is incomplete`,
-        driver,
+        message: `Primary storage driver '${primary}' is not configured`,
+        driver: primary,
       };
     }
 
-    return { status: 'ok', driver };
+    // If health cache is empty, run an initial probe
+    let isOk = this.storageRegistry.isHealthy(primary);
+    if (!isOk && Object.keys(this.storageRegistry.health()).length === 0) {
+      await this.storageRegistry.checkHealth();
+      isOk = this.storageRegistry.isHealthy(primary);
+    }
+
+    if (!isOk) {
+      const detail = this.storageRegistry.health()[primary]?.detail;
+      return {
+        status: 'error',
+        message: detail
+          ? `Primary storage driver '${primary}' unhealthy: ${detail}`
+          : `Primary storage driver '${primary}' is unhealthy`,
+        driver: primary,
+      };
+    }
+
+    return { status: 'ok', driver: primary };
   }
 }

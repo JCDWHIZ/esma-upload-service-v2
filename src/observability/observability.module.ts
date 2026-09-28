@@ -12,6 +12,8 @@ import { getCorrelationContext } from './correlation-context.js';
 import { StructuredLogger } from './logger.service.js';
 import { HealthController } from './health.controller.js';
 
+import { StorageModule } from '../storage/storage.module.js';
+
 interface SerializedReq {
   id?: unknown;
   method?: string;
@@ -30,6 +32,7 @@ interface SerializedRes {
 @Global()
 @Module({
   imports: [
+    StorageModule,
     PinoLoggerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [AppConfigService],
