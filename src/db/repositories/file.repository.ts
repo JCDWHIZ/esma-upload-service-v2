@@ -45,6 +45,7 @@ export class FileRepository extends BaseRepository {
         legacy_public_id: data.legacyPublicId ?? null,
         idempotency_key: data.idempotencyKey ?? null,
         correlation_id: data.correlationId,
+        expires_at: data.expiresAt ?? null,
       })
       .returningAll()
       .executeTakeFirstOrThrow();
@@ -125,7 +126,8 @@ export class FileRepository extends BaseRepository {
     } else {
       query = query
         .where('status', '<>', 'DELETED')
-        .where('status', '<>', 'DELETING');
+        .where('status', '<>', 'DELETING')
+        .where('status', '<>', 'PENDING_UPLOAD');
     }
 
     if (filter.visibility !== undefined) {
@@ -213,6 +215,12 @@ export class FileRepository extends BaseRepository {
     if (updates.sha256 !== undefined) {
       updateValues.sha256 = updates.sha256;
     }
+    if (updates.sizeBytes !== undefined) {
+      updateValues.size_bytes = String(updates.sizeBytes);
+    }
+    if (updates.expiresAt !== undefined) {
+      updateValues.expires_at = updates.expiresAt;
+    }
     if (updates.attributes !== undefined) {
       updateValues.attributes = updates.attributes;
     }
@@ -274,5 +282,19 @@ export class FileRepository extends BaseRepository {
       .executeTakeFirst();
 
     return Number(result.numDeletedRows) > 0;
+  }
+
+  async findExpiredPendingUploads(
+    cutoff: Date,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<FileRecord[]> {
+    const results = await this.getExecutor(trx)
+      .selectFrom('files')
+      .selectAll()
+      .where('status', '=', 'PENDING_UPLOAD')
+      .where('expires_at', '<', cutoff)
+      .execute();
+
+    return results.map(mapFileRow);
   }
 }

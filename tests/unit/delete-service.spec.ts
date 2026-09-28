@@ -204,12 +204,10 @@ describe('DeleteService [P2-08]', () => {
     };
 
     const mockOutboxRepo = {
-      enqueue: vi
-        .fn()
-        .mockImplementation((event: Record<string, unknown>) => {
-          enqueuedOutboxEvents.push(event);
-          return Promise.resolve({ id: 'outbox-1' });
-        }),
+      enqueue: vi.fn().mockImplementation((event: Record<string, unknown>) => {
+        enqueuedOutboxEvents.push(event);
+        return Promise.resolve({ id: 'outbox-1' });
+      }),
     };
 
     const mockDatabaseService = {

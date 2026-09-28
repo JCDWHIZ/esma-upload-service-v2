@@ -345,6 +345,46 @@ export class SeaweedFSStorageDriver implements IStorageDriver {
     }
   }
 
+  async getPresignedUploadUrl(
+    key: string,
+    mimetype: string,
+    expiresInSeconds = 900,
+  ): Promise<{ uploadUrl: string; requiredHeaders: Record<string, string> }> {
+    try {
+      const command = new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ContentType: mimetype,
+      });
+
+      const presigned = await getSignedUrl(this.s3Client, command, {
+        expiresIn: expiresInSeconds,
+      });
+
+      let uploadUrl = presigned;
+      if (this.publicEndpoint && this.publicEndpoint.trim().length > 0) {
+        const parsed = new URL(presigned);
+        const publicBase = new URL(this.publicEndpoint);
+        parsed.protocol = publicBase.protocol;
+        parsed.host = publicBase.host;
+        parsed.port = publicBase.port;
+        uploadUrl = parsed.toString();
+      }
+
+      return {
+        uploadUrl,
+        requiredHeaders: {
+          'Content-Type': mimetype,
+        },
+      };
+    } catch (err: unknown) {
+      throw classifyStorageError(
+        err,
+        `Failed to generate presigned upload URL for key: ${key}`,
+      );
+    }
+  }
+
   async list(
     prefix: string,
     opts?: { cursor?: string; limit?: number },

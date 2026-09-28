@@ -65,6 +65,7 @@ export function mapFileRow(row: Selectable<FilesTable>): FileRecord {
     createdAt: toDate(row.created_at),
     updatedAt: toDate(row.updated_at),
     deletedAt: toNullableDate(row.deleted_at),
+    expiresAt: toNullableDate(row.expires_at),
   };
 }
 

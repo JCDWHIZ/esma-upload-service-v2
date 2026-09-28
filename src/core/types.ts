@@ -2,7 +2,8 @@ export type Provider = 'local' | 'seaweedfs' | 'cloudinary';
 
 export type FileVisibility = 'private' | 'tenant' | 'public';
 
-export type FileStatus = 'ACTIVE' | 'QUARANTINED' | 'DELETING' | 'DELETED';
+export type FileStatus =
+  'PENDING_UPLOAD' | 'ACTIVE' | 'QUARANTINED' | 'DELETING' | 'DELETED';
 
 export type ScanStatus =
   'NOT_REQUIRED' | 'PENDING' | 'CLEAN' | 'INFECTED' | 'ERROR';
@@ -46,6 +47,7 @@ export interface FileRecord {
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
+  expiresAt?: Date | null;
 }
 
 export interface NewFileRecord {
@@ -71,6 +73,7 @@ export interface NewFileRecord {
   legacyPublicId?: string | null;
   idempotencyKey?: string | null;
   correlationId: string;
+  expiresAt?: Date | null;
 }
 
 export interface FileListFilter {
@@ -102,7 +105,9 @@ export interface FileStatusUpdate {
   scanStatus?: ScanStatus;
   replicationStatus?: ReplicationStatus;
   sha256?: string | null;
+  sizeBytes?: bigint | number;
   attributes?: Record<string, unknown>;
+  expiresAt?: Date | null;
 }
 
 export interface FileReplica {

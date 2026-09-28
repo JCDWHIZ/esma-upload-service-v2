@@ -25,7 +25,9 @@ export interface FilesTable {
   size_bytes: number | string; // bigint
   sha256: string | null;
   visibility: 'private' | 'tenant' | 'public';
-  status: Generated<'ACTIVE' | 'QUARANTINED' | 'DELETING' | 'DELETED'>;
+  status: Generated<
+    'PENDING_UPLOAD' | 'ACTIVE' | 'QUARANTINED' | 'DELETING' | 'DELETED'
+  >;
   scan_status: Generated<
     'NOT_REQUIRED' | 'PENDING' | 'CLEAN' | 'INFECTED' | 'ERROR'
   >;
@@ -43,6 +45,7 @@ export interface FilesTable {
   created_at: Timestamp;
   updated_at: Timestamp;
   deleted_at: NullableTimestamp;
+  expires_at: NullableTimestamp;
 }
 
 export interface FileReplicasTable {

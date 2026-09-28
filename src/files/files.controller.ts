@@ -21,6 +21,11 @@ import { FileReadService, type FileReadAuth } from './file-read.service.js';
 import { SignedUrlService } from './signed-url.service.js';
 import { DeleteService } from './delete.service.js';
 import { FileQueryService } from './file-query.service.js';
+import { PresignedUploadService } from './presigned-upload.service.js';
+import type {
+  InitiatePresignedUploadDto,
+  CompletePresignedUploadDto,
+} from './dto/presigned-upload.dto.js';
 import { FileRepository } from '../db/repositories/file.repository.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { Public } from '../auth/decorators/public.decorator.js';
@@ -60,9 +65,54 @@ export class FilesController {
     private readonly signedUrlService: SignedUrlService,
     private readonly deleteService: DeleteService,
     private readonly fileQueryService: FileQueryService,
+    private readonly presignedUploadService: PresignedUploadService,
     private readonly fileRepo: FileRepository,
     private readonly authzService: AuthorizationService,
   ) {}
+
+  @Post('presigned-upload')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Initiate direct-to-storage presigned upload' })
+  @ApiResponse({ status: 201, description: 'Presigned upload URL created' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden branch or upload access',
+  })
+  @ApiResponse({ status: 413, description: 'Payload too large' })
+  @ApiResponse({ status: 415, description: 'Unsupported media type' })
+  @ApiResponse({ status: 507, description: 'Insufficient storage quota' })
+  async initiatePresignedUpload(
+    @Body() body: InitiatePresignedUploadDto,
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const ctx = getRequestContext(req, 'req-presigned-init');
+    const result = await this.presignedUploadService.initiate(ctx, body);
+    return {
+      success: true,
+      data: result,
+      ...result,
+    };
+  }
+
+  @Post(':fileId/complete-upload')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm and complete direct upload' })
+  @ApiResponse({ status: 200, description: 'File manifest after confirmation' })
+  @ApiResponse({ status: 404, description: 'File not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden access to file' })
+  @ApiResponse({
+    status: 503,
+    description: 'Storage object not found in SeaweedFS',
+  })
+  async completePresignedUpload(
+    @Param('fileId') fileId: string,
+    @Body() body?: CompletePresignedUploadDto,
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const ctx = getRequestContext(req, 'req-presigned-complete');
+    return this.presignedUploadService.complete(ctx, fileId, body);
+  }
 
   @Post('upload')
   @HttpCode(HttpStatus.CREATED)

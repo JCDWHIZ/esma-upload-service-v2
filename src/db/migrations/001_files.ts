@@ -27,7 +27,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       sha256             char(64),
       visibility         text        NOT NULL CHECK (visibility IN ('private', 'tenant', 'public')),
       status             text        NOT NULL DEFAULT 'ACTIVE'
-                         CHECK (status IN ('ACTIVE', 'QUARANTINED', 'DELETING', 'DELETED')),
+                         CHECK (status IN ('PENDING_UPLOAD', 'ACTIVE', 'QUARANTINED', 'DELETING', 'DELETED')),
       scan_status        text        NOT NULL DEFAULT 'NOT_REQUIRED'
                          CHECK (scan_status IN ('NOT_REQUIRED', 'PENDING', 'CLEAN', 'INFECTED', 'ERROR')),
       replication_status text        NOT NULL DEFAULT 'NOT_REQUIRED'
@@ -42,7 +42,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       version            integer     NOT NULL DEFAULT 1,
       created_at         timestamptz NOT NULL DEFAULT now(),
       updated_at         timestamptz NOT NULL DEFAULT now(),
-      deleted_at         timestamptz
+      deleted_at         timestamptz,
+      expires_at         timestamptz
     );
   `.execute(db);
 

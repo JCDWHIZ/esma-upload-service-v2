@@ -7,6 +7,7 @@ import { FileReadService } from './file-read.service.js';
 import { SignedUrlService } from './signed-url.service.js';
 import { DeleteService } from './delete.service.js';
 import { FileQueryService } from './file-query.service.js';
+import { PresignedUploadService } from './presigned-upload.service.js';
 import { KeyService } from '../core/storage-key.service.js';
 import { AuthorizationModule } from '../authz/authorization.module.js';
 import { NoOpQuotaGate, QUOTA_GATE } from './quota-gate.interface.js';
@@ -21,6 +22,7 @@ import { NoOpQuotaGate, QUOTA_GATE } from './quota-gate.interface.js';
     SignedUrlService,
     DeleteService,
     FileQueryService,
+    PresignedUploadService,
     KeyService,
     {
       provide: QUOTA_GATE,
@@ -34,6 +36,7 @@ import { NoOpQuotaGate, QUOTA_GATE } from './quota-gate.interface.js';
     SignedUrlService,
     DeleteService,
     FileQueryService,
+    PresignedUploadService,
     KeyService,
     QUOTA_GATE,
   ],
