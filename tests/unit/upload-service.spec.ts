@@ -123,8 +123,14 @@ describe('UploadService (single-driver mode) [P2-06]', () => {
     reserveSpy = vi.fn().mockResolvedValue(undefined);
     releaseSpy = vi.fn().mockResolvedValue(undefined);
     mockQuotaGate = {
-      reserve: reserveSpy,
-      release: releaseSpy,
+      reserve: reserveSpy as unknown as (
+        ctx: RequestContext,
+        bytes: number | bigint,
+      ) => Promise<void>,
+      release: releaseSpy as unknown as (
+        ctx: RequestContext,
+        bytes: number | bigint,
+      ) => Promise<void>,
     };
 
     // Database / Repository mocks

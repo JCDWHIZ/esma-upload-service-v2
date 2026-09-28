@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { NAMESPACE_METADATA_KEY } from '../decorators/namespace.decorator.js';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
 import {
   AuthenticatedHttpRequest,
   ContextNamespace,
@@ -27,6 +28,21 @@ export class ContextGuard implements CanActivate {
 
     const http = context.switchToHttp();
     const req = http.getRequest<AuthenticatedHttpRequest>();
+
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (
+      isPublic &&
+      !req.principal &&
+      !req.user &&
+      !req.token &&
+      !req.apiClient
+    ) {
+      return true;
+    }
 
     // 1. Determine target namespace from Reflector metadata
     const metadataNamespace =

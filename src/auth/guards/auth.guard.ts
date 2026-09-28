@@ -24,15 +24,10 @@ export class AuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // 1. Check if route or controller is marked @Public()
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
-
-    if (isPublic) {
-      return true;
-    }
 
     // 2. Determine accepted credential mechanisms
     const accepted = this.reflector.getAllAndOverride<CredentialType[]>(
@@ -77,6 +72,9 @@ export class AuthGuard implements CanActivate {
     }
 
     if (!extractedApiKey && !extractedJwt) {
+      if (isPublic) {
+        return true;
+      }
       throw new UnauthenticatedError(
         'Authentication required: missing Bearer token or x-api-key header',
       );
