@@ -33,6 +33,25 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ── SeaweedFS S3 Gateway & Distributed Store (P2-04) ────────────────────────
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: gus-seaweedfs-dev
+    command: "server -dir=/data -s3 -s3.config=/etc/seaweedfs/s3.json -s3.port=8333"
+    ports:
+      - "8333:8333" # S3 API gateway
+      - "8888:8888" # Filer HTTP API
+      - "9333:9333" # Master HTTP API
+    volumes:
+      - gus_seaweedfs_data:/data
+      - ./ops/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8333/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
   # ── Application (optional: used for local container smoke-testing) ───────────
   # Run `docker compose -f docker-compose.dev.yml up app` to boot the service
   # against the local Postgres and Redis instances.
@@ -79,4 +98,6 @@ volumes:
     name: gus_redis_data
   gus_staging_data:
     name: gus_staging_data
+  gus_seaweedfs_data:
+    name: gus_seaweedfs_data
 
