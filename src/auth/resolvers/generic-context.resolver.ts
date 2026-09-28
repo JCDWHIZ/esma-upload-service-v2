@@ -28,12 +28,127 @@ export class GenericContextResolver implements ContextResolver {
           ? (req.principal as ApiClient)
           : undefined);
 
-      if (!rawClient || typeof rawClient !== 'object' || !rawClient.id) {
-        throw new UnauthenticatedError(
-          'API client authentication is required to resolve generic context',
-        );
-      }
       const client = rawClient;
+      if (!client || typeof client !== 'object' || !client.id) {
+        const rawToken =
+          req.user ??
+          req.token ??
+          (req.principal &&
+          typeof req.principal === 'object' &&
+          !('keyPrefix' in req.principal)
+            ? req.principal
+            : undefined);
+
+        if (!rawToken || typeof rawToken !== 'object') {
+          throw new UnauthenticatedError(
+            'Authentication is required to resolve generic context',
+          );
+        }
+
+        // Handle JWT token authentication in generic context
+        const namespace =
+          typeof req.headers?.['x-namespace'] === 'string' &&
+          req.headers['x-namespace'].trim().length > 0
+            ? req.headers['x-namespace'].trim()
+            : ((rawToken.namespace as string | undefined) ?? 'generic');
+        assertSafeSegment(namespace, 'namespace');
+
+        const tokenTenantId: string | undefined =
+          typeof rawToken.organizationId === 'string'
+            ? rawToken.organizationId
+            : typeof rawToken.schoolId === 'string'
+              ? rawToken.schoolId
+              : typeof rawToken.tenantId === 'string'
+                ? rawToken.tenantId
+                : undefined;
+
+        const rawHeaderTenant = req.headers?.['x-tenant-id'];
+        let tenantId: string;
+
+        if (
+          typeof rawHeaderTenant === 'string' &&
+          rawHeaderTenant.trim().length > 0
+        ) {
+          const headerTenant = rawHeaderTenant.trim();
+          if (tokenTenantId && !rawToken.platformAdmin) {
+            if (headerTenant !== tokenTenantId) {
+              throw new TenantMismatchError(
+                `Header x-tenant-id (${headerTenant}) does not match token tenant ID (${tokenTenantId})`,
+                { code: 'TENANT_MISMATCH' },
+              );
+            }
+          }
+          tenantId = headerTenant;
+        } else if (tokenTenantId) {
+          tenantId = tokenTenantId;
+        } else if (rawToken.platformAdmin) {
+          tenantId = 'system';
+        } else {
+          throw new ValidationError(
+            'Header x-tenant-id or token tenant claim is required for generic context',
+          );
+        }
+        assertSafeSegment(tenantId, 'tenantId');
+
+        const rawSubTenant = req.headers?.['x-sub-tenant-id'];
+        let subTenantId: string | undefined;
+        if (
+          typeof rawSubTenant === 'string' &&
+          rawSubTenant.trim().length > 0
+        ) {
+          subTenantId = rawSubTenant.trim();
+          assertSafeSegment(subTenantId, 'subTenantId');
+        } else if (rawToken.branchId) {
+          subTenantId = rawToken.branchId;
+        }
+
+        const rawAttributes =
+          req.headers?.['x-attributes'] ??
+          (req.body as { attributes?: unknown } | undefined)?.attributes;
+        const attributes = parseAttributes(rawAttributes);
+
+        const correlationId =
+          getCorrelationId() ??
+          resolveOrGenerateCorrelationId(req.headers?.['x-correlation-id']);
+        const ipAddress = req.ip ?? req.socket?.remoteAddress ?? '127.0.0.1';
+        const userAgent =
+          typeof req.headers?.['user-agent'] === 'string'
+            ? req.headers['user-agent']
+            : undefined;
+
+        const jwtContext: RequestContext = {
+          namespace,
+          tenantId,
+          subTenantId,
+          actor: {
+            id:
+              typeof rawToken.sub === 'string'
+                ? rawToken.sub
+                : typeof rawToken.userId === 'string'
+                  ? rawToken.userId
+                  : 'anonymous',
+            type: 'user',
+            roles: Array.isArray(rawToken.roles)
+              ? rawToken.roles
+              : rawToken.role
+                ? [rawToken.role]
+                : [],
+            permissions: Array.isArray(rawToken.permissions)
+              ? rawToken.permissions
+              : [],
+            scopes: Array.isArray(rawToken.scopes)
+              ? (rawToken.scopes as string[])
+              : [],
+            isPlatformAdmin: Boolean(rawToken.platformAdmin),
+          },
+          correlationId,
+          ipAddress,
+          userAgent,
+          attributes,
+        };
+
+        return Promise.resolve(freezeContext(jwtContext));
+      }
 
       const namespace = client.namespace;
       if (!namespace || typeof namespace !== 'string') {

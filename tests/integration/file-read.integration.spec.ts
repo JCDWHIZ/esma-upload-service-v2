@@ -11,6 +11,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { Readable, PassThrough } from 'node:stream';
+import type { Request, Response, NextFunction } from 'express';
 import { FilesModule } from '../../src/files/files.module.js';
 import { ConfigModule } from '../../src/config/config.module.js';
 import { AuthorizationModule } from '../../src/authz/authorization.module.js';
@@ -21,6 +22,7 @@ import { FakeStorageDriver } from '../helpers/storage-driver.mock.js';
 import { FileRepository } from '../../src/db/repositories/file.repository.js';
 import { ReplicaRepository } from '../../src/db/repositories/replica.repository.js';
 import { ProblemJsonErrorFilter } from '../../src/common/filters/problem-json-error.filter.js';
+import type { AuthenticatedHttpRequest } from '../../src/auth/context.js';
 import { FileRecord, FileReplica } from '../../src/core/types.js';
 
 describe('FileRead & Content Delivery Integration [P2-07]', () => {
@@ -137,6 +139,30 @@ describe('FileRead & Content Delivery Integration [P2-07]', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
+    app.use((req: Request, _res: Response, next: NextFunction) => {
+      if (!req.url.includes('sig=')) {
+        const tenantHeader = req.headers['x-tenant-id'];
+        const tenantId =
+          typeof tenantHeader === 'string' ? tenantHeader : 'school-int-1';
+
+        (req as AuthenticatedHttpRequest).ctx = {
+          namespace: 'esma-tenant',
+          tenantId,
+          actor: {
+            id: 'user-1',
+            type: 'user',
+            roles: ['schooladmin', 'user'],
+            scopes: ['files:read', 'files:write', 'files:delete'],
+            isSchoolAdmin: true,
+            isPlatformAdmin: false,
+          },
+          correlationId: 'corr-int-read',
+          ipAddress: '127.0.0.1',
+          attributes: {},
+        };
+      }
+      next();
+    });
     app.useGlobalFilters(new ProblemJsonErrorFilter());
     await app.init();
   });

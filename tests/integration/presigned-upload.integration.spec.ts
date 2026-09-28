@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import type { Request, Response, NextFunction } from 'express';
 import { S3Client } from '@aws-sdk/client-s3';
 import { ConfigModule } from '../../src/config/config.module.js';
 import { AppConfigService } from '../../src/config/config.service.js';
@@ -17,6 +18,8 @@ import { FileRepository } from '../../src/db/repositories/file.repository.js';
 import { ReplicaRepository } from '../../src/db/repositories/replica.repository.js';
 import { UsageRepository } from '../../src/db/repositories/usage.repository.js';
 import { OutboxRepository } from '../../src/db/repositories/outbox.repository.js';
+import { ProblemJsonErrorFilter } from '../../src/common/filters/problem-json-error.filter.js';
+import type { AuthenticatedHttpRequest } from '../../src/auth/context.js';
 import type { RequestContext } from '../../src/core/request-context.js';
 import type { FileRecord, FileReplica } from '../../src/core/types.js';
 
@@ -111,6 +114,11 @@ describe('Direct-to-Storage Presigned Upload Integration [P2-09]', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    app.use((req: Request, _res: Response, next: NextFunction) => {
+      (req as AuthenticatedHttpRequest).ctx = mockCtx;
+      next();
+    });
+    app.useGlobalFilters(new ProblemJsonErrorFilter());
     await app.init();
 
     presignedService = moduleRef.get(PresignedUploadService);

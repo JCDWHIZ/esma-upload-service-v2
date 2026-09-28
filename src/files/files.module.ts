@@ -12,8 +12,11 @@ import { KeyService } from '../core/storage-key.service.js';
 import { AuthorizationModule } from '../authz/authorization.module.js';
 import { NoOpQuotaGate, QUOTA_GATE } from './quota-gate.interface.js';
 
+import { AuthModule } from '../auth/auth.module.js';
+import { IngestModule } from '../ingest/ingest.module.js';
+
 @Module({
-  imports: [AuthorizationModule],
+  imports: [AuthorizationModule, AuthModule, IngestModule],
   controllers: [FilesController, HealthController],
   providers: [
     FilesService,

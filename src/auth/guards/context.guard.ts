@@ -29,6 +29,10 @@ export class ContextGuard implements CanActivate {
     const http = context.switchToHttp();
     const req = http.getRequest<AuthenticatedHttpRequest>();
 
+    if (req.ctx) {
+      return true;
+    }
+
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),

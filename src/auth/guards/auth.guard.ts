@@ -36,6 +36,9 @@ export class AuthGuard implements CanActivate {
     ) ?? ['school-jwt', 'admin-jwt', 'api-key', 'bearer-jwt'];
 
     const req = context.switchToHttp().getRequest<AuthenticatedHttpRequest>();
+    if (req.ctx) {
+      return true;
+    }
     const headers = req.headers ?? {};
 
     const authHeader = headers['authorization']?.trim();

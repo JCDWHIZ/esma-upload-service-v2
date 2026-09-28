@@ -11,6 +11,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { Readable } from 'node:stream';
+import type { Request, Response, NextFunction } from 'express';
 import { FilesModule } from '../../src/files/files.module.js';
 import { ConfigModule } from '../../src/config/config.module.js';
 import { AuthorizationModule } from '../../src/authz/authorization.module.js';
@@ -23,6 +24,7 @@ import { ReplicaRepository } from '../../src/db/repositories/replica.repository.
 import { UsageRepository } from '../../src/db/repositories/usage.repository.js';
 import { DatabaseService } from '../../src/db/database.service.js';
 import { ProblemJsonErrorFilter } from '../../src/common/filters/problem-json-error.filter.js';
+import type { AuthenticatedHttpRequest } from '../../src/auth/context.js';
 import { FileRecord, FileReplica } from '../../src/core/types.js';
 
 describe('DeleteService & FileQuery Integration [P2-08]', () => {
@@ -189,6 +191,24 @@ describe('DeleteService & FileQuery Integration [P2-08]', () => {
     } as unknown as ReturnType<DatabaseService['getDb']>);
 
     app = moduleRef.createNestApplication();
+    app.use((req: Request, _res: Response, next: NextFunction) => {
+      (req as AuthenticatedHttpRequest).ctx = {
+        namespace: 'esma-tenant',
+        tenantId: 'default',
+        actor: {
+          id: 'admin-user',
+          type: 'user',
+          roles: ['schooladmin', 'admin'],
+          scopes: ['files:read', 'files:write', 'files:delete'],
+          isSchoolAdmin: true,
+          isPlatformAdmin: true,
+        },
+        correlationId: 'corr-int-1',
+        ipAddress: '127.0.0.1',
+        attributes: {},
+      };
+      next();
+    });
     app.useGlobalFilters(new ProblemJsonErrorFilter());
     await app.init();
   });
@@ -314,6 +334,7 @@ describe('DeleteService & FileQuery Integration [P2-08]', () => {
     };
 
     expect(body).toEqual({
+      requested: 3,
       total: 3,
       deletedCount: 2,
       failedCount: 1,

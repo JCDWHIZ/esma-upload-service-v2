@@ -6,6 +6,7 @@ export * from './delete.service.js';
 export * from './file-query.service.js';
 export * from './presigned-upload.service.js';
 export * from './dto/presigned-upload.dto.js';
+export * from './dto/files.dto.js';
 export * from './files.service.js';
 export * from './files.controller.js';
 export * from './files.module.js';
