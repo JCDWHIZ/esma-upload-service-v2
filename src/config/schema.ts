@@ -123,6 +123,7 @@ export const rawConfigSchema = z.object({
   // --- Event pipeline: memory | kafka | pulsar ---
   EVENT_BROKER: z.enum(['memory', 'kafka', 'pulsar']).default('memory'),
   ALLOW_MEMORY_BROKER: booleanCoerce.default(false),
+  EVENTS_ENABLED: booleanCoerce.default(false),
   KAFKA_BROKERS: z.string().default('localhost:9092'),
   KAFKA_CLIENT_ID: z.string().default('esma-upload-service'),
   KAFKA_GROUP_ID: z.string().default('esma-upload-workers'),

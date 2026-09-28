@@ -218,6 +218,9 @@ export class AppConfigService {
   get allowMemoryBroker(): boolean {
     return this.config.ALLOW_MEMORY_BROKER;
   }
+  get eventsEnabled(): boolean {
+    return this.config.EVENTS_ENABLED;
+  }
   get kafkaBrokers(): string {
     return this.config.KAFKA_BROKERS;
   }

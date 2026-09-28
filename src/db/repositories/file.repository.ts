@@ -249,4 +249,16 @@ export class FileRepository extends BaseRepository {
 
     return Number(result.numUpdatedRows) > 0;
   }
+
+  async hardDelete(
+    id: string,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<boolean> {
+    const result = await this.getExecutor(trx)
+      .deleteFrom('files')
+      .where('id', '=', id)
+      .executeTakeFirst();
+
+    return Number(result.numDeletedRows) > 0;
+  }
 }
