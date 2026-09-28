@@ -54,6 +54,15 @@ export default defineConfig({
           globals: true,
         },
       },
+      {
+        test: {
+          name: 'contract',
+          include: ['tests/contract/**/*.spec.ts'],
+          testTimeout: 30000,
+          environment: 'node',
+          globals: true,
+        },
+      },
     ],
   },
 });

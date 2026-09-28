@@ -248,10 +248,28 @@ export class StorageUnavailableError extends AppError {
   }
 }
 
+export class PolicyViolationError extends ForbiddenError {
+  constructor(
+    message = 'Operation violates storage or upload policy',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'POLICY_VIOLATION',
+      ...options,
+    });
+  }
+}
+
+export interface RetryableErrorOptions extends Partial<AppErrorOptions> {
+  retryAfterMs?: number;
+}
+
 export class RetryableError extends AppError {
+  public readonly retryAfterMs?: number;
+
   constructor(
     message = 'Transient failure, can be retried',
-    options?: Partial<AppErrorOptions>,
+    options?: RetryableErrorOptions,
   ) {
     super({
       message,
@@ -260,6 +278,7 @@ export class RetryableError extends AppError {
       expose: false,
       ...options,
     });
+    this.retryAfterMs = options?.retryAfterMs;
   }
 }
 
