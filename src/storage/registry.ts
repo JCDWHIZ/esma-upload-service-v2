@@ -110,14 +110,73 @@ export class StorageRegistry implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    // If replicated mode with strict checking, ensure secondaries are configured
-    if (this.topology.mode === 'replicated' && this.topology.strict) {
-      for (const secondary of this.topology.secondaries) {
-        if (!this.drivers.has(secondary)) {
+    if (this.topology.mode === 'replicated') {
+      // 1. Primary must not appear in replicas
+      if (this.topology.secondaries.includes(this.topology.primary)) {
+        if (this.topology.strict) {
           throw new PermanentError(
-            `Replica storage driver "${secondary}" required by HYBRID_REPLICAS under HYBRID_STRICT=true is not configured.`,
+            `Primary storage driver "${this.topology.primary}" must not appear in HYBRID_REPLICAS.`,
+          );
+        } else {
+          this.logger.error(
+            `Primary storage driver "${this.topology.primary}" cannot be a replica target. Removing it from active secondaries.`,
+          );
+          this.topology.secondaries = this.topology.secondaries.filter(
+            (s) => s !== this.topology.primary,
           );
         }
+      }
+
+      // 2. Primary failovers check
+      const validFailovers: ProviderName[] = [];
+      for (const failover of this.topology.primaryFailover) {
+        if (!this.drivers.has(failover)) {
+          if (this.topology.strict) {
+            throw new PermanentError(
+              `Primary failover driver "${failover}" required by HYBRID_PRIMARY_FAILOVER under HYBRID_STRICT=true is not configured.`,
+            );
+          } else {
+            this.logger.error(
+              `Primary failover driver "${failover}" is not configured. Removing from available failover list.`,
+            );
+          }
+        } else {
+          validFailovers.push(failover);
+        }
+      }
+      this.topology.primaryFailover = validFailovers;
+
+      // 3. Secondaries check
+      const validSecondaries: ProviderName[] = [];
+      for (const secondary of this.topology.secondaries) {
+        if (!this.drivers.has(secondary)) {
+          if (this.topology.strict) {
+            throw new PermanentError(
+              `Replica storage driver "${secondary}" required by HYBRID_REPLICAS under HYBRID_STRICT=true is not configured.`,
+            );
+          } else {
+            this.logger.error(
+              `Replica storage driver "${secondary}" is not configured. Removing from active secondaries because HYBRID_STRICT=false.`,
+            );
+          }
+        } else {
+          validSecondaries.push(secondary);
+        }
+      }
+      this.topology.secondaries = validSecondaries;
+
+      // 4. Multi-node warning for local replica (F-27)
+      const isProd =
+        typeof this.config.isProduction === 'function'
+          ? this.config.isProduction()
+          : false;
+      if (
+        (this.config.instanceCountHint > 1 || isProd) &&
+        this.topology.secondaries.includes('local')
+      ) {
+        this.logger.warn(
+          `Multi-node deployment detected (INSTANCE_COUNT_HINT=${this.config.instanceCountHint}) with "local" in HYBRID_REPLICAS. Replicas written to local disk across multiple nodes will result in split-brain storage unless using a shared cluster volume (F-27).`,
+        );
       }
     }
   }
@@ -182,7 +241,10 @@ export class StorageRegistry implements OnModuleInit, OnModuleDestroy {
    */
   isHealthy(provider: ProviderName): boolean {
     const cached = this.healthCache.get(provider);
-    return cached ? cached.ok : false;
+    if (cached !== undefined) {
+      return cached.ok;
+    }
+    return this.drivers.has(provider);
   }
 
   /**

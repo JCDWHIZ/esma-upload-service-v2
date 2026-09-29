@@ -32,9 +32,19 @@ export function resolveTopology(config: AppConfigService): StorageTopology {
 
   if (driverMode === 'hybrid') {
     const primary = config.hybridPrimary;
-    const failover = config.hybridPrimaryFailover;
-    const primaryFailover: ProviderName[] =
-      failover && failover !== primary ? [failover] : [];
+    const failoverRaw = config.hybridPrimaryFailover?.trim() ?? '';
+    let primaryFailover: ProviderName[] = [];
+
+    if (failoverRaw.length > 0) {
+      primaryFailover = Array.from(
+        new Set(
+          failoverRaw
+            .split(',')
+            .map((s) => s.trim() as ProviderName)
+            .filter((s) => s.length > 0 && s !== primary),
+        ),
+      );
+    }
 
     let secondaries: ProviderName[] = [];
     const replicasRaw = config.hybridReplicas.trim();
@@ -43,10 +53,14 @@ export function resolveTopology(config: AppConfigService): StorageTopology {
       const all: ProviderName[] = ['local', 'cloudinary', 'seaweedfs'];
       secondaries = all.filter((d) => d !== primary);
     } else if (replicasRaw.length > 0) {
-      secondaries = replicasRaw
-        .split(',')
-        .map((s) => s.trim() as ProviderName)
-        .filter((s) => s.length > 0 && s !== primary);
+      secondaries = Array.from(
+        new Set(
+          replicasRaw
+            .split(',')
+            .map((s) => s.trim() as ProviderName)
+            .filter((s) => s.length > 0),
+        ),
+      );
     }
 
     return {

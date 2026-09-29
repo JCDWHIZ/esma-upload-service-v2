@@ -94,9 +94,7 @@ export const rawConfigSchema = z.object({
   HYBRID_PRIMARY: z
     .enum(['local', 'cloudinary', 'seaweedfs'])
     .default('seaweedfs'),
-  HYBRID_PRIMARY_FAILOVER: z
-    .enum(['local', 'cloudinary', 'seaweedfs'])
-    .default('local'),
+  HYBRID_PRIMARY_FAILOVER: z.string().default('local'),
   HYBRID_REPLICAS: z.string().default('cloudinary,local'),
   HYBRID_STRICT: booleanCoerce.default(true),
   DRIVER_HEALTH_INTERVAL_SECONDS: intCoerce(30).default(30),
@@ -192,9 +190,14 @@ function usesStorageDriver(
   if (data.STORAGE_DRIVER === driver) return true;
   if (data.STORAGE_DRIVER === 'hybrid') {
     if (data.HYBRID_PRIMARY === driver) return true;
-    if (data.HYBRID_PRIMARY_FAILOVER === driver) return true;
-    const replicas = data.HYBRID_REPLICAS.split(',').map((r) => r.trim());
-    if (replicas.includes(driver)) return true;
+    const failovers = (data.HYBRID_PRIMARY_FAILOVER ?? '')
+      .split(',')
+      .map((r) => r.trim());
+    if (failovers.includes(driver)) return true;
+    const replicas = (data.HYBRID_REPLICAS ?? '')
+      .split(',')
+      .map((r) => r.trim());
+    if (replicas.includes(driver) || replicas.includes('auto')) return true;
   }
   return false;
 }

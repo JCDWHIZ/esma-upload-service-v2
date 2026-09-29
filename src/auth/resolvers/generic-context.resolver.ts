@@ -98,8 +98,11 @@ export class GenericContextResolver implements ContextResolver {
         ) {
           subTenantId = rawSubTenant.trim();
           assertSafeSegment(subTenantId, 'subTenantId');
-        } else if (rawToken.branchId) {
-          subTenantId = rawToken.branchId;
+        } else if (
+          typeof rawToken.branchId === 'string' &&
+          rawToken.branchId.trim().length > 0
+        ) {
+          subTenantId = rawToken.branchId.trim();
         }
 
         const rawAttributes =

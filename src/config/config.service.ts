@@ -153,7 +153,7 @@ export class AppConfigService {
   get hybridPrimary(): 'local' | 'cloudinary' | 'seaweedfs' {
     return this.config.HYBRID_PRIMARY;
   }
-  get hybridPrimaryFailover(): 'local' | 'cloudinary' | 'seaweedfs' {
+  get hybridPrimaryFailover(): string {
     return this.config.HYBRID_PRIMARY_FAILOVER;
   }
   get hybridReplicas(): string {
