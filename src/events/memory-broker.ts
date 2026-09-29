@@ -436,6 +436,7 @@ export class MemoryBroker implements IMessageBroker {
     const dlqHeaders: Record<string, string> = {
       ...(item.headers ?? {}),
       'x-original-topic': originalTopic,
+      'x-event-type': item.event.eventType,
       'x-error': reason,
       'x-attempts': String(item.attempt + 1),
       'x-first-failed-at':

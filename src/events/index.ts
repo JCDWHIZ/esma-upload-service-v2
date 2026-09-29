@@ -6,3 +6,7 @@ export * from './memory-broker.js';
 export * from './outbox-writer.js';
 export * from './outbox-relay.js';
 export * from './outbox-retention.service.js';
+export * from './backoff.js';
+export * from './consumer.interface.js';
+export * from './consumer.js';
+export * from './idempotency.js';
