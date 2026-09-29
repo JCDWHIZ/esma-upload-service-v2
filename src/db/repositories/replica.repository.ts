@@ -8,8 +8,14 @@ import type {
   Provider,
   ReplicaAvailableMeta,
   ReplicaStatus,
+  ReplicationStatus,
 } from '../../core/types.js';
 import { mapReplicaRow } from '../mappers.js';
+import { deriveReplicationStatus } from '../../core/replication-state.js';
+
+export interface ClaimOptions {
+  readonly allowStaleSec?: number;
+}
 
 @Injectable()
 export class ReplicaRepository extends BaseRepository {
@@ -36,6 +42,8 @@ export class ReplicaRepository extends BaseRepository {
           attempts: r.attempts ?? 0,
           last_error: r.lastError ?? null,
           synced_at: r.syncedAt ?? null,
+          ...(r.createdAt ? { created_at: r.createdAt } : {}),
+          ...(r.updatedAt ? { updated_at: r.updatedAt } : {}),
         })),
       )
       .returningAll()
@@ -58,34 +66,108 @@ export class ReplicaRepository extends BaseRepository {
     return rows.map(mapReplicaRow);
   }
 
+  /**
+   * Recomputes files.replication_status based on current secondary replica states.
+   * Conforms to ARCH §5.2.
+   */
+  async recomputeFileReplicationStatus(
+    fileId: string,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<ReplicationStatus> {
+    const rows = await this.getExecutor(trx)
+      .selectFrom('file_replicas')
+      .select(['status', 'role'])
+      .where('file_id', '=', fileId)
+      .execute();
+
+    const newStatus = deriveReplicationStatus(
+      rows.map((r) => ({
+        status: r.status,
+        role: r.role,
+      })),
+    );
+
+    await this.getExecutor(trx)
+      .updateTable('files')
+      .set({
+        replication_status: newStatus,
+        updated_at: sql`now()`,
+      })
+      .where('id', '=', fileId)
+      .execute();
+
+    return newStatus;
+  }
+
+  /**
+   * Claims a replica for processing via CAS (QUEUED -> IN_PROGRESS),
+   * optionally reclaiming an expired IN_PROGRESS lease older than allowStaleSec.
+   */
   async claim(
     fileId: string,
     provider: Provider,
+    options?: ClaimOptions,
     trx?: Transaction<Database> | Kysely<Database>,
   ): Promise<boolean> {
-    const result = await this.getExecutor(trx)
-      .updateTable('file_replicas')
-      .set({
-        status: 'IN_PROGRESS',
-        updated_at: sql`now()`,
-      })
-      .where('file_id', '=', fileId)
-      .where('provider', '=', provider)
-      .where('status', '=', 'QUEUED')
-      .executeTakeFirst();
+    const executor = this.getExecutor(trx);
+    let result;
 
-    return Number(result.numUpdatedRows) > 0;
+    if (options?.allowStaleSec !== undefined && options.allowStaleSec > 0) {
+      result = await executor
+        .updateTable('file_replicas')
+        .set({
+          status: 'IN_PROGRESS',
+          updated_at: sql`now()`,
+        })
+        .where('file_id', '=', fileId)
+        .where('provider', '=', provider)
+        .where((eb) =>
+          eb.or([
+            eb('status', '=', 'QUEUED'),
+            eb.and([
+              eb('status', '=', 'IN_PROGRESS'),
+              eb(
+                'updated_at',
+                '<',
+                sql<Date>`now() - (${sql.raw(String(options.allowStaleSec))} * interval '1 second')`,
+              ),
+            ]),
+          ]),
+        )
+        .executeTakeFirst();
+    } else {
+      result = await executor
+        .updateTable('file_replicas')
+        .set({
+          status: 'IN_PROGRESS',
+          updated_at: sql`now()`,
+        })
+        .where('file_id', '=', fileId)
+        .where('provider', '=', provider)
+        .where('status', '=', 'QUEUED')
+        .executeTakeFirst();
+    }
+
+    const updated = Number(result.numUpdatedRows) > 0;
+    if (updated) {
+      await this.recomputeFileReplicationStatus(fileId, trx);
+    }
+    return updated;
   }
 
-  async markAvailable(
+  /**
+   * Completes a replica copy via CAS (IN_PROGRESS -> AVAILABLE).
+   */
+  async complete(
     fileId: string,
     provider: Provider,
     meta: ReplicaAvailableMeta = {},
     trx?: Transaction<Database> | Kysely<Database>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const updates: Record<string, unknown> = {
       status: 'AVAILABLE',
       synced_at: sql`now()`,
+      updated_at: sql`now()`,
       last_error: null,
     };
 
@@ -99,75 +181,191 @@ export class ReplicaRepository extends BaseRepository {
       updates.provider_meta = meta.providerMeta;
     }
 
-    await this.getExecutor(trx)
+    const result = await this.getExecutor(trx)
       .updateTable('file_replicas')
       .set(updates)
       .where('file_id', '=', fileId)
       .where('provider', '=', provider)
-      .execute();
+      .where('status', 'in', ['IN_PROGRESS', 'QUEUED'])
+      .executeTakeFirst();
+
+    const updated = Number(result.numUpdatedRows) > 0;
+    if (updated) {
+      await this.recomputeFileReplicationStatus(fileId, trx);
+    }
+    return updated;
   }
 
-  async markFailed(
+  /**
+   * Backwards-compatible alias for complete().
+   */
+  async markAvailable(
+    fileId: string,
+    provider: Provider,
+    meta: ReplicaAvailableMeta = {},
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<boolean> {
+    return this.complete(fileId, provider, meta, trx);
+  }
+
+  /**
+   * Records a retryable replication failure via CAS (IN_PROGRESS -> QUEUED).
+   */
+  async retry(
     fileId: string,
     provider: Provider,
     error: string,
     trx?: Transaction<Database> | Kysely<Database>,
-  ): Promise<void> {
-    await this.getExecutor(trx)
+  ): Promise<boolean> {
+    const result = await this.getExecutor(trx)
+      .updateTable('file_replicas')
+      .set({
+        status: 'QUEUED',
+        last_error: error,
+        attempts: sql`attempts + 1`,
+        updated_at: sql`now()`,
+      })
+      .where('file_id', '=', fileId)
+      .where('provider', '=', provider)
+      .where('status', 'in', ['IN_PROGRESS', 'FAILED'])
+      .executeTakeFirst();
+
+    const updated = Number(result.numUpdatedRows) > 0;
+    if (updated) {
+      await this.recomputeFileReplicationStatus(fileId, trx);
+    }
+    return updated;
+  }
+
+  /**
+   * Backwards-compatible alias for retry().
+   */
+  async requeue(
+    fileId: string,
+    provider: Provider,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<boolean> {
+    return this.retry(fileId, provider, 'Requeued', trx);
+  }
+
+  /**
+   * Records exhausted replication attempts via CAS (IN_PROGRESS -> FAILED).
+   */
+  async fail(
+    fileId: string,
+    provider: Provider,
+    error: string,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<boolean> {
+    const result = await this.getExecutor(trx)
       .updateTable('file_replicas')
       .set({
         status: 'FAILED',
         last_error: error,
         attempts: sql`attempts + 1`,
+        updated_at: sql`now()`,
       })
       .where('file_id', '=', fileId)
       .where('provider', '=', provider)
-      .execute();
+      .where('status', '=', 'IN_PROGRESS')
+      .executeTakeFirst();
+
+    const updated = Number(result.numUpdatedRows) > 0;
+    if (updated) {
+      await this.recomputeFileReplicationStatus(fileId, trx);
+    }
+    return updated;
   }
 
-  async requeue(
+  /**
+   * Backwards-compatible alias for fail().
+   */
+  async markFailed(
+    fileId: string,
+    provider: Provider,
+    error: string,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<boolean> {
+    return this.fail(fileId, provider, error, trx);
+  }
+
+  /**
+   * Redrives a previously failed replica via CAS (FAILED -> QUEUED).
+   */
+  async redrive(
     fileId: string,
     provider: Provider,
     trx?: Transaction<Database> | Kysely<Database>,
-  ): Promise<void> {
-    await this.getExecutor(trx)
+  ): Promise<boolean> {
+    const result = await this.getExecutor(trx)
       .updateTable('file_replicas')
       .set({
         status: 'QUEUED',
+        last_error: null,
+        updated_at: sql`now()`,
       })
       .where('file_id', '=', fileId)
       .where('provider', '=', provider)
-      .execute();
+      .where('status', '=', 'FAILED')
+      .executeTakeFirst();
+
+    const updated = Number(result.numUpdatedRows) > 0;
+    if (updated) {
+      await this.recomputeFileReplicationStatus(fileId, trx);
+    }
+    return updated;
   }
 
+  /**
+   * Marks a replica as DELETING via CAS (AVAILABLE | IN_PROGRESS | FAILED | QUEUED -> DELETING).
+   */
   async markDeleting(
     fileId: string,
     provider: Provider,
     trx?: Transaction<Database> | Kysely<Database>,
-  ): Promise<void> {
-    await this.getExecutor(trx)
+  ): Promise<boolean> {
+    const result = await this.getExecutor(trx)
       .updateTable('file_replicas')
       .set({
         status: 'DELETING',
+        updated_at: sql`now()`,
       })
       .where('file_id', '=', fileId)
       .where('provider', '=', provider)
-      .execute();
+      .where('status', 'in', ['AVAILABLE', 'IN_PROGRESS', 'FAILED', 'QUEUED'])
+      .executeTakeFirst();
+
+    const updated = Number(result.numUpdatedRows) > 0;
+    if (updated) {
+      await this.recomputeFileReplicationStatus(fileId, trx);
+    }
+    return updated;
   }
 
+  /**
+   * Finalizes deletion via CAS (DELETING | QUEUED | FAILED -> DELETED).
+   */
   async markDeleted(
     fileId: string,
     provider: Provider,
     trx?: Transaction<Database> | Kysely<Database>,
-  ): Promise<void> {
-    await this.getExecutor(trx)
+  ): Promise<boolean> {
+    const result = await this.getExecutor(trx)
       .updateTable('file_replicas')
       .set({
         status: 'DELETED',
+        updated_at: sql`now()`,
       })
       .where('file_id', '=', fileId)
       .where('provider', '=', provider)
-      .execute();
+      .where('status', 'in', ['DELETING', 'QUEUED', 'FAILED'])
+      .executeTakeFirst();
+
+    const updated = Number(result.numUpdatedRows) > 0;
+    if (updated) {
+      await this.recomputeFileReplicationStatus(fileId, trx);
+    }
+    return updated;
   }
 
   async findStale(

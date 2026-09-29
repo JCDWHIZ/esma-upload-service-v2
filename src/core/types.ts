@@ -138,6 +138,8 @@ export interface NewFileReplica {
   attempts?: number;
   lastError?: string | null;
   syncedAt?: Date | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface ReplicaAvailableMeta {

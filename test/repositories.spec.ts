@@ -311,6 +311,162 @@ describe('P1-06 Repositories & Concurrency Guarantees', () => {
       const stale = await replicaRepo.findStale('AVAILABLE', futureDate, 10);
       expect(stale.some((r) => r.fileId === file.id)).toBe(true);
     });
+
+    it('recomputes file replication_status across full lifecycle (P4-02)', async () => {
+      const file = await fileRepo.insert({
+        namespace: 'esma-tenant',
+        tenantId: 'school-aggregate',
+        storageKey: 'replica/lifecycle.png',
+        originalFilename: 'lifecycle.png',
+        mimetype: 'image/png',
+        sizeBytes: 1024,
+        visibility: 'tenant',
+        primaryProvider: 'seaweedfs',
+        uploadedBy: 'user-agg',
+        correlationId: 'corr-rep-agg',
+      });
+
+      // 1. Insert primary (AVAILABLE) and two secondaries (QUEUED)
+      await replicaRepo.insertMany([
+        {
+          fileId: file.id,
+          provider: 'seaweedfs',
+          role: 'primary',
+          status: 'AVAILABLE',
+          providerKey: 'seaweed/primary',
+        },
+        {
+          fileId: file.id,
+          provider: 'local',
+          role: 'secondary',
+          status: 'QUEUED',
+          providerKey: 'local/sec-1',
+        },
+        {
+          fileId: file.id,
+          provider: 'cloudinary',
+          role: 'secondary',
+          status: 'QUEUED',
+          providerKey: 'cld/sec-2',
+        },
+      ]);
+
+      // Recompute initial state: all secondaries QUEUED -> aggregate is QUEUED
+      const agg = await replicaRepo.recomputeFileReplicationStatus(file.id);
+      expect(agg).toBe('QUEUED');
+      let fileRecord = await fileRepo.findById(file.id);
+      expect(fileRecord?.replicationStatus).toBe('QUEUED');
+
+      // 2. Claim local secondary (QUEUED -> IN_PROGRESS)
+      const claimedLocal = await replicaRepo.claim(file.id, 'local');
+      expect(claimedLocal).toBe(true);
+      fileRecord = await fileRepo.findById(file.id);
+      expect(fileRecord?.replicationStatus).toBe('IN_PROGRESS');
+
+      // 3. Complete local secondary (IN_PROGRESS -> AVAILABLE)
+      const completedLocal = await replicaRepo.complete(file.id, 'local', {
+        etag: '"etag-local"',
+      });
+      expect(completedLocal).toBe(true);
+      fileRecord = await fileRepo.findById(file.id);
+      // local is AVAILABLE, cloudinary is still QUEUED -> IN_PROGRESS
+      expect(fileRecord?.replicationStatus).toBe('IN_PROGRESS');
+
+      // 4. Claim and fail cloudinary secondary (QUEUED -> IN_PROGRESS -> FAILED)
+      await replicaRepo.claim(file.id, 'cloudinary');
+      const failedCloud = await replicaRepo.fail(
+        file.id,
+        'cloudinary',
+        'Upload quota exceeded',
+      );
+      expect(failedCloud).toBe(true);
+      fileRecord = await fileRepo.findById(file.id);
+      // Mix of AVAILABLE and FAILED with no QUEUED/IN_PROGRESS -> PARTIAL
+      expect(fileRecord?.replicationStatus).toBe('PARTIAL');
+
+      // 5. Redrive cloudinary (FAILED -> QUEUED)
+      const redriven = await replicaRepo.redrive(file.id, 'cloudinary');
+      expect(redriven).toBe(true);
+      fileRecord = await fileRepo.findById(file.id);
+      // Mix of AVAILABLE and QUEUED -> IN_PROGRESS
+      expect(fileRecord?.replicationStatus).toBe('IN_PROGRESS');
+
+      // 6. Complete cloudinary -> all secondaries AVAILABLE -> SYNCED
+      await replicaRepo.claim(file.id, 'cloudinary');
+      await replicaRepo.complete(file.id, 'cloudinary');
+      fileRecord = await fileRepo.findById(file.id);
+      expect(fileRecord?.replicationStatus).toBe('SYNCED');
+
+      // 7. Mark deleting and deleted
+      await replicaRepo.markDeleting(file.id, 'local');
+      await replicaRepo.markDeleted(file.id, 'local');
+      await replicaRepo.markDeleting(file.id, 'cloudinary');
+      await replicaRepo.markDeleted(file.id, 'cloudinary');
+      fileRecord = await fileRepo.findById(file.id);
+      // When all secondaries are DELETED, active secondaries = 0 -> NOT_REQUIRED
+      expect(fileRecord?.replicationStatus).toBe('NOT_REQUIRED');
+    });
+
+    it('claims stale IN_PROGRESS leases when allowStaleSec is specified (P4-02)', async () => {
+      const file = await fileRepo.insert({
+        namespace: 'esma-tenant',
+        tenantId: 'school-stale',
+        storageKey: 'replica/stale.png',
+        originalFilename: 'stale.png',
+        mimetype: 'image/png',
+        sizeBytes: 1024,
+        visibility: 'tenant',
+        primaryProvider: 'seaweedfs',
+        uploadedBy: 'user-stale',
+        correlationId: 'corr-stale-test',
+      });
+
+      // 1. Fresh lease cannot be claimed
+      await replicaRepo.insertMany([
+        {
+          fileId: file.id,
+          provider: 'local',
+          role: 'secondary',
+          status: 'IN_PROGRESS',
+          providerKey: 'local/fresh-key',
+        },
+      ]);
+
+      const freshClaim = await replicaRepo.claim(file.id, 'local', {
+        allowStaleSec: 600,
+      });
+      expect(freshClaim).toBe(false);
+
+      // 2. Stale lease (700 seconds old, exceeding 600s threshold) can be reclaimed
+      const file2 = await fileRepo.insert({
+        namespace: 'esma-tenant',
+        tenantId: 'school-stale-2',
+        storageKey: 'replica/stale2.png',
+        originalFilename: 'stale2.png',
+        mimetype: 'image/png',
+        sizeBytes: 1024,
+        visibility: 'tenant',
+        primaryProvider: 'seaweedfs',
+        uploadedBy: 'user-stale',
+        correlationId: 'corr-stale-test-2',
+      });
+
+      await replicaRepo.insertMany([
+        {
+          fileId: file2.id,
+          provider: 'local',
+          role: 'secondary',
+          status: 'IN_PROGRESS',
+          providerKey: 'local/stale-key',
+          updatedAt: new Date(Date.now() - 700 * 1000),
+        },
+      ]);
+
+      const staleClaim = await replicaRepo.claim(file2.id, 'local', {
+        allowStaleSec: 600,
+      });
+      expect(staleClaim).toBe(true);
+    });
   });
 
   describe('OutboxRepository', () => {

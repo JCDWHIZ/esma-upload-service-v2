@@ -13,11 +13,14 @@ describe('StoragePlacementService Unit & Property Tests (P4-01)', () => {
     correlationId: 'test-corr-id',
     namespace: 'generic',
     tenantId: 'tenant-123',
+    ipAddress: '127.0.0.1',
+    attributes: {},
     actor: {
+      type: 'user',
       id: 'actor-1',
       roles: ['admin'],
+      scopes: ['files:read', 'files:write'],
     },
-    authenticated: true,
   };
 
   const createMockConfig = (
