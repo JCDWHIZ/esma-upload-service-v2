@@ -17,6 +17,7 @@ import type { FileRepository } from '../../src/db/repositories/file.repository.j
 import type { ReplicaRepository } from '../../src/db/repositories/replica.repository.js';
 import type { UsageRepository } from '../../src/db/repositories/usage.repository.js';
 import type { OutboxRepository } from '../../src/db/repositories/outbox.repository.js';
+import type { OutboxWriter } from '../../src/events/outbox-writer.js';
 
 describe('DeleteService [P2-08]', () => {
   let deleteService: DeleteService;
@@ -33,7 +34,7 @@ describe('DeleteService [P2-08]', () => {
     bytes: bigint;
     files: number;
   }>;
-  let enqueuedOutboxEvents: Array<Record<string, unknown>>;
+  let enqueuedOutboxEvents: unknown[];
 
   const mockContext: RequestContext = {
     namespace: 'esma-tenant',
@@ -210,6 +211,14 @@ describe('DeleteService [P2-08]', () => {
       }),
     };
 
+    const mockOutboxWriter = {
+      enqueue: vi.fn().mockImplementation((trx: unknown, envelope: unknown) => {
+        void trx;
+        enqueuedOutboxEvents.push(envelope);
+        return Promise.resolve();
+      }),
+    };
+
     const mockDatabaseService = {
       getDb: vi.fn().mockReturnValue({
         transaction: () => ({
@@ -229,6 +238,7 @@ describe('DeleteService [P2-08]', () => {
       mockReplicaRepo as unknown as ReplicaRepository,
       mockUsageRepo as unknown as UsageRepository,
       mockOutboxRepo as unknown as OutboxRepository,
+      mockOutboxWriter as unknown as OutboxWriter,
     );
   });
 
@@ -359,24 +369,15 @@ describe('DeleteService [P2-08]', () => {
     await deleteService.delete(mockContext, 'f-event');
 
     expect(enqueuedOutboxEvents).toHaveLength(1);
-    const firstEvent = enqueuedOutboxEvents[0] as {
-      topic: string;
-      partitionKey: string;
-      eventType: string;
-      envelope: {
-        eventType: string;
-        namespace: string;
-        tenantId: string;
-        payload: { fileId: string };
-      };
-    };
-    expect(firstEvent.topic).toBe('file.purge');
-    expect(firstEvent.partitionKey).toBe('f-event');
-    expect(firstEvent.eventType).toBe('file.purge');
-    expect(firstEvent.envelope.eventType).toBe('file.purge');
-    expect(firstEvent.envelope.namespace).toBe('esma-tenant');
-    expect(firstEvent.envelope.tenantId).toBe('school-123');
-    expect(firstEvent.envelope.payload.fileId).toBe('f-event');
+    // OutboxWriter.enqueue pushes the EventEnvelope directly (topic lives in the outbox row, not envelope)
+    const envelope = enqueuedOutboxEvents[0] as Record<string, unknown>;
+    expect(envelope['eventType']).toBe('file.purge');
+    expect(envelope['partitionKey']).toBe('f-event');
+    expect(typeof envelope['eventId']).toBe('string');
+    expect(envelope['namespace']).toBe('esma-tenant');
+    expect(envelope['tenantId']).toBe('school-123');
+    const payload = envelope['payload'] as Record<string, unknown>;
+    expect(payload['fileId']).toBe('f-event');
   });
 
   it('throws NotFoundError when fileId does not exist [P2-08]', async () => {

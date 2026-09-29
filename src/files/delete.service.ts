@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfigService } from '../config/config.service.js';
 import { RequestContext } from '../core/request-context.js';
-import { newId } from '../core/identifiers.js';
 import {
   AppError,
   ForbiddenError,
@@ -17,6 +16,9 @@ import { FileRepository } from '../db/repositories/file.repository.js';
 import { ReplicaRepository } from '../db/repositories/replica.repository.js';
 import { UsageRepository } from '../db/repositories/usage.repository.js';
 import { OutboxRepository } from '../db/repositories/outbox.repository.js';
+import { OutboxWriter } from '../events/outbox-writer.js';
+import { createEnvelope } from '../events/envelope.js';
+import { EVENT_TYPES } from '../events/catalog.js';
 
 export interface BulkDeleteResultItem {
   fileId: string;
@@ -45,6 +47,7 @@ export class DeleteService {
     private readonly replicaRepo: ReplicaRepository,
     private readonly usageRepo: UsageRepository,
     private readonly outboxRepo: OutboxRepository,
+    private readonly outboxWriter: OutboxWriter,
   ) {}
 
   /**
@@ -123,28 +126,15 @@ export class DeleteService {
           trx,
         );
 
-        // Enqueue outbox event if enabled
+        // Enqueue outbox event if enabled (using typed envelope per P4-04)
         if (this.configService.eventsEnabled) {
-          await this.outboxRepo.enqueue(
-            {
-              topic: 'file.purge',
-              partitionKey: fileId,
-              eventType: 'file.purge',
-              envelope: {
-                eventId: newId(),
-                eventType: 'file.purge',
-                schemaVersion: 1,
-                timestamp: new Date().toISOString(),
-                correlationId: ctx.correlationId,
-                namespace: file.namespace,
-                tenantId: file.tenantId,
-                partitionKey: fileId,
-                attempt: 0,
-                payload: { fileId },
-              },
-            },
-            trx,
-          );
+          const purgeEnvelope = createEnvelope({
+            eventType: EVENT_TYPES.FILE_PURGE,
+            partitionKey: fileId,
+            context: ctx,
+            payload: { fileId },
+          });
+          await this.outboxWriter.enqueue(trx, purgeEnvelope);
         }
       });
     }

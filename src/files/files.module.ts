@@ -11,12 +11,13 @@ import { PresignedUploadService } from './presigned-upload.service.js';
 import { KeyService } from '../core/storage-key.service.js';
 import { AuthorizationModule } from '../authz/authorization.module.js';
 import { NoOpQuotaGate, QUOTA_GATE } from './quota-gate.interface.js';
+import { EventsModule } from '../events/events.module.js';
 
 import { AuthModule } from '../auth/auth.module.js';
 import { IngestModule } from '../ingest/ingest.module.js';
 
 @Module({
-  imports: [AuthorizationModule, AuthModule, IngestModule],
+  imports: [AuthorizationModule, AuthModule, IngestModule, EventsModule],
   controllers: [FilesController, HealthController],
   providers: [
     FilesService,

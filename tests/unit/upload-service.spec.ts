@@ -211,10 +211,11 @@ describe('UploadService (single-driver mode) [P2-06]', () => {
       }),
     };
 
-    const mockOutboxRepo = {
-      enqueue: vi.fn().mockImplementation((event: unknown) => {
-        enqueuedOutboxEvents.push(event);
-        return Promise.resolve(event);
+    const mockOutboxWriter = {
+      enqueue: vi.fn().mockImplementation((trx: unknown, envelope: unknown) => {
+        void trx;
+        enqueuedOutboxEvents.push(envelope);
+        return Promise.resolve();
       }),
     };
 
@@ -242,7 +243,7 @@ describe('UploadService (single-driver mode) [P2-06]', () => {
       mockFileRepo as unknown as import('../../src/db/repositories/file.repository.js').FileRepository,
       mockReplicaRepo as unknown as import('../../src/db/repositories/replica.repository.js').ReplicaRepository,
       mockUsageRepo as unknown as import('../../src/db/repositories/usage.repository.js').UsageRepository,
-      mockOutboxRepo as unknown as import('../../src/db/repositories/outbox.repository.js').OutboxRepository,
+      mockOutboxWriter as unknown as import('../../src/events/outbox-writer.js').OutboxWriter,
       mockQuotaGate,
     );
   });
@@ -468,10 +469,16 @@ describe('UploadService (single-driver mode) [P2-06]', () => {
 
     expect(outcomes[0].success).toBe(true);
     expect(enqueuedOutboxEvents).toHaveLength(1);
-    expect(enqueuedOutboxEvents[0]).toMatchObject({
-      topic: 'file.uploaded',
-      eventType: 'file.uploaded',
-    });
+    // OutboxWriter.enqueue is called with (trx, envelope) and we capture the envelope
+    const envelope = enqueuedOutboxEvents[0] as Record<string, unknown>;
+    expect(envelope['eventType']).toBe('file.uploaded');
+    expect(typeof envelope['eventId']).toBe('string');
+    expect(envelope['partitionKey']).toBe(
+      (outcomes[0] as { fileId: string }).fileId,
+    );
+    const payload = envelope['payload'] as Record<string, unknown>;
+    expect(payload['mimetype']).toBe('image/jpeg');
+    expect(payload['primaryProvider']).toBe('local');
   });
 
   it('uploadSingle returns the manifest directly', async () => {

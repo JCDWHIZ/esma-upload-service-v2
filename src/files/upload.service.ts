@@ -25,7 +25,9 @@ import { DatabaseService } from '../db/database.service.js';
 import { FileRepository } from '../db/repositories/file.repository.js';
 import { ReplicaRepository } from '../db/repositories/replica.repository.js';
 import { UsageRepository } from '../db/repositories/usage.repository.js';
-import { OutboxRepository } from '../db/repositories/outbox.repository.js';
+import { OutboxWriter } from '../events/outbox-writer.js';
+import { createEnvelope } from '../events/envelope.js';
+import { EVENT_TYPES } from '../events/catalog.js';
 import type { IngestedFile } from '../ingest/types.js';
 import {
   type IQuotaGate,
@@ -76,7 +78,7 @@ export class UploadService {
     private readonly fileRepo: FileRepository,
     private readonly replicaRepo: ReplicaRepository,
     private readonly usageRepo: UsageRepository,
-    private readonly outboxRepo: OutboxRepository,
+    private readonly outboxWriter: OutboxWriter,
     @Optional()
     @Inject(QUOTA_GATE)
     private readonly quotaGate: IQuotaGate = new NoOpQuotaGate(),
@@ -342,27 +344,20 @@ export class UploadService {
           trx,
         );
 
-        // Optional outbox event when EVENTS_ENABLED is true
+        // Outbox event (EVENTS_ENABLED is now true by default per P4-04)
         if (this.configService.eventsEnabled) {
-          await this.outboxRepo.enqueue(
-            {
-              topic: 'file.uploaded',
-              partitionKey: fileId,
-              eventType: 'file.uploaded',
-              envelope: {
-                fileId,
-                namespace: ctx.namespace,
-                tenantId: ctx.tenantId,
-                subTenantId: ctx.subTenantId ?? null,
-                sizeBytes: file.size,
-                mimetype: file.detectedMime,
-                visibility,
-                primaryProvider: primaryDriver.name,
-                createdAt: inserted.createdAt.toISOString(),
-              },
+          const uploadedEnvelope = createEnvelope({
+            eventType: EVENT_TYPES.FILE_UPLOADED,
+            partitionKey: fileId,
+            context: ctx,
+            payload: {
+              fileId,
+              size: file.size,
+              mimetype: file.detectedMime,
+              primaryProvider: primaryDriver.name,
             },
-            trx,
-          );
+          });
+          await this.outboxWriter.enqueue(trx, uploadedEnvelope);
         }
 
         return { file: inserted, replica: replicas[0] };

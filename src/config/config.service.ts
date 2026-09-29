@@ -256,6 +256,18 @@ export class AppConfigService {
   get outboxRetentionHours(): number {
     return this.config.OUTBOX_RETENTION_HOURS;
   }
+  get outboxPollMinMs(): number {
+    return this.config.OUTBOX_POLL_MIN_MS;
+  }
+  get outboxPollMaxMs(): number {
+    return this.config.OUTBOX_POLL_MAX_MS;
+  }
+  get outboxBatchSize(): number {
+    return this.config.OUTBOX_BATCH_SIZE;
+  }
+  get outboxListenNotify(): boolean {
+    return this.config.OUTBOX_LISTEN_NOTIFY;
+  }
   get tombstoneRetentionDays(): number {
     return this.config.TOMBSTONE_RETENTION_DAYS;
   }
