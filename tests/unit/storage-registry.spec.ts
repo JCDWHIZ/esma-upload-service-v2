@@ -171,6 +171,9 @@ describe('StorageRegistry & Topology Unit Tests', () => {
       const config = createMockConfig({
         storageDriver: 'local',
         driverHealthIntervalSeconds: 5,
+        seaweedfsS3Endpoint: undefined,
+        seaweedfsBucket: undefined,
+        cloudinaryCloudName: undefined,
       });
       const registry = new StorageRegistry(config);
 
@@ -223,6 +226,9 @@ describe('StorageRegistry & Topology Unit Tests', () => {
       const config = createMockConfig({
         storageDriver: 'local',
         driverHealthIntervalSeconds: 5,
+        seaweedfsS3Endpoint: undefined,
+        seaweedfsBucket: undefined,
+        cloudinaryCloudName: undefined,
       });
       const registry = new StorageRegistry(config);
 
