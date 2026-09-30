@@ -289,6 +289,24 @@ export class AppConfigService {
   get purgeInline(): boolean {
     return this.config.PURGE_INLINE;
   }
+  get sweepIntervalSeconds(): number {
+    return this.config.SWEEP_INTERVAL_SECONDS;
+  }
+  get sweepQueuedAfterMinutes(): number {
+    return this.config.SWEEP_QUEUED_AFTER_MINUTES;
+  }
+  get sweepLeaseTimeoutMinutes(): number {
+    return this.config.SWEEP_LEASE_TIMEOUT_MINUTES;
+  }
+  get sweepDeletingAfterMinutes(): number {
+    return this.config.SWEEP_DELETING_AFTER_MINUTES;
+  }
+  get redriveAfterHours(): number {
+    return this.config.REDRIVE_AFTER_HOURS;
+  }
+  get redriveMaxTimes(): number {
+    return this.config.REDRIVE_MAX_TIMES;
+  }
 
   // --- Rollout Flags ---
   get legacyEngine(): 'legacy' | 'core' {

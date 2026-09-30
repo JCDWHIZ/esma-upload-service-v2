@@ -41,7 +41,9 @@
     "apikey:list": "ts-node src/scripts/apikey-cli.ts list",
     "apikey:create:prod": "node dist/src/scripts/apikey-cli.js create",
     "apikey:revoke:prod": "node dist/src/scripts/apikey-cli.js revoke",
-    "apikey:list:prod": "node dist/src/scripts/apikey-cli.js list"
+    "apikey:list:prod": "node dist/src/scripts/apikey-cli.js list",
+    "reconcile:orphans": "ts-node src/scripts/reconcile-orphans.ts",
+    "reconcile:orphans:prod": "node dist/src/scripts/reconcile-orphans.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",

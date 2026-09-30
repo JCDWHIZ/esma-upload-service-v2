@@ -9,6 +9,7 @@ import { AppConfigService } from '../config/config.service.js';
 import { OutboxRelay } from '../events/outbox-relay.js';
 import { OutboxRetentionService } from '../events/outbox-retention.service.js';
 import { ReplicationWorker } from './replication.worker.js';
+import { SweeperService } from './sweeper.service.js';
 
 @Injectable()
 export class WorkerService
@@ -23,6 +24,7 @@ export class WorkerService
     private readonly outboxRelay: OutboxRelay,
     private readonly outboxRetention: OutboxRetentionService,
     private readonly replicationWorker: ReplicationWorker,
+    private readonly sweeperService: SweeperService,
   ) {}
 
   async onApplicationBootstrap() {
@@ -59,8 +61,9 @@ export class WorkerService
       this.runningRoles.add('processing');
     }
 
-    if (roles.includes('sweeper')) {
-      this.logger.log('Sweeper role configured (placeholder for P4-10)');
+    if (roles.includes('sweeper') && !this.runningRoles.has('sweeper')) {
+      this.logger.log('Starting sweeper role: SweeperService');
+      this.sweeperService.start();
       this.runningRoles.add('sweeper');
     }
   }
@@ -74,6 +77,10 @@ export class WorkerService
     if (this.runningRoles.has('replication')) {
       await this.replicationWorker.stop();
       this.runningRoles.delete('replication');
+    }
+    if (this.runningRoles.has('sweeper')) {
+      this.sweeperService.stop();
+      this.runningRoles.delete('sweeper');
     }
     this.runningRoles.clear();
   }

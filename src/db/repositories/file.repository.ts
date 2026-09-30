@@ -6,6 +6,7 @@ import type { Database } from '../types.js';
 import type {
   FileListFilter,
   FileRecord,
+  FileStatus,
   FileStatusUpdate,
   NewFileRecord,
   PaginatedResult,
@@ -296,5 +297,48 @@ export class FileRepository extends BaseRepository {
       .execute();
 
     return results.map(mapFileRow);
+  }
+
+  async findStaleByStatus(
+    status: FileStatus,
+    olderThan: Date,
+    limit = 50,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<FileRecord[]> {
+    const results = await this.getExecutor(trx)
+      .selectFrom('files')
+      .selectAll()
+      .where('status', '=', status)
+      .where('updated_at', '<', olderThan)
+      .orderBy('updated_at', 'asc')
+      .limit(limit)
+      .execute();
+
+    return results.map(mapFileRow);
+  }
+
+  async hardDeleteTombstones(
+    olderThan: Date,
+    limit = 100,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<number> {
+    const result = await this.getExecutor(trx)
+      .deleteFrom('files')
+      .where('id', 'in', (eb) =>
+        eb
+          .selectFrom('files')
+          .select('id')
+          .where('status', '=', 'DELETED')
+          .where((w) =>
+            w.or([
+              w('deleted_at', '<', olderThan),
+              w('updated_at', '<', olderThan),
+            ]),
+          )
+          .limit(limit),
+      )
+      .executeTakeFirst();
+
+    return Number(result.numDeletedRows);
   }
 }

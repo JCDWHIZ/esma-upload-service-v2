@@ -66,6 +66,10 @@ import {
   fileUploadMetadataSchema,
 } from './dto/files.dto.js';
 import { FileRepository } from '../db/repositories/file.repository.js';
+import { ReplicaRepository } from '../db/repositories/replica.repository.js';
+import { OutboxRepository } from '../db/repositories/outbox.repository.js';
+import { OutboxWriter } from '../events/outbox-writer.js';
+import { DatabaseService } from '../db/database.service.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { AuthGuard } from '../auth/guards/auth.guard.js';
 import { ContextGuard } from '../auth/guards/context.guard.js';
@@ -86,9 +90,13 @@ import type { RequestContext } from '../core/request-context.js';
 import {
   ForbiddenError,
   NotFoundError,
+  StorageUnavailableError,
   ValidationError,
 } from '../core/errors/app-error.js';
 import type { UploadManifestResponse } from '../core/manifest.js';
+import { EVENT_TYPES } from '../events/catalog.js';
+import { createEnvelope } from '../events/envelope.js';
+import type { Provider } from '../core/types.js';
 
 function getRequestContext(
   req?: AuthenticatedHttpRequest,
@@ -137,6 +145,10 @@ export class FilesController {
     private readonly fileQueryService: FileQueryService,
     private readonly presignedUploadService: PresignedUploadService,
     private readonly fileRepo: FileRepository,
+    private readonly replicaRepo: ReplicaRepository,
+    private readonly outboxRepo: OutboxRepository,
+    private readonly outboxWriter: OutboxWriter,
+    private readonly dbService: DatabaseService,
     private readonly authzService: AuthorizationService,
     private readonly policyRegistry: PolicyRegistry,
   ) {}
@@ -810,6 +822,138 @@ export class FilesController {
       deletedCount: result.deletedCount,
       failedCount: result.failedCount,
       results: result.results,
+    };
+  }
+
+  // ── 9. Operational Admin Endpoints [P4-10] ─────────────────────────────────
+
+  @Post(':fileId/replicate')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RequireAction('admin')
+  @ApiOperation({
+    summary: 'Manually trigger replication for a file (admin)',
+    description:
+      'Enqueues file.replicate outbox events for specified target providers or missing secondary replicas.',
+  })
+  @ApiParam({ name: 'fileId', description: 'UUIDv7 identifier of the file' })
+  @ApiResponse({
+    status: 202,
+    description: 'Replication jobs enqueued successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'File not found or cross-tenant',
+    type: ProblemDetailsDto,
+  })
+  async triggerReplication(
+    @Param(new ZodValidationPipe(fileIdParamSchema)) param: { fileId: string },
+    @Body() body?: { targetProvider?: string; targetProviders?: string[] },
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const file = await this.fileRepo.findById(param.fileId);
+    if (!file || file.status === 'DELETED') {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    const ctx = getRequestContext(req, 'req-manual-replicate');
+    if (!this.authzService.canAccessTenant(ctx, file.tenantId)) {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    let targets: Provider[] = [];
+    if (body?.targetProvider) {
+      targets.push(body.targetProvider as Provider);
+    } else if (
+      Array.isArray(body?.targetProviders) &&
+      body.targetProviders.length > 0
+    ) {
+      targets = body.targetProviders as Provider[];
+    } else {
+      const replicas = await this.replicaRepo.listByFile(param.fileId);
+      const missing = replicas.filter((r) => r.status !== 'AVAILABLE');
+      if (missing.length > 0) {
+        targets = missing.map((r) => r.provider);
+      } else {
+        targets = (['local', 'seaweedfs', 'cloudinary'] as Provider[]).filter(
+          (p) => p !== file.primaryProvider,
+        );
+      }
+    }
+
+    const database = this.dbService.getDb();
+    if (!database) {
+      throw new StorageUnavailableError('Database service unavailable');
+    }
+
+    const enqueuedTargets: Provider[] = [];
+
+    await database.transaction().execute(async (trx) => {
+      for (const provider of targets) {
+        const replicas = await this.replicaRepo.listByFile(param.fileId, trx);
+        const existing = replicas.find((r) => r.provider === provider);
+
+        if (!existing) {
+          await this.replicaRepo.insertMany(
+            [
+              {
+                fileId: param.fileId,
+                provider,
+                role: 'secondary',
+                status: 'QUEUED',
+                providerKey: file.storageKey,
+              },
+            ],
+            trx,
+          );
+        } else if (
+          existing.status !== 'AVAILABLE' &&
+          existing.status !== 'IN_PROGRESS'
+        ) {
+          await this.replicaRepo.requeue(param.fileId, provider, trx);
+        }
+
+        const envelope = createEnvelope({
+          eventType: EVENT_TYPES.FILE_REPLICATE,
+          partitionKey: param.fileId,
+          payload: { fileId: param.fileId, targetProvider: provider },
+          context: ctx,
+          namespace: file.namespace,
+          tenantId: file.tenantId,
+        });
+
+        await this.outboxWriter.enqueue(trx, envelope);
+        enqueuedTargets.push(provider);
+      }
+    });
+
+    return {
+      fileId: param.fileId,
+      status: 'QUEUED',
+      enqueuedTargets,
+    };
+  }
+
+  @Get('/api/v1/admin/replication')
+  @RequireAction('admin')
+  @ApiOperation({
+    summary:
+      'Get replication engine operational metrics and status summary (admin)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Replication operational metrics summary',
+  })
+  async getReplicationAdminSummary() {
+    const statusCounts = await this.replicaRepo.countByStatus();
+    const oldestQueuedAgeSeconds =
+      await this.replicaRepo.getOldestQueuedAgeSeconds();
+    const outboxPending = await this.outboxRepo.countUnpublished();
+
+    return {
+      statusCounts,
+      oldestQueuedAgeSeconds,
+      outboxPending,
+      dlqDepth: 0,
     };
   }
 }

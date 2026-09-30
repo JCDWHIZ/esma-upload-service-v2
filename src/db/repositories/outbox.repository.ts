@@ -97,4 +97,16 @@ export class OutboxRepository extends BaseRepository {
 
     return Number(result.numDeletedRows);
   }
+
+  async countUnpublished(
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<number> {
+    const row = await this.getExecutor(trx)
+      .selectFrom('outbox_events')
+      .select(sql<number>`count(*)::int`.as('count'))
+      .where('published_at', 'is', null)
+      .executeTakeFirst();
+
+    return Number(row?.count ?? 0);
+  }
 }

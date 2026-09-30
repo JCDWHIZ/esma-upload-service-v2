@@ -146,6 +146,12 @@ export const rawConfigSchema = z.object({
   CLAMAV_HOST: z.string().default(''),
   CLAMAV_PORT: intCoerce(3310).default(3310),
   PURGE_INLINE: booleanCoerce.default(false),
+  SWEEP_INTERVAL_SECONDS: intCoerce(60).default(60),
+  SWEEP_QUEUED_AFTER_MINUTES: intCoerce(10).default(10),
+  SWEEP_LEASE_TIMEOUT_MINUTES: intCoerce(15).default(15),
+  SWEEP_DELETING_AFTER_MINUTES: intCoerce(10).default(10),
+  REDRIVE_AFTER_HOURS: intCoerce(0).default(0),
+  REDRIVE_MAX_TIMES: intCoerce(3).default(3),
 
   // --- Rollout flags (removed in P6-10) ---
   LEGACY_ENGINE: z.enum(['legacy', 'core']).default('legacy'),

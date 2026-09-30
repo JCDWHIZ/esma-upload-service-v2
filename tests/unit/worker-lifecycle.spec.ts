@@ -73,6 +73,11 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
   });
 
   it('starts configured roles (relay and replication) on bootstrap and stops on shutdown', async () => {
+    const mockSweeperService = {
+      start: vi.fn(),
+      stop: vi.fn(),
+    } as any;
+
     const workerService = new WorkerService(
       mockLogger,
       mockDb,
@@ -80,6 +85,7 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
       mockRelay,
       mockRetention,
       mockReplicationWorker,
+      mockSweeperService,
     );
 
     await workerService.onApplicationBootstrap();
