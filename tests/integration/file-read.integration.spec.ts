@@ -97,6 +97,12 @@ describe('FileRead & Content Delivery Integration [P2-07]', () => {
     filesDb.set(privateFile.id, privateFile);
 
     const mockStorageRegistry = {
+      has: vi.fn().mockImplementation((name: string) => {
+        return (
+          name === 'local' || name === 'cloudinary' || name === 'seaweedfs'
+        );
+      }),
+      isHealthy: vi.fn().mockReturnValue(true),
       get: vi.fn().mockImplementation((name: string) => {
         if (name === 'local' || name === 'cloudinary' || name === 'seaweedfs') {
           return fakeDriver;
@@ -144,17 +150,20 @@ describe('FileRead & Content Delivery Integration [P2-07]', () => {
         const tenantHeader = req.headers['x-tenant-id'];
         const tenantId =
           typeof tenantHeader === 'string' ? tenantHeader : 'school-int-1';
+        const isAdmin = req.headers['x-esma-admin'] === 'true';
 
         (req as AuthenticatedHttpRequest).ctx = {
-          namespace: 'esma-tenant',
-          tenantId,
+          namespace: isAdmin ? 'esma-admin' : 'esma-tenant',
+          tenantId: isAdmin ? 'system' : tenantId,
           actor: {
-            id: 'user-1',
+            id: isAdmin ? 'admin-1' : 'user-1',
             type: 'user',
-            roles: ['schooladmin', 'user'],
-            scopes: ['files:read', 'files:write', 'files:delete'],
-            isSchoolAdmin: true,
-            isPlatformAdmin: false,
+            roles: isAdmin ? ['superadmin'] : ['schooladmin', 'user'],
+            scopes: isAdmin
+              ? ['files:admin', '*']
+              : ['files:read', 'files:write', 'files:delete'],
+            isSchoolAdmin: !isAdmin,
+            isPlatformAdmin: isAdmin,
           },
           correlationId: 'corr-int-read',
           ipAddress: '127.0.0.1',
@@ -390,6 +399,212 @@ describe('FileRead & Content Delivery Integration [P2-07]', () => {
 
       // Verify destroy was called on the upstream stream
       expect(destroySpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('Replica Selection and Fallback [P4-08]', () => {
+    it('mid-request fallback: succeeds from secondary replica when primary fails before headers', async () => {
+      const server = app.getHttpServer() as unknown as Parameters<
+        typeof request
+      >[0];
+
+      const failoverFile: FileRecord = {
+        ...testFile,
+        id: '0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3333',
+        primaryProvider: 'seaweedfs',
+        storageKey: 'uploads/primary/failover.pdf',
+      };
+      filesDb.set(failoverFile.id, failoverFile);
+
+      replicasDb.set(failoverFile.id, [
+        {
+          fileId: failoverFile.id,
+          provider: 'seaweedfs',
+          role: 'primary',
+          status: 'AVAILABLE',
+          providerKey: 'uploads/primary/failover.pdf',
+          providerMeta: {},
+          url: null,
+          etag: null,
+          attempts: 0,
+          lastError: null,
+          syncedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          fileId: failoverFile.id,
+          provider: 'local',
+          role: 'secondary',
+          status: 'AVAILABLE',
+          providerKey: testFile.storageKey, // local fake driver has testFile content
+          providerMeta: {},
+          url: null,
+          etag: null,
+          attempts: 0,
+          lastError: null,
+          syncedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      const seaweedDriver = new FakeStorageDriver('seaweedfs');
+      vi.spyOn(seaweedDriver, 'downloadStream').mockRejectedValue(
+        new Error('Primary SeaweedFS node down'),
+      );
+
+      const registry = app.get(StorageRegistry);
+      vi.spyOn(registry, 'get').mockImplementation((name: string) => {
+        if (name === 'seaweedfs') return seaweedDriver;
+        if (name === 'local') return fakeDriver;
+        return fakeDriver;
+      });
+
+      const res = await request(server)
+        .get(`/api/v1/files/${failoverFile.id}`)
+        .expect(200);
+
+      expect(Buffer.from(res.body as Buffer).toString()).toBe(
+        sampleContent.toString(),
+      );
+    });
+
+    it('public file with redirect=auto: streams from primary when CDN queued, redirects when CDN available', async () => {
+      const server = app.getHttpServer() as unknown as Parameters<
+        typeof request
+      >[0];
+
+      const cdnFile: FileRecord = {
+        ...testFile,
+        id: '0198f3a2-7c1e-7b40-9d2a-5e6f1a8c4444',
+        visibility: 'public',
+        primaryProvider: 'local',
+      };
+      filesDb.set(cdnFile.id, cdnFile);
+
+      // Stage 1: Cloudinary replica is QUEUED (not yet AVAILABLE)
+      replicasDb.set(cdnFile.id, [
+        {
+          fileId: cdnFile.id,
+          provider: 'local',
+          role: 'primary',
+          status: 'AVAILABLE',
+          providerKey: testFile.storageKey,
+          providerMeta: {},
+          url: null,
+          etag: null,
+          attempts: 0,
+          lastError: null,
+          syncedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          fileId: cdnFile.id,
+          provider: 'cloudinary',
+          role: 'secondary',
+          status: 'QUEUED',
+          providerKey: 'cdn/queued.pdf',
+          providerMeta: {},
+          url: null,
+          etag: null,
+          attempts: 0,
+          lastError: null,
+          syncedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      const registry = app.get(StorageRegistry);
+      vi.spyOn(registry, 'get').mockImplementation(() => {
+        return fakeDriver;
+      });
+
+      // Should stream from primary with 200 OK
+      const resStream = await request(server)
+        .get(`/api/v1/files/${cdnFile.id}`)
+        .query({ redirect: 'auto' })
+        .expect(200);
+
+      expect(Buffer.from(resStream.body as Buffer).toString()).toBe(
+        sampleContent.toString(),
+      );
+
+      // Stage 2: Cloudinary replica becomes AVAILABLE
+      const cdnDriver = new FakeStorageDriver('cloudinary');
+      cdnDriver.setCapabilities({ publicCdn: true });
+      const cdnUrl =
+        'https://res.cloudinary.com/test-org/image/upload/cdn-file.pdf';
+      vi.spyOn(cdnDriver, 'getDirectUrl').mockResolvedValue(cdnUrl);
+
+      vi.spyOn(registry, 'get').mockImplementation((name: string) => {
+        if (name === 'cloudinary') return cdnDriver;
+        return fakeDriver;
+      });
+
+      replicasDb.set(cdnFile.id, [
+        {
+          fileId: cdnFile.id,
+          provider: 'local',
+          role: 'primary',
+          status: 'AVAILABLE',
+          providerKey: testFile.storageKey,
+          providerMeta: {},
+          url: null,
+          etag: null,
+          attempts: 0,
+          lastError: null,
+          syncedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          fileId: cdnFile.id,
+          provider: 'cloudinary',
+          role: 'secondary',
+          status: 'AVAILABLE',
+          providerKey: 'cdn/file.pdf',
+          providerMeta: {},
+          url: cdnUrl,
+          etag: null,
+          attempts: 0,
+          lastError: null,
+          syncedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      // Should redirect with 302 Found
+      const resRedirect = await request(server)
+        .get(`/api/v1/files/${cdnFile.id}`)
+        .query({ redirect: 'auto' })
+        .expect(302);
+
+      expect(resRedirect.headers['location']).toBe(cdnUrl);
+    });
+
+    it('?provider=x rejects non-admin with 403 and returns 409 with Retry-After: 30 for admin when unavailable', async () => {
+      const server = app.getHttpServer() as unknown as Parameters<
+        typeof request
+      >[0];
+
+      // Non-admin request
+      await request(server)
+        .get(`/api/v1/files/${testFile.id}`)
+        .query({ provider: 'seaweedfs' })
+        .expect(403);
+
+      // Admin request with unavailable replica
+      const res = await request(server)
+        .get(`/api/v1/files/${testFile.id}`)
+        .set('x-esma-admin', 'true')
+        .query({ provider: 'seaweedfs' })
+        .expect(409);
+
+      expect(res.headers['retry-after']).toBe('30');
     });
   });
 });

@@ -16,6 +16,7 @@ import {
   ForbiddenError,
   NotFoundError,
   ReplicaNotAvailableError,
+  StorageUnavailableError,
   UnauthenticatedError,
 } from '../../src/core/errors/app-error.js';
 
@@ -151,6 +152,8 @@ describe('FileReadService Unit Tests [P2-07]', () => {
     });
 
     storageRegistry = {
+      has: vi.fn().mockReturnValue(true),
+      isHealthy: vi.fn().mockReturnValue(true),
       get: vi.fn().mockImplementation((name: string) => {
         if (name === 'local') return fakeDriver;
         if (name === 'cloudinary') return cloudinaryDriver;
@@ -599,6 +602,79 @@ describe('FileReadService Unit Tests [P2-07]', () => {
       expect((res as unknown as { url: string }).url).toContain(
         'cloudinary.example.com',
       );
+    });
+
+    it('falls back to secondary replica when opening primary replica fails mid-request', async () => {
+      const seaweedDriver = new FakeStorageDriver('seaweedfs');
+      vi.spyOn(seaweedDriver, 'downloadStream').mockRejectedValue(
+        new Error('SeaweedFS node connection reset'),
+      );
+
+      // Storage registry mock returns seaweedDriver for seaweedfs
+      vi.spyOn(storageRegistry, 'get').mockImplementation((name: string) => {
+        if (name === 'seaweedfs') return seaweedDriver;
+        if (name === 'local') return fakeDriver;
+        if (name === 'cloudinary') return cloudinaryDriver;
+        throw new Error(`Driver not found: ${name}`);
+      });
+
+      mockFilesMap.set('failover-file', {
+        ...baseFileRecord,
+        id: 'failover-file',
+        primaryProvider: 'seaweedfs',
+      });
+
+      mockReplicasMap.set('failover-file', [
+        {
+          fileId: 'failover-file',
+          provider: 'seaweedfs',
+          role: 'primary',
+          status: 'AVAILABLE',
+          providerKey: 'uploads/primary.pdf',
+          providerMeta: {},
+          url: null,
+          etag: null,
+          attempts: 0,
+          lastError: null,
+          syncedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          fileId: 'failover-file',
+          provider: 'local',
+          role: 'secondary',
+          status: 'AVAILABLE',
+          providerKey: baseFileRecord.storageKey,
+          providerMeta: {},
+          url: null,
+          etag: null,
+          attempts: 0,
+          lastError: null,
+          syncedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      const res = await service.open(sameTenantCtx, 'failover-file');
+      expect(res.kind).toBe('stream');
+      expect(res.statusCode).toBe(200);
+
+      // Verify metrics
+      const metrics = service.getMetrics();
+      expect(metrics.fallbacks).toBe(1);
+      expect(metrics.readsByProvider['local']).toBe(1);
+    });
+
+    it('throws StorageUnavailableError when all replica candidates fail', async () => {
+      vi.spyOn(fakeDriver, 'downloadStream').mockRejectedValue(
+        new Error('Disk failure on all local disks'),
+      );
+
+      await expect(
+        service.open(sameTenantCtx, baseFileRecord.id),
+      ).rejects.toThrow(StorageUnavailableError);
     });
   });
 });

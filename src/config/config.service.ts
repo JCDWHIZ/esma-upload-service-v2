@@ -247,6 +247,9 @@ export class AppConfigService {
   get workerRoles(): string {
     return this.config.WORKER_ROLES;
   }
+  get workerHealthPort(): number {
+    return this.config.WORKER_HEALTH_PORT;
+  }
   get replicationMaxAttempts(): number {
     return this.config.REPLICATION_MAX_ATTEMPTS;
   }
@@ -282,6 +285,9 @@ export class AppConfigService {
   }
   get clamavPort(): number {
     return this.config.CLAMAV_PORT;
+  }
+  get purgeInline(): boolean {
+    return this.config.PURGE_INLINE;
   }
 
   // --- Rollout Flags ---

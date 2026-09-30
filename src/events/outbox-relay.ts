@@ -67,6 +67,7 @@ export class OutboxRelay {
     @Optional()
     @Inject(MESSAGE_BROKER)
     private readonly broker?: IMessageBroker,
+    @Optional()
     options?: OutboxRelayOptions,
   ) {
     this.pollMinMs = options?.pollMinMs ?? 100;

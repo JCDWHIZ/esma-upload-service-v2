@@ -16,6 +16,11 @@ export class ProblemJsonErrorFilter implements ExceptionFilter {
     if (response?.setHeader) {
       response.setHeader('x-correlation-id', canonical.correlationId);
       response.setHeader('Content-Type', 'application/problem+json');
+      if (canonical.headers) {
+        for (const [k, v] of Object.entries(canonical.headers)) {
+          response.setHeader(k, v);
+        }
+      }
     }
 
     response.status(canonical.status).json({

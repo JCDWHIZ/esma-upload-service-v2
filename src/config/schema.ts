@@ -132,6 +132,7 @@ export const rawConfigSchema = z.object({
 
   // --- Workers ---
   WORKER_ROLES: z.string().default('relay,replication,processing,sweeper'),
+  WORKER_HEALTH_PORT: intCoerce(8081).default(8081),
   REPLICATION_MAX_ATTEMPTS: intCoerce(6).default(6),
   REPLICATION_CONCURRENCY: intCoerce(4).default(4),
   OUTBOX_RETENTION_HOURS: intCoerce(72).default(72),
@@ -144,6 +145,7 @@ export const rawConfigSchema = z.object({
   TOMBSTONE_RETENTION_DAYS: intCoerce(30).default(30),
   CLAMAV_HOST: z.string().default(''),
   CLAMAV_PORT: intCoerce(3310).default(3310),
+  PURGE_INLINE: booleanCoerce.default(false),
 
   // --- Rollout flags (removed in P6-10) ---
   LEGACY_ENGINE: z.enum(['legacy', 'core']).default('legacy'),

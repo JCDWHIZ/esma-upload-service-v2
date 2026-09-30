@@ -139,7 +139,20 @@ export class DeleteService {
       });
     }
 
-    // Inline purge phase: delete physical objects across replica drivers
+    // If PURGE_INLINE is enabled or events are disabled, execute inline purge (for environments without a worker)
+    if (this.configService.purgeInline || !this.configService.eventsEnabled) {
+      await this.executeInlinePurge(ctx, fileId);
+    }
+  }
+
+  /**
+   * Executes driver-level inline purge across all DELETING replicas.
+   * Used when PURGE_INLINE=true or when events are disabled.
+   */
+  private async executeInlinePurge(
+    ctx: RequestContext,
+    fileId: string,
+  ): Promise<void> {
     const replicas = await this.replicaRepo.listByFile(fileId);
     const deletingReplicas = replicas.filter((r) => r.status === 'DELETING');
 

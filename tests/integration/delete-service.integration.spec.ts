@@ -22,6 +22,7 @@ import { FakeStorageDriver } from '../helpers/storage-driver.mock.js';
 import { FileRepository } from '../../src/db/repositories/file.repository.js';
 import { ReplicaRepository } from '../../src/db/repositories/replica.repository.js';
 import { UsageRepository } from '../../src/db/repositories/usage.repository.js';
+import { OutboxRepository } from '../../src/db/repositories/outbox.repository.js';
 import { DatabaseService } from '../../src/db/database.service.js';
 import { ProblemJsonErrorFilter } from '../../src/common/filters/problem-json-error.filter.js';
 import type { AuthenticatedHttpRequest } from '../../src/auth/context.js';
@@ -179,6 +180,10 @@ describe('DeleteService & FileQuery Integration [P2-08]', () => {
       .useValue(mockReplicaRepo)
       .overrideProvider(UsageRepository)
       .useValue(mockUsageRepo)
+      .overrideProvider(OutboxRepository)
+      .useValue({
+        enqueue: vi.fn().mockResolvedValue({}),
+      })
       .compile();
 
     const dbService = moduleRef.get(DatabaseService);

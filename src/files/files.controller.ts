@@ -623,6 +623,11 @@ export class FilesController {
       stream.on('close', () => {
         streamFinished = true;
       });
+      stream.on('error', (err) => {
+        if (res.headersSent) {
+          res.destroy(err instanceof Error ? err : new Error(String(err)));
+        }
+      });
 
       const cleanup = () => {
         if (!streamFinished) {

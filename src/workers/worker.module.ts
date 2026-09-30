@@ -5,6 +5,7 @@ import { DatabaseModule } from '../db/database.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { WorkerService } from './worker.service.js';
+import { ReplicationWorker } from './replication.worker.js';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { WorkerService } from './worker.service.js';
     StorageModule,
     EventsModule,
   ],
-  providers: [WorkerService],
+  providers: [WorkerService, ReplicationWorker],
+  exports: [WorkerService, ReplicationWorker],
 })
 export class WorkerModule {}

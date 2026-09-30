@@ -16,6 +16,8 @@ import { EventsModule } from '../events/events.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { IngestModule } from '../ingest/ingest.module.js';
 
+import { ReplicaSelector } from './replica-selector.js';
+
 @Module({
   imports: [AuthorizationModule, AuthModule, IngestModule, EventsModule],
   controllers: [FilesController, HealthController],
@@ -23,6 +25,7 @@ import { IngestModule } from '../ingest/ingest.module.js';
     FilesService,
     UploadService,
     FileReadService,
+    ReplicaSelector,
     SignedUrlService,
     DeleteService,
     FileQueryService,
@@ -37,6 +40,7 @@ import { IngestModule } from '../ingest/ingest.module.js';
     FilesService,
     UploadService,
     FileReadService,
+    ReplicaSelector,
     SignedUrlService,
     DeleteService,
     FileQueryService,

@@ -11,6 +11,7 @@ export interface CanonicalError {
   correlationId: string;
   typeUrl: string;
   expose: boolean;
+  headers?: Record<string, string>;
 }
 
 export function codeToSlug(code: string): string {
@@ -60,6 +61,7 @@ export function mapExceptionToCanonical(
       correlationId: exception.correlationId || correlationId,
       typeUrl: `https://errors.esma.example/gus/${codeToSlug(exception.code)}`,
       expose: exception.expose,
+      headers: exception.headers,
     };
   }
 

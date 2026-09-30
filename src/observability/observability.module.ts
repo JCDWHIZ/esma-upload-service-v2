@@ -11,6 +11,7 @@ import {
 import { getCorrelationContext } from './correlation-context.js';
 import { StructuredLogger } from './logger.service.js';
 import { HealthController } from './health.controller.js';
+import { HealthService } from './health.service.js';
 
 import { StorageModule } from '../storage/storage.module.js';
 
@@ -112,7 +113,8 @@ interface SerializedRes {
       useClass: CorrelationIdInterceptor,
     },
     StructuredLogger,
+    HealthService,
   ],
-  exports: [PinoLoggerModule, StructuredLogger],
+  exports: [PinoLoggerModule, StructuredLogger, HealthService],
 })
 export class ObservabilityModule {}
