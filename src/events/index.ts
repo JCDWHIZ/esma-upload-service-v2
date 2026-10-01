@@ -10,3 +10,4 @@ export * from './backoff.js';
 export * from './consumer.interface.js';
 export * from './consumer.js';
 export * from './idempotency.js';
+export * from './kafka-broker.driver.js';

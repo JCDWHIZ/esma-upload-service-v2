@@ -230,6 +230,28 @@ export class AppConfigService {
   get kafkaGroupId(): string {
     return this.config.KAFKA_GROUP_ID;
   }
+  get kafkaTopicPrefix(): string {
+    return this.config.KAFKA_TOPIC_PREFIX;
+  }
+  get kafkaTopicPartitions(): number {
+    return this.config.KAFKA_TOPIC_PARTITIONS;
+  }
+  get kafkaTopicReplicationFactor(): number {
+    return this.config.KAFKA_TOPIC_REPLICATION_FACTOR;
+  }
+  get kafkaSsl(): boolean {
+    return this.config.KAFKA_SSL;
+  }
+  get kafkaSaslMechanism():
+    'plain' | 'scram-sha-256' | 'scram-sha-512' | undefined {
+    return this.config.KAFKA_SASL_MECHANISM;
+  }
+  get kafkaSaslUsername(): string {
+    return this.config.KAFKA_SASL_USERNAME;
+  }
+  get kafkaSaslPassword(): string {
+    return this.config.KAFKA_SASL_PASSWORD;
+  }
   get pulsarServiceUrl(): string {
     return this.config.PULSAR_SERVICE_URL;
   }

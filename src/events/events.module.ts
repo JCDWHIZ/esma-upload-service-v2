@@ -1,15 +1,19 @@
 import { Module } from '@nestjs/common';
 import { EventsService } from './events.service.js';
 import { MemoryBroker } from './memory-broker.js';
+import { KafkaBrokerDriver } from './kafka-broker.driver.js';
 import { MESSAGE_BROKER } from './broker.interface.js';
 import { TopicMap, defaultTopicMap } from './topic-map.js';
 import { OutboxWriter } from './outbox-writer.js';
 import { OutboxRelay } from './outbox-relay.js';
 import { OutboxRetentionService } from './outbox-retention.service.js';
 import { DatabaseModule } from '../db/database.module.js';
+import { AppConfigService } from '../config/config.service.js';
+import { ConfigModule } from '../config/config.module.js';
+import type { IMessageBroker } from './broker.interface.js';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, ConfigModule],
   providers: [
     EventsService,
     {
@@ -22,7 +26,35 @@ import { DatabaseModule } from '../db/database.module.js';
     },
     {
       provide: MESSAGE_BROKER,
-      useExisting: MemoryBroker,
+      useFactory: (
+        config: AppConfigService,
+        memoryBroker: MemoryBroker,
+        topicMap: TopicMap,
+      ): IMessageBroker => {
+        const brokerType = config.eventBroker;
+
+        if (brokerType === 'kafka') {
+          const kafkaDriver = new KafkaBrokerDriver({
+            brokers: config.kafkaBrokers,
+            clientId: config.kafkaClientId,
+            topicMap,
+            topicPrefix: config.kafkaTopicPrefix,
+            topicPartitions: config.kafkaTopicPartitions,
+            topicReplicationFactor: config.kafkaTopicReplicationFactor,
+            ssl: config.kafkaSsl,
+            saslMechanism: config.kafkaSaslMechanism,
+            saslUsername: config.kafkaSaslUsername,
+            saslPassword: config.kafkaSaslPassword,
+            ensureTopics: !config.isProduction(),
+          });
+          // initialize() is called by the service on application bootstrap
+          return kafkaDriver;
+        }
+
+        // Default: memory broker
+        return memoryBroker;
+      },
+      inject: [AppConfigService, MemoryBroker, TopicMap],
     },
     {
       provide: TopicMap,

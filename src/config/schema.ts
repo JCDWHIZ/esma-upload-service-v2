@@ -12,6 +12,7 @@ export const SECRET_KEYS = new Set<string>([
   'CLOUDINARY_API_KEY',
   'CLOUDINARY_API_SECRET',
   'PULSAR_AUTH_TOKEN',
+  'KAFKA_SASL_PASSWORD',
 ]);
 
 const booleanCoerce = z.preprocess((val) => {
@@ -125,6 +126,15 @@ export const rawConfigSchema = z.object({
   KAFKA_BROKERS: z.string().default('localhost:9092'),
   KAFKA_CLIENT_ID: z.string().default('esma-upload-service'),
   KAFKA_GROUP_ID: z.string().default('esma-upload-workers'),
+  KAFKA_TOPIC_PREFIX: z.string().default('esma.files'),
+  KAFKA_TOPIC_PARTITIONS: intCoerce(6).default(6),
+  KAFKA_TOPIC_REPLICATION_FACTOR: intCoerce(1).default(1),
+  KAFKA_SSL: booleanCoerce.default(false),
+  KAFKA_SASL_MECHANISM: z
+    .enum(['plain', 'scram-sha-256', 'scram-sha-512'])
+    .optional(),
+  KAFKA_SASL_USERNAME: z.string().default(''),
+  KAFKA_SASL_PASSWORD: z.string().default(''),
   PULSAR_SERVICE_URL: z.string().default('pulsar://localhost:6650'),
   PULSAR_AUTH_TOKEN: z.string().default(''),
   PULSAR_TENANT: z.string().default('esma'),
