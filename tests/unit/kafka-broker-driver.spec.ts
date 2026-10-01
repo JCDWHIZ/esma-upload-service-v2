@@ -312,7 +312,12 @@ describe('KafkaBrokerDriver [P5-02]', () => {
 
       expect(mockConsumer.connect).toHaveBeenCalled();
       expect(mockConsumer.subscribe).toHaveBeenCalledWith({
-        topics: ['test.files.replication'],
+        topics: [
+          'test.files.replication',
+          'test.files.replication.retry.10s',
+          'test.files.replication.retry.1m',
+          'test.files.replication.retry.10m',
+        ],
       });
       expect(mockConsumer.run).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -692,11 +697,11 @@ describe('KafkaBrokerDriver [P5-02]', () => {
       ]);
     });
 
-    it('pauses partition when x-not-before is in the future', async () => {
+    it('pauses partition when x-not-before is in the future then processes message', async () => {
       const resumeFn = vi.fn();
       const pauseFn = vi.fn().mockReturnValue(resumeFn);
 
-      const handler = vi.fn();
+      const handler = vi.fn().mockResolvedValue({ kind: 'ack' });
 
       await driver.subscribe(
         'replication',
@@ -723,9 +728,10 @@ describe('KafkaBrokerDriver [P5-02]', () => {
 
       expect(pauseFn).toHaveBeenCalledOnce();
       expect(resumeFn).toHaveBeenCalledOnce();
-      expect(handler).not.toHaveBeenCalled();
-      // Original offset was NOT committed because message wasn't processed yet
-      expect(mockConsumer.commitOffsets).not.toHaveBeenCalled();
+      expect(handler).toHaveBeenCalledOnce();
+      expect(mockConsumer.commitOffsets).toHaveBeenCalledWith([
+        { topic: 'test.files.replication', partition: 2, offset: '51' },
+      ]);
     });
   });
 });

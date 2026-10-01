@@ -74,6 +74,7 @@ export class KafkaBrokerDriver implements IMessageBroker {
   private producer: KafkaJS.Producer | null = null;
   private admin: KafkaJS.Admin | null = null;
   private readonly activeConsumers: KafkaJS.Consumer[] = [];
+  private readonly inFlightExecutions = new Set<Promise<unknown>>();
   private isReady = false;
 
   constructor(private readonly config: KafkaBrokerConfig) {
@@ -124,6 +125,17 @@ export class KafkaBrokerDriver implements IMessageBroker {
   async disconnect(): Promise<void> {
     this.isReady = false;
     this.logger.log('KafkaBrokerDriver disconnecting — draining consumers...');
+
+    // Wait for in-flight handlers to drain (up to 5000ms)
+    if (this.inFlightExecutions.size > 0) {
+      this.logger.log(
+        `KafkaBrokerDriver waiting for ${this.inFlightExecutions.size} in-flight handlers to drain...`,
+      );
+      await Promise.race([
+        Promise.allSettled(Array.from(this.inFlightExecutions)),
+        new Promise((resolve) => setTimeout(resolve, 5000)),
+      ]);
+    }
 
     await Promise.allSettled(
       this.activeConsumers.map(async (c) => {
@@ -211,6 +223,14 @@ export class KafkaBrokerDriver implements IMessageBroker {
     handler: MessageHandler<T>,
   ): Promise<Subscription> {
     const physicalTopic = this.config.topicMap.toKafka(topic);
+    const topicsToSubscribe = [physicalTopic];
+    if (topic === 'replication' || topic === 'processing') {
+      topicsToSubscribe.push(
+        this.config.topicMap.toKafkaRetry(topic, '10s'),
+        this.config.topicMap.toKafkaRetry(topic, '1m'),
+        this.config.topicMap.toKafkaRetry(topic, '10m'),
+      );
+    }
     const kafka = await this.getKafkaClient();
 
     const consumer = kafka.consumer({
@@ -221,14 +241,14 @@ export class KafkaBrokerDriver implements IMessageBroker {
     });
 
     await consumer.connect();
-    await consumer.subscribe({ topics: [physicalTopic] });
+    await consumer.subscribe({ topics: topicsToSubscribe });
     this.activeConsumers.push(consumer);
 
     // Start the consumer run loop
     void consumer.run({
       partitionsConsumedConcurrently: opts.concurrency,
       eachMessage: async (payload) => {
-        await this.handleMessage(
+        const execution = this.handleMessage(
           consumer,
           payload.topic,
           payload.partition,
@@ -238,11 +258,22 @@ export class KafkaBrokerDriver implements IMessageBroker {
           handler as MessageHandler<unknown>,
           () => payload.pause(),
         );
+
+        const tracked = execution.then(
+          () => {},
+          () => {},
+        );
+        this.inFlightExecutions.add(tracked);
+        void tracked.finally(() => {
+          this.inFlightExecutions.delete(tracked);
+        });
+
+        await execution;
       },
     });
 
     this.logger.log(
-      `Subscribed to ${physicalTopic} (group=${opts.consumerGroup}, concurrency=${opts.concurrency})`,
+      `Subscribed to ${topicsToSubscribe.join(', ')} (group=${opts.consumerGroup}, concurrency=${opts.concurrency})`,
     );
 
     return {
@@ -281,7 +312,6 @@ export class KafkaBrokerDriver implements IMessageBroker {
         const resume = pause();
         await new Promise<void>((r) => setTimeout(r, waitMs));
         resume();
-        return;
       }
     }
 
@@ -384,7 +414,7 @@ export class KafkaBrokerDriver implements IMessageBroker {
       return;
     }
 
-    const delayMs = Math.max(0, outcome.delayMs ?? 10_000);
+    const delayMs = Math.max(0, outcome.delayMs ?? 1_000);
     const tier = pickRetryTier(delayMs);
     const retryTopic = this.config.topicMap.toKafkaRetry(logicalTopic, tier);
 
