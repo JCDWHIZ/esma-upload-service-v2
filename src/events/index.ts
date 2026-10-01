@@ -12,3 +12,4 @@ export * from './consumer.js';
 export * from './idempotency.js';
 export * from './kafka-broker.driver.js';
 export * from './pulsar-broker.driver.js';
+export * from './dead-letter.service.js';

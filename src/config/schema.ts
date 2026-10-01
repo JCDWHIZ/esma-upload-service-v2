@@ -141,7 +141,7 @@ export const rawConfigSchema = z.object({
   PULSAR_NAMESPACE: z.string().default('uploads'),
 
   // --- Workers ---
-  WORKER_ROLES: z.string().default('relay,replication,processing,sweeper'),
+  WORKER_ROLES: z.string().default('relay,replication,processing,sweeper,dlq'),
   WORKER_HEALTH_PORT: intCoerce(8081).default(8081),
   REPLICATION_MAX_ATTEMPTS: intCoerce(6).default(6),
   REPLICATION_CONCURRENCY: intCoerce(4).default(4),

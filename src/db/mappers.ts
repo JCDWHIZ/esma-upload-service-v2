@@ -7,6 +7,7 @@ import type {
   AuditLogTable,
   ApiClientsTable,
   TenantUsageTable,
+  DeadLettersTable,
 } from './types.js';
 import type {
   FileRecord,
@@ -16,6 +17,7 @@ import type {
   AuditLogEntry,
   ApiClient,
   TenantUsage,
+  DeadLetterRecord,
   KeysetCursor,
 } from '../core/types.js';
 
@@ -160,6 +162,26 @@ export function mapTenantUsageRow(
     maxBytes: toNullableBigInt(row.max_bytes),
     maxFiles: toNullableBigInt(row.max_files),
     updatedAt: toDate(row.updated_at),
+  };
+}
+
+export function mapDeadLetterRow(
+  row: Selectable<DeadLettersTable>,
+): DeadLetterRecord {
+  return {
+    id: row.id,
+    receivedAt: toDate(row.received_at),
+    originalTopic: row.original_topic,
+    eventType: row.event_type,
+    eventId: row.event_id,
+    envelope: (typeof row.envelope === 'string'
+      ? JSON.parse(row.envelope)
+      : row.envelope) as Record<string, unknown>,
+    error: row.error,
+    attempts: Number(row.attempts),
+    status: row.status,
+    resolvedAt: toNullableDate(row.resolved_at),
+    resolvedBy: row.resolved_by,
   };
 }
 

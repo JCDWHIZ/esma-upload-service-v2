@@ -9,6 +9,7 @@ import { WorkerService } from './worker.service.js';
 import { ReplicationWorker } from './replication.worker.js';
 import { ScanWorker } from './scan.worker.js';
 import { SweeperService } from './sweeper.service.js';
+import { DlqWorker } from './dlq.worker.js';
 
 @Module({
   imports: [
@@ -19,7 +20,19 @@ import { SweeperService } from './sweeper.service.js';
     EventsModule,
     IngestModule,
   ],
-  providers: [WorkerService, ReplicationWorker, ScanWorker, SweeperService],
-  exports: [WorkerService, ReplicationWorker, ScanWorker, SweeperService],
+  providers: [
+    WorkerService,
+    ReplicationWorker,
+    ScanWorker,
+    SweeperService,
+    DlqWorker,
+  ],
+  exports: [
+    WorkerService,
+    ReplicationWorker,
+    ScanWorker,
+    SweeperService,
+    DlqWorker,
+  ],
 })
 export class WorkerModule {}

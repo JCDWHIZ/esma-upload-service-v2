@@ -83,6 +83,11 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
       stop: vi.fn(),
     } as any;
 
+    const mockDlqWorker = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
     const workerService = new WorkerService(
       mockLogger,
       mockDb,
@@ -92,6 +97,7 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
       mockReplicationWorker,
       mockScanWorker,
       mockSweeperService,
+      mockDlqWorker,
     );
 
     await workerService.onApplicationBootstrap();
@@ -128,6 +134,11 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
       stop: vi.fn(),
     } as any;
 
+    const mockDlqWorker = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
     const workerService = new WorkerService(
       mockLogger,
       mockDb,
@@ -137,6 +148,7 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
       mockReplicationWorker,
       mockScanWorker,
       mockSweeperService,
+      mockDlqWorker,
     );
 
     await workerService.onApplicationBootstrap();
@@ -145,6 +157,47 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
 
     workerService.onApplicationShutdown('SIGTERM');
     expect(mockScanWorker.stop).toHaveBeenCalled();
+  });
+
+  it('starts and stops DlqWorker when dlq role is configured (P5-06)', async () => {
+    const dlqConfig = {
+      workerRoles: 'dlq',
+      workerHealthPort: 0,
+    } as unknown as AppConfigService;
+
+    const mockScanWorker = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    const mockSweeperService = {
+      start: vi.fn(),
+      stop: vi.fn(),
+    } as any;
+
+    const mockDlqWorker = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    const workerService = new WorkerService(
+      mockLogger,
+      mockDb,
+      dlqConfig,
+      mockRelay,
+      mockRetention,
+      mockReplicationWorker,
+      mockScanWorker,
+      mockSweeperService,
+      mockDlqWorker,
+    );
+
+    await workerService.onApplicationBootstrap();
+    expect(mockDlqWorker.start).toHaveBeenCalled();
+    expect(workerService.getRunningRoles()).toContain('dlq');
+
+    workerService.onApplicationShutdown('SIGTERM');
+    expect(mockDlqWorker.stop).toHaveBeenCalled();
   });
 
   describe('createWorkerHealthServer', () => {

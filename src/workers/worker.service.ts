@@ -11,6 +11,7 @@ import { OutboxRetentionService } from '../events/outbox-retention.service.js';
 import { ReplicationWorker } from './replication.worker.js';
 import { ScanWorker } from './scan.worker.js';
 import { SweeperService } from './sweeper.service.js';
+import { DlqWorker } from './dlq.worker.js';
 
 @Injectable()
 export class WorkerService
@@ -27,6 +28,7 @@ export class WorkerService
     private readonly replicationWorker: ReplicationWorker,
     private readonly scanWorker: ScanWorker,
     private readonly sweeperService: SweeperService,
+    private readonly dlqWorker: DlqWorker,
   ) {}
 
   async onApplicationBootstrap() {
@@ -69,6 +71,12 @@ export class WorkerService
       this.sweeperService.start();
       this.runningRoles.add('sweeper');
     }
+
+    if (roles.includes('dlq') && !this.runningRoles.has('dlq')) {
+      this.logger.log('Starting dlq role: DlqWorker');
+      await this.dlqWorker.start();
+      this.runningRoles.add('dlq');
+    }
   }
 
   async stopRoles(): Promise<void> {
@@ -88,6 +96,10 @@ export class WorkerService
     if (this.runningRoles.has('sweeper')) {
       this.sweeperService.stop();
       this.runningRoles.delete('sweeper');
+    }
+    if (this.runningRoles.has('dlq')) {
+      await this.dlqWorker.stop();
+      this.runningRoles.delete('dlq');
     }
     this.runningRoles.clear();
   }

@@ -127,6 +127,20 @@ export interface TenantUsageTable {
   updated_at: Timestamp;
 }
 
+export interface DeadLettersTable {
+  id: string; // uuid
+  received_at: Timestamp;
+  original_topic: string;
+  event_type: string;
+  event_id: string;
+  envelope: Record<string, unknown>;
+  error: string;
+  attempts: Generated<number>;
+  status: Generated<'OPEN' | 'REDRIVEN' | 'DISCARDED'>;
+  resolved_at: NullableTimestamp;
+  resolved_by: string | null;
+}
+
 export interface Database {
   files: FilesTable;
   file_replicas: FileReplicasTable;
@@ -135,4 +149,5 @@ export interface Database {
   audit_log: AuditLogTable;
   api_clients: ApiClientsTable;
   tenant_usage: TenantUsageTable;
+  dead_letters: DeadLettersTable;
 }

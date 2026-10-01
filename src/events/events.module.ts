@@ -13,10 +13,13 @@ import { AppConfigService } from '../config/config.service.js';
 import { ConfigModule } from '../config/config.module.js';
 import type { IMessageBroker } from './broker.interface.js';
 
+import { DeadLetterService } from './dead-letter.service.js';
+
 @Module({
   imports: [DatabaseModule, ConfigModule],
   providers: [
     EventsService,
+    DeadLetterService,
     {
       provide: MemoryBroker,
       useFactory: () => {
@@ -78,6 +81,7 @@ import type { IMessageBroker } from './broker.interface.js';
   ],
   exports: [
     EventsService,
+    DeadLetterService,
     MemoryBroker,
     MESSAGE_BROKER,
     TopicMap,

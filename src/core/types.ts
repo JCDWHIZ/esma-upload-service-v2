@@ -259,3 +259,41 @@ export interface TenantUsage {
   maxFiles: bigint | null;
   updatedAt: Date;
 }
+
+export type DeadLetterStatus = 'OPEN' | 'REDRIVEN' | 'DISCARDED';
+
+export interface DeadLetterRecord {
+  id: string;
+  receivedAt: Date;
+  originalTopic: string;
+  eventType: string;
+  eventId: string;
+  envelope: Record<string, unknown>;
+  error: string;
+  attempts: number;
+  status: DeadLetterStatus;
+  resolvedAt: Date | null;
+  resolvedBy: string | null;
+}
+
+export interface NewDeadLetterRecord {
+  id?: string;
+  receivedAt?: Date;
+  originalTopic: string;
+  eventType: string;
+  eventId: string;
+  envelope: Record<string, unknown>;
+  error: string;
+  attempts?: number;
+  status?: DeadLetterStatus;
+  resolvedAt?: Date | null;
+  resolvedBy?: string | null;
+}
+
+export interface DeadLetterFilter {
+  status?: DeadLetterStatus;
+  originalTopic?: string;
+  eventType?: string;
+  from?: Date;
+  to?: Date;
+}

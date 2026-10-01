@@ -43,7 +43,15 @@
     "apikey:revoke:prod": "node dist/src/scripts/apikey-cli.js revoke",
     "apikey:list:prod": "node dist/src/scripts/apikey-cli.js list",
     "reconcile:orphans": "ts-node src/scripts/reconcile-orphans.ts",
-    "reconcile:orphans:prod": "node dist/src/scripts/reconcile-orphans.js"
+    "reconcile:orphans:prod": "node dist/src/scripts/reconcile-orphans.js",
+    "dlq:list": "ts-node src/scripts/dlq-cli.ts list",
+    "dlq:redrive": "ts-node src/scripts/dlq-cli.ts redrive",
+    "dlq:discard": "ts-node src/scripts/dlq-cli.ts discard",
+    "dlq:stats": "ts-node src/scripts/dlq-cli.ts stats",
+    "dlq:list:prod": "node dist/src/scripts/dlq-cli.js list",
+    "dlq:redrive:prod": "node dist/src/scripts/dlq-cli.js redrive",
+    "dlq:discard:prod": "node dist/src/scripts/dlq-cli.js discard",
+    "dlq:stats:prod": "node dist/src/scripts/dlq-cli.js stats"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",
