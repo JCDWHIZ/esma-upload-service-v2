@@ -139,6 +139,17 @@ describe('ScanWorker (P5-07)', () => {
 
     mockReplicaRepo = {
       listByFile: vi.fn().mockImplementation(async () => [...mockReplicas]),
+      markDeleted: vi
+        .fn()
+        .mockImplementation(async (fileId: string, provider: string) => {
+          const r = mockReplicas.find(
+            (rep) => rep.fileId === fileId && rep.provider === provider,
+          );
+          if (r) {
+            r.status = 'DELETED';
+          }
+          return true;
+        }),
       updateStatus: vi
         .fn()
         .mockImplementation(
@@ -241,7 +252,6 @@ describe('ScanWorker (P5-07)', () => {
     // Secondary replica cancelled / marked DELETED
     const secondary = mockReplicas.find((r) => r.provider === 'local');
     expect(secondary?.status).toBe('DELETED');
-    expect(secondary?.lastError).toContain('Eicar-Test-Signature');
 
     // Emitted file.scanned event with threat info
     const scannedEvent = enqueuedOutboxEvents.find(

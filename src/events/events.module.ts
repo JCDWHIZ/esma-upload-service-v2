@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { EventsService } from './events.service.js';
 import { MemoryBroker } from './memory-broker.js';
 import { KafkaBrokerDriver } from './kafka-broker.driver.js';
+import { PulsarBrokerDriver } from './pulsar-broker.driver.js';
 import { MESSAGE_BROKER } from './broker.interface.js';
 import { TopicMap, defaultTopicMap } from './topic-map.js';
 import { OutboxWriter } from './outbox-writer.js';
@@ -49,6 +50,17 @@ import type { IMessageBroker } from './broker.interface.js';
           });
           // initialize() is called by the service on application bootstrap
           return kafkaDriver;
+        }
+
+        if (brokerType === 'pulsar') {
+          const pulsarDriver = new PulsarBrokerDriver({
+            serviceUrl: config.pulsarServiceUrl,
+            authToken: config.pulsarAuthToken,
+            tenant: config.pulsarTenant,
+            namespace: config.pulsarNamespace,
+            topicMap,
+          });
+          return pulsarDriver;
         }
 
         // Default: memory broker
