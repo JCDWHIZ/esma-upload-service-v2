@@ -228,7 +228,7 @@ describe('FileReadService Unit Tests [P2-07]', () => {
       );
     });
 
-    it('throws FileQuarantinedError for QUARANTINED or INFECTED file', async () => {
+    it('throws FileQuarantinedError for QUARANTINED, INFECTED, or ERROR file', async () => {
       mockFilesMap.set('quar-1', {
         ...baseFileRecord,
         id: 'quar-1',
@@ -239,11 +239,19 @@ describe('FileReadService Unit Tests [P2-07]', () => {
         id: 'inf-1',
         scanStatus: 'INFECTED',
       });
+      mockFilesMap.set('err-1', {
+        ...baseFileRecord,
+        id: 'err-1',
+        scanStatus: 'ERROR',
+      });
 
       await expect(service.open(sameTenantCtx, 'quar-1')).rejects.toThrow(
         FileQuarantinedError,
       );
       await expect(service.open(sameTenantCtx, 'inf-1')).rejects.toThrow(
+        FileQuarantinedError,
+      );
+      await expect(service.open(sameTenantCtx, 'err-1')).rejects.toThrow(
         FileQuarantinedError,
       );
     });

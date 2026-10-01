@@ -147,6 +147,25 @@ export class ReplicationWorker {
       return { kind: 'ack' };
     }
 
+    // Gate on scan_status per P5-07: do not replicate while scanning is PENDING or file is INFECTED
+    if (file.scanStatus === 'PENDING') {
+      this.logger.debug(
+        `File ${fileId} virus scan is PENDING. Retrying replication after delay.`,
+      );
+      return {
+        kind: 'retry',
+        delayMs: 5000,
+        reason: 'Waiting for virus scan to complete',
+      };
+    }
+
+    if (file.scanStatus === 'INFECTED' || file.scanStatus === 'ERROR') {
+      this.logger.warn(
+        `File ${fileId} scan status is ${file.scanStatus}. Replication aborted.`,
+      );
+      return { kind: 'ack' };
+    }
+
     const replicas = await this.replicaRepo.listByFile(fileId);
     const targetReplica = replicas.find((r) => r.provider === provider);
 

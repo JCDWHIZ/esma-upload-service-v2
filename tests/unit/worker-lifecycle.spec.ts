@@ -73,6 +73,11 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
   });
 
   it('starts configured roles (relay and replication) on bootstrap and stops on shutdown', async () => {
+    const mockScanWorker = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
     const mockSweeperService = {
       start: vi.fn(),
       stop: vi.fn(),
@@ -85,6 +90,7 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
       mockRelay,
       mockRetention,
       mockReplicationWorker,
+      mockScanWorker,
       mockSweeperService,
     );
 
@@ -104,6 +110,41 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
     expect(mockRelay.stop).toHaveBeenCalled();
     expect(mockRetention.stop).toHaveBeenCalled();
     expect(mockReplicationWorker.stop).toHaveBeenCalled();
+  });
+
+  it('starts and stops ScanWorker when processing role is configured (P5-07)', async () => {
+    const processingConfig = {
+      workerRoles: 'processing',
+      workerHealthPort: 0,
+    } as unknown as AppConfigService;
+
+    const mockScanWorker = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    const mockSweeperService = {
+      start: vi.fn(),
+      stop: vi.fn(),
+    } as any;
+
+    const workerService = new WorkerService(
+      mockLogger,
+      mockDb,
+      processingConfig,
+      mockRelay,
+      mockRetention,
+      mockReplicationWorker,
+      mockScanWorker,
+      mockSweeperService,
+    );
+
+    await workerService.onApplicationBootstrap();
+    expect(mockScanWorker.start).toHaveBeenCalled();
+    expect(workerService.getRunningRoles()).toContain('processing');
+
+    workerService.onApplicationShutdown('SIGTERM');
+    expect(mockScanWorker.stop).toHaveBeenCalled();
   });
 
   describe('createWorkerHealthServer', () => {

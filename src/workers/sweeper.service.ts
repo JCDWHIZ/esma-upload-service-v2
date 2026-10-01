@@ -17,6 +17,7 @@ export interface SweeperSweepResult {
   stuckDeletingReenqueued: number;
   autoRedriven: number;
   tombstonesHardDeleted: number;
+  quarantinedPurged: number;
   outboxCleaned: number;
   stagingCleaned: number;
 }
@@ -79,6 +80,7 @@ export class SweeperService implements OnApplicationShutdown {
         stuckDeletingReenqueued: 0,
         autoRedriven: 0,
         tombstonesHardDeleted: 0,
+        quarantinedPurged: 0,
         outboxCleaned: 0,
         stagingCleaned: 0,
       };
@@ -91,6 +93,7 @@ export class SweeperService implements OnApplicationShutdown {
       const stuckDeletingReenqueued = await this.sweepStuckDeleting();
       const autoRedriven = await this.sweepAutoRedrive();
       const tombstonesHardDeleted = await this.sweepTombstones();
+      const quarantinedPurged = await this.sweepQuarantined();
       const outboxCleaned = await this.sweepOutbox();
       const stagingCleaned = await this.sweepStaging();
 
@@ -100,6 +103,7 @@ export class SweeperService implements OnApplicationShutdown {
         stuckDeletingReenqueued,
         autoRedriven,
         tombstonesHardDeleted,
+        quarantinedPurged,
         outboxCleaned,
         stagingCleaned,
       };
@@ -111,6 +115,7 @@ export class SweeperService implements OnApplicationShutdown {
         stuckDeletingReenqueued: 0,
         autoRedriven: 0,
         tombstonesHardDeleted: 0,
+        quarantinedPurged: 0,
         outboxCleaned: 0,
         stagingCleaned: 0,
       };
@@ -444,7 +449,71 @@ export class SweeperService implements OnApplicationShutdown {
   }
 
   /**
-   * 6. Outbox sweep: Cleans published outbox events older than OUTBOX_RETENTION_HOURS.
+   * 6. Quarantined sweep: Purges files in QUARANTINED status older than QUARANTINE_RETENTION_DAYS.
+   * Marks them DELETING and enqueues 'file.purge' outbox events.
+   */
+  async sweepQuarantined(dryRun = false): Promise<number> {
+    const database = this.db.getDb();
+    if (!database) return 0;
+
+    const retentionDays = this.configService.quarantineRetentionDays;
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+    return database.transaction().execute(async (trx) => {
+      const lock = await sql<{
+        locked: boolean;
+      }>`SELECT pg_try_advisory_xact_lock(hashtext('sweeper_quarantined')) AS locked`.execute(
+        trx,
+      );
+      if (!lock.rows[0]?.locked) {
+        return 0;
+      }
+
+      const quarantinedFiles = await this.fileRepo.findStaleByStatus(
+        'QUARANTINED',
+        cutoff,
+        50,
+        trx,
+      );
+      if (quarantinedFiles.length === 0) {
+        return 0;
+      }
+
+      if (dryRun) {
+        this.logger.log(
+          `[DRY-RUN] Quarantined sweep: found ${quarantinedFiles.length} quarantined files`,
+        );
+        return quarantinedFiles.length;
+      }
+
+      let count = 0;
+      for (const file of quarantinedFiles) {
+        const marked = await this.fileRepo.markDeleting(file.id, trx);
+        if (marked) {
+          const envelope = createEnvelope({
+            eventType: EVENT_TYPES.FILE_PURGE,
+            partitionKey: file.id,
+            payload: { fileId: file.id },
+            namespace: file.namespace,
+            tenantId: file.tenantId,
+          });
+
+          await this.outboxWriter.enqueue(trx, envelope);
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        this.logger.log(
+          `Quarantined sweep: enqueued ${count} file.purge events for quarantined files older than ${retentionDays}d`,
+        );
+      }
+      return count;
+    });
+  }
+
+  /**
+   * 7. Outbox sweep: Cleans published outbox events older than OUTBOX_RETENTION_HOURS.
    */
   async sweepOutbox(dryRun = false): Promise<number> {
     const database = this.db.getDb();

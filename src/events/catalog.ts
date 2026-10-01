@@ -134,6 +134,7 @@ export type FileDeletedPayload = z.infer<typeof FileDeletedPayloadSchema>;
 export const FileScannedPayloadSchema = z.object({
   fileId: z.string().min(1),
   result: z.string().min(1),
+  threat: z.string().optional(),
 });
 export type FileScannedPayload = z.infer<typeof FileScannedPayloadSchema>;
 

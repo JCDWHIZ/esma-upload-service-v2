@@ -519,6 +519,19 @@ export class UploadService {
             });
             await this.outboxWriter.enqueue(trx, replicateEnvelope);
           }
+
+          // 3. file.scan event when virus scanning is required (P5-07)
+          if (policy.requireVirusScan) {
+            const scanEnvelope = createEnvelope({
+              eventType: EVENT_TYPES.FILE_SCAN,
+              partitionKey: fileId,
+              context: ctx,
+              payload: {
+                fileId,
+              },
+            });
+            await this.outboxWriter.enqueue(trx, scanEnvelope);
+          }
         }
 
         return { file: inserted, replicas: insertedReplicas };

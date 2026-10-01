@@ -308,6 +308,15 @@ export class AppConfigService {
   get clamavPort(): number {
     return this.config.CLAMAV_PORT;
   }
+  get clamavTimeoutMs(): number {
+    return this.config.CLAMAV_TIMEOUT_MS;
+  }
+  get scanFailMode(): 'closed' | 'open' {
+    return this.config.SCAN_FAIL_MODE;
+  }
+  get quarantineRetentionDays(): number {
+    return this.config.QUARANTINE_RETENTION_DAYS;
+  }
   get purgeInline(): boolean {
     return this.config.PURGE_INLINE;
   }

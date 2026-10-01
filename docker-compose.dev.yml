@@ -91,6 +91,24 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # ── ClamAV Antivirus Scanner (P5-07) ──────────────────────────────────────
+  clamav:
+    image: clamav/clamav:stable
+    container_name: gus-clamav-dev
+    profiles:
+      - scan
+    ports:
+      - "3310:3310"
+    volumes:
+      - gus_clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping", "10"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
   gus_postgres_data:
     name: gus_postgres_data
@@ -100,4 +118,6 @@ volumes:
     name: gus_staging_data
   gus_seaweedfs_data:
     name: gus_seaweedfs_data
+  gus_clamav_data:
+    name: gus_clamav_data
 

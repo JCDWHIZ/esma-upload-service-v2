@@ -466,4 +466,61 @@ describe('ReplicationWorker (P4-07)', () => {
       EVENT_TYPES.FILE_REPLICATION_FAILED,
     );
   });
+
+  describe('Scan status gating (P5-07)', () => {
+    it('defers replication when scanStatus is PENDING', async () => {
+      mockFile.scanStatus = 'PENDING';
+
+      const envelope = createEnvelope<FileReplicatePayload>({
+        eventType: EVENT_TYPES.FILE_REPLICATE,
+        partitionKey: mockFile.id,
+        payload: {
+          fileId: mockFile.id,
+          targetProvider: 'local',
+        },
+      });
+
+      const outcome = await worker.handleReplication(envelope, 1, 3);
+      expect(outcome.kind).toBe('retry');
+      if (outcome.kind === 'retry') {
+        expect(outcome.delayMs).toBe(5000);
+        expect(outcome.reason).toContain('Waiting for virus scan');
+      }
+      expect(mockReplicaRepo.claim).not.toHaveBeenCalled();
+    });
+
+    it('aborts replication when scanStatus is INFECTED', async () => {
+      mockFile.scanStatus = 'INFECTED';
+
+      const envelope = createEnvelope<FileReplicatePayload>({
+        eventType: EVENT_TYPES.FILE_REPLICATE,
+        partitionKey: mockFile.id,
+        payload: {
+          fileId: mockFile.id,
+          targetProvider: 'local',
+        },
+      });
+
+      const outcome = await worker.handleReplication(envelope, 1, 3);
+      expect(outcome).toEqual({ kind: 'ack' });
+      expect(mockReplicaRepo.claim).not.toHaveBeenCalled();
+    });
+
+    it('aborts replication when scanStatus is ERROR', async () => {
+      mockFile.scanStatus = 'ERROR';
+
+      const envelope = createEnvelope<FileReplicatePayload>({
+        eventType: EVENT_TYPES.FILE_REPLICATE,
+        partitionKey: mockFile.id,
+        payload: {
+          fileId: mockFile.id,
+          targetProvider: 'local',
+        },
+      });
+
+      const outcome = await worker.handleReplication(envelope, 1, 3);
+      expect(outcome).toEqual({ kind: 'ack' });
+      expect(mockReplicaRepo.claim).not.toHaveBeenCalled();
+    });
+  });
 });

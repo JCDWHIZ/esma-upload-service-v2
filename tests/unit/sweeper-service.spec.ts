@@ -8,6 +8,7 @@ import type { ReplicaRepository } from '../../src/db/repositories/replica.reposi
 import type { OutboxRepository } from '../../src/db/repositories/outbox.repository.js';
 import type { OutboxWriter } from '../../src/events/outbox-writer.js';
 import type { FileRecord, FileReplica } from '../../src/core/types.js';
+import { EVENT_TYPES } from '../../src/events/catalog.js';
 
 const mocks = vi.hoisted(() => ({
   lockAcquired: true,
@@ -97,6 +98,7 @@ describe('SweeperService [P4-10]', () => {
       redriveAfterHours: 1,
       redriveMaxTimes: 3,
       tombstoneRetentionDays: 30,
+      quarantineRetentionDays: 7,
       outboxRetentionHours: 72,
       stagingDir: '/tmp/test-staging',
       stagingMaxAgeMinutes: 60,
@@ -131,6 +133,7 @@ describe('SweeperService [P4-10]', () => {
         return [];
       }),
       hardDeleteTombstones: vi.fn().mockResolvedValue(2),
+      markDeleting: vi.fn().mockResolvedValue(true),
     } as unknown as FileRepository;
 
     mockReplicaRepo = {
@@ -271,5 +274,21 @@ describe('SweeperService [P4-10]', () => {
     expect(summary).toBeDefined();
     expect(typeof summary.stuckQueuedReenqueued).toBe('number');
     expect(typeof summary.tombstonesHardDeleted).toBe('number');
+    expect(typeof summary.quarantinedPurged).toBe('number');
+  });
+
+  it('purges stale quarantined files in sweepQuarantined [P5-07]', async () => {
+    mockFile.status = 'QUARANTINED';
+    const count = await sweeper.sweepQuarantined();
+
+    expect(count).toBe(1);
+    expect(mockFileRepo.markDeleting).toHaveBeenCalledWith(
+      'f-sweep-1',
+      expect.anything(),
+    );
+    expect(enqueuedOutboxEvents).toHaveLength(1);
+    expect((enqueuedOutboxEvents[0] as any).eventType).toBe(
+      EVENT_TYPES.FILE_PURGE,
+    );
   });
 });

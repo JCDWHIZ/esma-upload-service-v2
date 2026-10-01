@@ -481,6 +481,31 @@ describe('UploadService (single-driver mode) [P2-06]', () => {
     expect(payload['primaryProvider']).toBe('local');
   });
 
+  it('enqueues file.scan outbox event when policy.requireVirusScan is true (P5-07)', async () => {
+    (configService as unknown as { eventsEnabled: boolean }).eventsEnabled =
+      true;
+
+    const scanPolicy = {
+      ...defaultPolicy,
+      requireVirusScan: true,
+    };
+
+    const file = createMockIngestedFile();
+    const outcomes = await uploadService.upload(mockContext, scanPolicy, [
+      file,
+    ]);
+
+    expect(outcomes[0].success).toBe(true);
+    const scanEvent = enqueuedOutboxEvents.find(
+      (e) => (e as Record<string, unknown>)['eventType'] === 'file.scan',
+    ) as Record<string, unknown>;
+    expect(scanEvent).toBeDefined();
+    const scanPayload = scanEvent['payload'] as Record<string, unknown>;
+    expect(scanPayload['fileId']).toBe(
+      (outcomes[0] as { fileId: string }).fileId,
+    );
+  });
+
   it('uploadSingle returns the manifest directly', async () => {
     const file = createMockIngestedFile();
     const manifest = await uploadService.uploadSingle(

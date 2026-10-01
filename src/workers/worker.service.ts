@@ -9,6 +9,7 @@ import { AppConfigService } from '../config/config.service.js';
 import { OutboxRelay } from '../events/outbox-relay.js';
 import { OutboxRetentionService } from '../events/outbox-retention.service.js';
 import { ReplicationWorker } from './replication.worker.js';
+import { ScanWorker } from './scan.worker.js';
 import { SweeperService } from './sweeper.service.js';
 
 @Injectable()
@@ -24,6 +25,7 @@ export class WorkerService
     private readonly outboxRelay: OutboxRelay,
     private readonly outboxRetention: OutboxRetentionService,
     private readonly replicationWorker: ReplicationWorker,
+    private readonly scanWorker: ScanWorker,
     private readonly sweeperService: SweeperService,
   ) {}
 
@@ -56,8 +58,9 @@ export class WorkerService
       this.runningRoles.add('replication');
     }
 
-    if (roles.includes('processing')) {
-      this.logger.log('Processing role configured (placeholder for Phase 5)');
+    if (roles.includes('processing') && !this.runningRoles.has('processing')) {
+      this.logger.log('Starting processing role: ScanWorker');
+      await this.scanWorker.start();
       this.runningRoles.add('processing');
     }
 
@@ -77,6 +80,10 @@ export class WorkerService
     if (this.runningRoles.has('replication')) {
       await this.replicationWorker.stop();
       this.runningRoles.delete('replication');
+    }
+    if (this.runningRoles.has('processing')) {
+      await this.scanWorker.stop();
+      this.runningRoles.delete('processing');
     }
     if (this.runningRoles.has('sweeper')) {
       this.sweeperService.stop();

@@ -155,7 +155,11 @@ export class FileReadService {
       throw new NotFoundError(`File '${fileId}' not found`);
     }
 
-    if (file.status === 'QUARANTINED' || file.scanStatus === 'INFECTED') {
+    if (
+      file.status === 'QUARANTINED' ||
+      file.scanStatus === 'INFECTED' ||
+      file.scanStatus === 'ERROR'
+    ) {
       throw new FileQuarantinedError(
         `File '${fileId}' has been quarantined due to security scan failure`,
       );
