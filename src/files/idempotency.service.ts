@@ -43,19 +43,25 @@ export class IdempotencyService {
 
     if (existing) {
       if (existing.status === 'IN_PROGRESS') {
-        throw new IdempotencyInProgressError();
-      }
+        const staleTimeoutMs = 5 * 60 * 1000; // 5 min timeout for abandoned in-flight requests
+        if (Date.now() - existing.createdAt.getTime() > staleTimeoutMs) {
+          // Stale in-progress key from crashed worker or dead socket; reclaim it
+          await this.idempotencyRepository.deleteByKey(tenantId, key);
+        } else {
+          throw new IdempotencyInProgressError();
+        }
+      } else {
+        if (existing.requestHash !== requestHash) {
+          throw new IdempotencyConflictError();
+        }
 
-      if (existing.requestHash !== requestHash) {
-        throw new IdempotencyConflictError();
+        return {
+          status: 'REPLAYED',
+          responseStatus: existing.responseStatus ?? 200,
+          responseBody: existing.responseBody ?? {},
+          fileId: existing.fileId,
+        };
       }
-
-      return {
-        status: 'REPLAYED',
-        responseStatus: existing.responseStatus ?? 200,
-        responseBody: existing.responseBody ?? {},
-        fileId: existing.fileId,
-      };
     }
 
     const ttlHours = this.configService?.idempotencyKeyTtlHours ?? 24;
@@ -104,5 +110,9 @@ export class IdempotencyService {
       responseBody,
       fileId,
     );
+  }
+
+  async releaseKey(tenantId: string, key: string): Promise<void> {
+    await this.idempotencyRepository.deleteByKey(tenantId, key);
   }
 }

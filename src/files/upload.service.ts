@@ -43,6 +43,7 @@ import {
   NoOpQuotaGate,
   QUOTA_GATE,
 } from './quota-gate.interface.js';
+import { MetricsService } from '../observability/metrics.service.js';
 
 export interface UploadMetrics {
   primaryFailovers: number;
@@ -100,6 +101,8 @@ export class UploadService {
     private readonly quotaGate: IQuotaGate = new NoOpQuotaGate(),
     @Optional()
     private readonly storagePlacement?: StoragePlacementService,
+    @Optional()
+    private readonly metricsService?: MetricsService,
   ) {}
 
   public getMetrics(): Readonly<UploadMetrics> {
@@ -125,6 +128,7 @@ export class UploadService {
     const outcomes: UploadOutcome[] = [];
 
     for (const file of files) {
+      const uploadStart = Date.now();
       try {
         const completed = await this.uploadSingleInternal(
           ctx,
@@ -139,11 +143,30 @@ export class UploadService {
           manifest: completed.manifest,
           fileRecord: completed.fileRecord,
         });
+
+        if (this.metricsService) {
+          const durationSec = (Date.now() - uploadStart) / 1000;
+          this.metricsService.uploadDurationSeconds.observe(
+            { namespace: ctx.namespace, provider: completed.ref.provider },
+            durationSec,
+          );
+          this.metricsService.uploadBytesTotal.inc(
+            { namespace: ctx.namespace, provider: completed.ref.provider },
+            file.size,
+          );
+        }
       } catch (err: unknown) {
         const appErr =
           err instanceof AppError
             ? err
             : new StorageUnavailableError('File upload failed', { cause: err });
+
+        if (this.metricsService) {
+          this.metricsService.uploadFailuresTotal.inc({
+            namespace: ctx.namespace,
+            code: (appErr as any).code || 'UPLOAD_FAILED',
+          });
+        }
 
         if (atomic) {
           await this.rollbackBatch(ctx, completedUploads);
@@ -205,6 +228,19 @@ export class UploadService {
 
     // 3. Reserve quota through QuotaGate seam
     await this.quotaGate.reserve(ctx, file.size);
+
+    // Check duplicate content hash per tenant (P6-03)
+    try {
+      const existingDuplicates = await this.fileRepo.countBySha256(ctx.tenantId, file.sha256);
+      if (existingDuplicates > 0 && this.metricsService) {
+        this.metricsService.duplicateHashTotal.inc({
+          tenant_id: ctx.tenantId,
+          namespace: ctx.namespace,
+        });
+      }
+    } catch {
+      // Metric check failure must not fail the upload
+    }
 
     // 4. Generate UUIDv7 fileId & build storage key
     const fileId = newId();

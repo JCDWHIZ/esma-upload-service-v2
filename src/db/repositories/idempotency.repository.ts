@@ -100,4 +100,18 @@ export class IdempotencyRepository extends BaseRepository {
 
     return Number(result.numDeletedRows ?? 0);
   }
+
+  async deleteByKey(
+    tenantId: string,
+    key: string,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<boolean> {
+    const result = await this.getExecutor(trx)
+      .deleteFrom('idempotency_keys')
+      .where('tenant_id', '=', tenantId)
+      .where('key', '=', key)
+      .executeTakeFirst();
+
+    return Number(result.numDeletedRows ?? 0) > 0;
+  }
 }

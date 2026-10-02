@@ -290,14 +290,25 @@ export class FilesController {
       idempotencyKey,
     };
 
-    const outcomes = await this.uploadService.upload(
-      ctx,
-      policy,
-      fileList,
-      options,
-    );
+    let outcomes;
+    try {
+      outcomes = await this.uploadService.upload(
+        ctx,
+        policy,
+        fileList,
+        options,
+      );
+    } catch (err: unknown) {
+      if (idempotencyKey) {
+        await this.idempotencyService.releaseKey(ctx.tenantId, idempotencyKey);
+      }
+      throw err;
+    }
 
     const hasFailure = outcomes.some((o) => !o.success);
+    if (hasFailure && idempotencyKey) {
+      await this.idempotencyService.releaseKey(ctx.tenantId, idempotencyKey);
+    }
 
     if (!hasFailure) {
       const manifests = outcomes.map(

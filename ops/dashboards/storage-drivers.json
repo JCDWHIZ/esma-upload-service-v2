@@ -1,0 +1,62 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Storage Driver Health (1=Healthy, 0=Unhealthy)",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "gus_driver_health",
+          "legendFormat": "{{provider}}"
+        }
+      ]
+    },
+    {
+      "title": "Storage Bytes Written by Provider",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 6 },
+      "targets": [
+        {
+          "expr": "sum(rate(gus_upload_bytes_total[5m])) by (provider)",
+          "legendFormat": "{{provider}}"
+        }
+      ]
+    },
+    {
+      "title": "SHA-256 Checksum Mismatches",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 6 },
+      "targets": [
+        {
+          "expr": "sum(rate(gus_sha256_mismatches_total[5m])) by (provider)",
+          "legendFormat": "{{provider}}"
+        }
+      ]
+    },
+    {
+      "title": "Replica Status Counts",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 15 },
+      "targets": [
+        {
+          "expr": "gus_replica_status",
+          "legendFormat": "{{provider}} - {{status}}"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["esma", "gus", "storage"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "ESMA GUS - Storage Drivers",
+  "uid": "gus-storage-drivers"
+}

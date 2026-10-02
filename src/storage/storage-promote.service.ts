@@ -55,7 +55,7 @@ export class StoragePromoteService {
       errors: 0,
     };
 
-    let offset = 0;
+    let lastId: string | null = null;
     let hasMore = true;
 
     while (hasMore) {
@@ -74,9 +74,12 @@ export class StoragePromoteService {
         query = query.where('namespace', '=', namespace);
       }
 
+      if (lastId) {
+        query = query.where('id', '>', lastId);
+      }
+
       const files = await query
-        .orderBy('created_at', 'asc')
-        .offset(offset)
+        .orderBy('id', 'asc')
         .limit(batchSize)
         .execute();
 
@@ -84,6 +87,8 @@ export class StoragePromoteService {
         hasMore = false;
         break;
       }
+
+      lastId = files[files.length - 1].id;
 
       for (const file of files) {
         result.scanned++;
@@ -157,16 +162,6 @@ export class StoragePromoteService {
             `Failed to promote primary for file ${file.id}: ${err instanceof Error ? err.message : String(err)}`,
           );
         }
-      }
-
-      if (dryRun) {
-        // In dry-run mode, offset increases because records aren't modified in DB
-        offset += files.length;
-      } else {
-        // In live mode, promoted records no longer match primary_provider != toProvider,
-        // so offset only increments by non-promoted (skipped/errored) records
-        const nonPromotedInBatch = files.length - (result.promoted % batchSize);
-        offset += nonPromotedInBatch > 0 ? nonPromotedInBatch : 0;
       }
 
       if (files.length < batchSize) {

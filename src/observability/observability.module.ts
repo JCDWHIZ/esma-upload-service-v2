@@ -22,6 +22,7 @@ import { RateLimiterService } from '../common/rate-limiter.service.js';
 import { RateLimiterGuard } from '../common/guards/rate-limiter.guard.js';
 import { MetricsService } from './metrics.service.js';
 import { MetricsController } from './metrics.controller.js';
+import { MetricsInterceptor } from './metrics.interceptor.js';
 
 interface SerializedReq {
   id?: unknown;
@@ -115,6 +116,11 @@ interface SerializedRes {
       provide: APP_INTERCEPTOR,
       useClass: CorrelationIdInterceptor,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
+    },
+    MetricsInterceptor,
     StructuredLogger,
     HealthService,
     AuditService,

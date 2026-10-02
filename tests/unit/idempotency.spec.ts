@@ -63,6 +63,12 @@ describe('IdempotencyService (P6-03)', () => {
         }
         return deleted;
       }),
+      deleteByKey: vi.fn().mockImplementation(async (tenantId: string, key: string) => {
+        const fullKey = `${tenantId}:${key}`;
+        const existed = store.has(fullKey);
+        store.delete(fullKey);
+        return existed;
+      }),
     };
 
     idempotencyService = new IdempotencyService(
@@ -152,6 +158,33 @@ describe('IdempotencyService (P6-03)', () => {
       await expect(
         idempotencyService.acquireOrCheck('tenant-1', 'key-100', 'fp-different'),
       ).rejects.toThrow(IdempotencyConflictError);
+    });
+
+    it('releases in-progress key on releaseKey allowing new attempts', async () => {
+      await idempotencyService.acquireOrCheck('tenant-1', 'key-err', 'fp-err');
+      await idempotencyService.releaseKey('tenant-1', 'key-err');
+
+      const reattempt = await idempotencyService.acquireOrCheck(
+        'tenant-1',
+        'key-err',
+        'fp-err',
+      );
+      expect(reattempt).toEqual({ status: 'NEW' });
+    });
+
+    it('reclaims stale IN_PROGRESS lease older than 5 minutes', async () => {
+      await idempotencyService.acquireOrCheck('tenant-1', 'key-stale', 'fp-stale');
+      const fullKey = 'tenant-1:key-stale';
+      const record = store.get(fullKey);
+      // Simulate key created 10 minutes ago
+      record.createdAt = new Date(Date.now() - 10 * 60 * 1000);
+
+      const reclaimed = await idempotencyService.acquireOrCheck(
+        'tenant-1',
+        'key-stale',
+        'fp-stale',
+      );
+      expect(reclaimed).toEqual({ status: 'NEW' });
     });
   });
 });

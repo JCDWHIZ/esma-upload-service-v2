@@ -58,28 +58,38 @@ describe('StoragePromoteService [P6-07]', () => {
     mockDb = {
       selectFrom: (table: string) => {
         if (table === 'files') {
-          return {
-            select: () => ({
-              where: (col: string, op: string, val: any) => ({
-                where: (col2: string, op2: string, val2: any) => ({
-                  orderBy: () => ({
-                    offset: () => ({
-                      limit: () => ({
-                        execute: async () =>
-                          filesStore.filter(
-                            (f) =>
-                              f.status === val &&
-                              (op2 === '='
-                                ? f.primary_provider === val2
-                                : f.primary_provider !== val2),
-                          ),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
+          let wherePrimaryOp: string | null = null;
+          let wherePrimaryVal: any = null;
+          let afterId: string | null = null;
+
+          const queryObj: any = {
+            where: (col: string, op: string, val: any) => {
+              if (col === 'primary_provider') {
+                wherePrimaryOp = op;
+                wherePrimaryVal = val;
+              } else if (col === 'id' && op === '>') {
+                afterId = val;
+              }
+              return queryObj;
+            },
+            orderBy: () => queryObj,
+            limit: (n: number) => ({
+              execute: async () => {
+                let res = filesStore.filter((f) => f.status === 'ACTIVE');
+                if (wherePrimaryOp === '=') {
+                  res = res.filter((f) => f.primary_provider === wherePrimaryVal);
+                } else if (wherePrimaryOp === '!=') {
+                  res = res.filter((f) => f.primary_provider !== wherePrimaryVal);
+                }
+                if (afterId !== null) {
+                  const currentAfterId = afterId;
+                  res = res.filter((f) => f.id > currentAfterId);
+                }
+                return res.slice(0, n);
+              },
             }),
           };
+          return { select: () => queryObj };
         }
         if (table === 'file_replicas') {
           return {
