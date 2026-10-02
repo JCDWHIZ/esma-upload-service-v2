@@ -344,6 +344,29 @@ export class AppConfigService {
   get derivativeConcurrency(): number {
     return this.config.DERIVATIVE_CONCURRENCY;
   }
+  get dedupMode(): 'off' | 'reference' {
+    return this.config.DEDUP_MODE;
+  }
+  get idempotencyKeyTtlHours(): number {
+    return this.config.IDEMPOTENCY_KEY_TTL_HOURS;
+  }
+
+  // --- Observability & Metrics (P6-04) ---
+  get metricsEnabled(): boolean {
+    return this.config.METRICS_ENABLED;
+  }
+  get metricsPort(): number {
+    return this.config.METRICS_PORT;
+  }
+  get metricsToken(): string | undefined {
+    return this.config.METRICS_TOKEN;
+  }
+  get otelExporterOtlpEndpoint(): string {
+    return this.config.OTEL_EXPORTER_OTLP_ENDPOINT;
+  }
+  get otelServiceName(): string {
+    return this.config.OTEL_SERVICE_NAME;
+  }
 
   // --- Audit Logging ---
   get auditReads(): 'all' | 'sampled' | 'off' {

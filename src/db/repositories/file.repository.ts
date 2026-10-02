@@ -100,6 +100,22 @@ export class FileRepository extends BaseRepository {
     return result ? mapFileRow(result) : null;
   }
 
+  async countBySha256(
+    tenantId: string,
+    sha256: string,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<number> {
+    const result = await this.getExecutor(trx)
+      .selectFrom('files')
+      .select((eb) => eb.fn.count<string>('id').as('count'))
+      .where('tenant_id', '=', tenantId)
+      .where('sha256', '=', sha256)
+      .where('status', 'in', ['ACTIVE', 'PENDING_UPLOAD'])
+      .executeTakeFirst();
+
+    return result ? Number(result.count) : 0;
+  }
+
   async list(
     filter: FileListFilter,
     cursor?: string | null,

@@ -20,6 +20,8 @@ import { AuditController } from './audit.controller.js';
 import { RedisService } from '../common/redis.service.js';
 import { RateLimiterService } from '../common/rate-limiter.service.js';
 import { RateLimiterGuard } from '../common/guards/rate-limiter.guard.js';
+import { MetricsService } from './metrics.service.js';
+import { MetricsController } from './metrics.controller.js';
 
 interface SerializedReq {
   id?: unknown;
@@ -58,11 +60,6 @@ interface SerializedRes {
               '*.key',
               '*.apiKey',
               '*.jwtSecret',
-              '*.signedUrlSecret',
-              '*.*.secret',
-              '*.*.token',
-              '*.*.password',
-              '*.*.key',
             ],
             censor: '[REDACTED]',
           },
@@ -112,7 +109,7 @@ interface SerializedRes {
       }),
     }),
   ],
-  controllers: [HealthController, AuditController],
+  controllers: [HealthController, AuditController, MetricsController],
   providers: [
     {
       provide: APP_INTERCEPTOR,
@@ -124,6 +121,7 @@ interface SerializedRes {
     RedisService,
     RateLimiterService,
     RateLimiterGuard,
+    MetricsService,
   ],
   exports: [
     PinoLoggerModule,
@@ -133,6 +131,7 @@ interface SerializedRes {
     RedisService,
     RateLimiterService,
     RateLimiterGuard,
+    MetricsService,
   ],
 })
 export class ObservabilityModule {}

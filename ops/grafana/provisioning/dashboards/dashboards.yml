@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: 'ESMA Upload Service Dashboards'
+    orgId: 1
+    folder: 'ESMA Upload Service'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

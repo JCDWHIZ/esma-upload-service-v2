@@ -142,6 +142,18 @@ export interface DeadLettersTable {
   resolved_by: string | null;
 }
 
+export interface IdempotencyKeysTable {
+  tenant_id: string;
+  key: string;
+  request_hash: string;
+  status: 'IN_PROGRESS' | 'COMPLETED';
+  response_status: number | null;
+  response_body: Record<string, unknown> | null;
+  file_id: string | null;
+  created_at: Timestamp;
+  expires_at: Timestamp;
+}
+
 export interface Database {
   files: FilesTable;
   file_replicas: FileReplicasTable;
@@ -151,4 +163,5 @@ export interface Database {
   api_clients: ApiClientsTable;
   tenant_usage: TenantUsageTable;
   dead_letters: DeadLettersTable;
+  idempotency_keys: IdempotencyKeysTable;
 }

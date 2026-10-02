@@ -19,6 +19,8 @@ import { IngestModule } from '../ingest/ingest.module.js';
 
 import { ReplicaSelector } from './replica-selector.js';
 
+import { IdempotencyService } from './idempotency.service.js';
+
 @Module({
   imports: [AuthorizationModule, AuthModule, IngestModule, EventsModule],
   controllers: [FilesController, HealthController],
@@ -33,6 +35,7 @@ import { ReplicaSelector } from './replica-selector.js';
     PresignedUploadService,
     KeyService,
     DatabaseQuotaGate,
+    IdempotencyService,
     {
       provide: QUOTA_GATE,
       useClass: DatabaseQuotaGate,
@@ -48,6 +51,7 @@ import { ReplicaSelector } from './replica-selector.js';
     FileQueryService,
     PresignedUploadService,
     KeyService,
+    IdempotencyService,
     QUOTA_GATE,
   ],
 })

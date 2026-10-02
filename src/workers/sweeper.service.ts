@@ -7,6 +7,7 @@ import { DatabaseService } from '../db/database.service.js';
 import { FileRepository } from '../db/repositories/file.repository.js';
 import { ReplicaRepository } from '../db/repositories/replica.repository.js';
 import { OutboxRepository } from '../db/repositories/outbox.repository.js';
+import { IdempotencyRepository } from '../db/repositories/idempotency.repository.js';
 import { OutboxWriter } from '../events/outbox-writer.js';
 import { createEnvelope } from '../events/envelope.js';
 import { EVENT_TYPES } from '../events/catalog.js';
@@ -20,6 +21,7 @@ export interface SweeperSweepResult {
   quarantinedPurged: number;
   outboxCleaned: number;
   stagingCleaned: number;
+  idempotencyKeysCleaned: number;
 }
 
 @Injectable()
@@ -35,6 +37,7 @@ export class SweeperService implements OnApplicationShutdown {
     private readonly replicaRepo: ReplicaRepository,
     private readonly outboxRepo: OutboxRepository,
     private readonly outboxWriter: OutboxWriter,
+    private readonly idempotencyRepo?: IdempotencyRepository,
   ) {}
 
   start(): void {
@@ -83,6 +86,7 @@ export class SweeperService implements OnApplicationShutdown {
         quarantinedPurged: 0,
         outboxCleaned: 0,
         stagingCleaned: 0,
+        idempotencyKeysCleaned: 0,
       };
     }
 
@@ -96,6 +100,7 @@ export class SweeperService implements OnApplicationShutdown {
       const quarantinedPurged = await this.sweepQuarantined();
       const outboxCleaned = await this.sweepOutbox();
       const stagingCleaned = await this.sweepStaging();
+      const idempotencyKeysCleaned = await this.sweepIdempotencyKeys();
 
       return {
         stuckQueuedReenqueued,
@@ -106,6 +111,7 @@ export class SweeperService implements OnApplicationShutdown {
         quarantinedPurged,
         outboxCleaned,
         stagingCleaned,
+        idempotencyKeysCleaned,
       };
     } catch (err: unknown) {
       this.logger.error(`Error during sweep cycle: ${String(err)}`);
@@ -118,6 +124,7 @@ export class SweeperService implements OnApplicationShutdown {
         quarantinedPurged: 0,
         outboxCleaned: 0,
         stagingCleaned: 0,
+        idempotencyKeysCleaned: 0,
       };
     } finally {
       this.isSweeping = false;
@@ -586,5 +593,37 @@ export class SweeperService implements OnApplicationShutdown {
     }
 
     return cleaned;
+  }
+
+  /**
+   * 8. Idempotency sweep: Cleans expired idempotency keys past 24 hours (or configured TTL).
+   */
+  async sweepIdempotencyKeys(dryRun = false): Promise<number> {
+    const database = this.db.getDb();
+    const repo = this.idempotencyRepo;
+    if (!database || !repo) return 0;
+
+    return database.transaction().execute(async (trx) => {
+      const lock = await sql<{
+        locked: boolean;
+      }>`SELECT pg_try_advisory_xact_lock(hashtext('sweeper_idempotency_keys')) AS locked`.execute(
+        trx,
+      );
+      if (!lock.rows[0]?.locked) {
+        return 0;
+      }
+
+      if (dryRun) {
+        return 0;
+      }
+
+      const deletedCount = await repo.deleteExpired(new Date(), trx);
+      if (deletedCount > 0) {
+        this.logger.log(
+          `Idempotency sweep: deleted ${deletedCount} expired idempotency keys`,
+        );
+      }
+      return deletedCount;
+    });
   }
 }

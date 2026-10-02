@@ -39,6 +39,7 @@ import { SignedUrlService } from './signed-url.service.js';
 import { DeleteService } from './delete.service.js';
 import { FileQueryService } from './file-query.service.js';
 import { PresignedUploadService } from './presigned-upload.service.js';
+import { IdempotencyService } from './idempotency.service.js';
 import {
   InitiatePresignedUploadDto,
   InitiatePresignedUploadResponse,
@@ -151,6 +152,7 @@ export class FilesController {
     private readonly dbService: DatabaseService,
     private readonly authzService: AuthorizationService,
     private readonly policyRegistry: PolicyRegistry,
+    private readonly idempotencyService: IdempotencyService,
   ) {}
 
   // ── 1. Multipart Upload ─────────────────────────────────────────────────────
@@ -254,6 +256,31 @@ export class FilesController {
       throw new ValidationError('No files were provided for upload');
     }
 
+    if (idempotencyKey) {
+      const combinedHash = fileList.map((f) => f.sha256).join(':');
+      const fingerprint = this.idempotencyService.computeFingerprint(
+        combinedHash,
+        body.folder ?? '',
+        body.visibility ?? 'tenant',
+        body.tags ?? [],
+      );
+      const evalResult = await this.idempotencyService.acquireOrCheck(
+        ctx.tenantId,
+        idempotencyKey,
+        fingerprint,
+      );
+
+      if (evalResult.status === 'REPLAYED') {
+        if (res) {
+          res.setHeader('Idempotent-Replayed', 'true');
+          return res
+            .status(evalResult.responseStatus)
+            .json(evalResult.responseBody);
+        }
+        return evalResult.responseBody;
+      }
+    }
+
     const options: UploadOptions = {
       folder: body.folder,
       visibility: body.visibility,
@@ -287,6 +314,18 @@ export class FilesController {
               data: manifests,
               files: manifests,
             };
+
+      if (idempotencyKey) {
+        const firstId =
+          manifests.length === 1 ? manifests[0].data.fileId : undefined;
+        await this.idempotencyService.recordCompleted(
+          ctx.tenantId,
+          idempotencyKey,
+          HttpStatus.CREATED,
+          responsePayload as Record<string, unknown>,
+          firstId,
+        );
+      }
 
       if (res) {
         return res.status(HttpStatus.CREATED).json(responsePayload);

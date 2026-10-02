@@ -197,6 +197,31 @@ export class ConflictError extends AppError {
   }
 }
 
+export class IdempotencyConflictError extends ConflictError {
+  constructor(
+    message = 'An upload with this idempotency key was already completed with a different payload',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'IDEMPOTENCY_CONFLICT',
+      ...options,
+    });
+  }
+}
+
+export class IdempotencyInProgressError extends ConflictError {
+  constructor(
+    message = 'A request with this idempotency key is currently in progress',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'IDEMPOTENCY_IN_PROGRESS',
+      headers: { 'Retry-After': '5', ...(options?.headers ?? {}) },
+      ...options,
+    });
+  }
+}
+
 export class FileNotReadyError extends ConflictError {
   constructor(
     message = 'File is still being ingested or replicated and is not ready',

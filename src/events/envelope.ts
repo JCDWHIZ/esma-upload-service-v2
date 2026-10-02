@@ -1,5 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import type { RequestContext } from '../auth/context.js';
+import { generateTraceparent } from '../observability/tracing.js';
 
 /**
  * Standard v2 event envelope adhering strictly to ARCH §8.1.
@@ -15,6 +16,7 @@ export interface EventEnvelope<T = unknown> {
   readonly tenantId: string;
   readonly partitionKey: string; // fileId (ADR-07)
   readonly attempt: number; // 0 on first delivery
+  readonly headers?: Record<string, string>;
   readonly payload: T;
 }
 
@@ -38,6 +40,7 @@ export interface CreateEnvelopeParams<T> {
   readonly namespace?: string;
   readonly tenantId?: string;
   readonly attempt?: number;
+  readonly headers?: Record<string, string>;
 }
 
 /**
@@ -54,6 +57,7 @@ export function createEnvelope<T>(
   const causationId =
     params.causationId ??
     (ctx && 'causationId' in ctx ? ctx.causationId : undefined);
+  const traceparent = params.headers?.traceparent ?? generateTraceparent();
 
   return {
     eventId: params.eventId ?? uuidv7(),
@@ -66,6 +70,10 @@ export function createEnvelope<T>(
     tenantId,
     partitionKey: params.partitionKey,
     attempt: params.attempt ?? 0,
+    headers: {
+      traceparent,
+      ...(params.headers ?? {}),
+    },
     payload: params.payload,
   };
 }

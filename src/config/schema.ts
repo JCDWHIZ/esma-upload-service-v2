@@ -167,6 +167,15 @@ export const rawConfigSchema = z.object({
   REDRIVE_MAX_TIMES: intCoerce(3).default(3),
   DERIVATIVE_MAX_INPUT_PIXELS: intCoerce(50000000).default(50000000),
   DERIVATIVE_CONCURRENCY: intCoerce(2).default(2),
+  DEDUP_MODE: z.enum(['off', 'reference']).default('off'),
+  IDEMPOTENCY_KEY_TTL_HOURS: intCoerce(24).default(24),
+
+  // --- Observability & Metrics (P6-04) ---
+  METRICS_ENABLED: booleanCoerce.default(true),
+  METRICS_PORT: intCoerce(9090).default(9090),
+  METRICS_TOKEN: z.string().optional(),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().default('http://localhost:4317'),
+  OTEL_SERVICE_NAME: z.string().default('esma-upload-service'),
 
   // --- Audit Logging (P6-01) ---
   AUDIT_READS: z

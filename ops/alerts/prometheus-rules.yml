@@ -1,0 +1,72 @@
+groups:
+  - name: esma_upload_service_alerts
+    rules:
+      - alert: ReplicationLagHigh
+        expr: histogram_quantile(0.95, sum(rate(gus_replication_lag_seconds_bucket[5m])) by (le, provider)) > 60
+        for: 15m
+        labels:
+          severity: warning
+          service: esma-upload-service
+        annotations:
+          summary: "High replication lag detected on provider {{ $labels.provider }}"
+          description: "Replication lag p95 has exceeded 60 seconds on provider {{ $labels.provider }} for 15 minutes."
+
+      - alert: DlqDepthNonZero
+        expr: gus_dlq_depth > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: esma-upload-service
+        annotations:
+          summary: "Dead-letter queue (DLQ) contains poisoned event records"
+          description: "DLQ depth is {{ $value }} open records for 10 minutes. Operator investigation required."
+
+      - alert: OutboxStuck
+        expr: gus_outbox_pending > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: esma-upload-service
+        annotations:
+          summary: "Outbox event queue growth detected"
+          description: "Pending transactional outbox events count is {{ $value }} for 5 minutes, indicating message broker or relay delay."
+
+      - alert: PrimaryDriverUnhealthy
+        expr: gus_driver_health{provider="primary"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: esma-upload-service
+        annotations:
+          summary: "Primary storage driver health probe failed"
+          description: "The primary storage driver ({{ $labels.provider }}) is unhealthy for 2 minutes."
+
+      - alert: UploadErrorRateHigh
+        expr: (sum(rate(gus_upload_failures_total[5m])) / sum(rate(gus_http_requests_total{route="/api/v1/files/upload"}[5m]))) * 100 > 2
+        for: 10m
+        labels:
+          severity: high
+          service: esma-upload-service
+        annotations:
+          summary: "Upload request error rate exceeded 2%"
+          description: "File upload error rate is {{ $value }}% over the last 10 minutes."
+
+      - alert: VirusInfectedDetected
+        expr: increase(gus_quarantined_files_total[1m]) > 0
+        for: 0m
+        labels:
+          severity: high
+          service: esma-upload-service
+        annotations:
+          summary: "Infected payload quarantined by ClamAV scanner"
+          description: "A virus signature was detected and quarantined for namespace {{ $labels.namespace }}."
+
+      - alert: ChecksumMismatchDetected
+        expr: increase(gus_sha256_mismatches_total[1m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: esma-upload-service
+        annotations:
+          summary: "Data corruption alert: SHA-256 checksum mismatch"
+          description: "Payload integrity check failed for provider {{ $labels.provider }}."
