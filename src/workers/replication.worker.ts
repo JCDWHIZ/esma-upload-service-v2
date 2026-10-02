@@ -537,6 +537,31 @@ export class ReplicationWorker {
       }
     }
 
+    // Purge image derivatives on primary storage provider (P5-08)
+    if (file.derivatives && typeof file.derivatives === 'object') {
+      try {
+        const primaryDriver = this.storageRegistry.get(file.primaryProvider);
+        for (const [varName, deriv] of Object.entries(file.derivatives)) {
+          if (deriv && typeof deriv === 'object' && deriv.key) {
+            try {
+              await primaryDriver.delete({
+                provider: file.primaryProvider,
+                key: deriv.key,
+              });
+            } catch (derivErr: unknown) {
+              this.logger.warn(
+                `Failed to purge derivative "${varName}" for file ${fileId}: ${String(derivErr)}`,
+              );
+            }
+          }
+        }
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Could not access primary driver to purge derivatives for file ${fileId}: ${String(err)}`,
+        );
+      }
+    }
+
     // Confirm all replicas have reached DELETED status
     const refreshedReplicas = await this.replicaRepo.listByFile(fileId);
     const pendingReplicas = refreshedReplicas.filter(

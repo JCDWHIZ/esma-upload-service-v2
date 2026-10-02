@@ -468,9 +468,12 @@ describe('UploadService (single-driver mode) [P2-06]', () => {
     ]);
 
     expect(outcomes[0].success).toBe(true);
-    expect(enqueuedOutboxEvents).toHaveLength(1);
+    expect(enqueuedOutboxEvents).toHaveLength(2);
     // OutboxWriter.enqueue is called with (trx, envelope) and we capture the envelope
-    const envelope = enqueuedOutboxEvents[0] as Record<string, unknown>;
+    const envelope = enqueuedOutboxEvents.find(
+      (e) => (e as Record<string, unknown>)['eventType'] === 'file.uploaded',
+    ) as Record<string, unknown>;
+    expect(envelope).toBeDefined();
     expect(envelope['eventType']).toBe('file.uploaded');
     expect(typeof envelope['eventId']).toBe('string');
     expect(envelope['partitionKey']).toBe(
@@ -479,6 +482,11 @@ describe('UploadService (single-driver mode) [P2-06]', () => {
     const payload = envelope['payload'] as Record<string, unknown>;
     expect(payload['mimetype']).toBe('image/jpeg');
     expect(payload['primaryProvider']).toBe('local');
+
+    const processEnvelope = enqueuedOutboxEvents.find(
+      (e) => (e as Record<string, unknown>)['eventType'] === 'file.process',
+    ) as Record<string, unknown>;
+    expect(processEnvelope).toBeDefined();
   });
 
   it('enqueues file.scan outbox event when policy.requireVirusScan is true (P5-07)', async () => {

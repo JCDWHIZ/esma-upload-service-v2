@@ -41,6 +41,7 @@ export interface FileReadOptions {
   ifNoneMatch?: string;
   signal?: AbortSignal;
   isHead?: boolean;
+  variant?: string;
 }
 
 export type FileReadResult =
@@ -288,6 +289,116 @@ export class FileReadService {
           file,
         };
       }
+    }
+
+    // 5.5. Image Derivative Variant handling (P5-08 / ARCH §8.2)
+    if (options?.variant) {
+      const variantName = options.variant;
+
+      // For public files where Cloudinary is available, prefer Cloudinary transformation URLs
+      if (
+        file.visibility === 'public' &&
+        this.storageRegistry.has('cloudinary')
+      ) {
+        const cDriver = this.storageRegistry.get('cloudinary');
+        const width =
+          variantName === 'thumb'
+            ? 256
+            : variantName === 'medium'
+              ? 1024
+              : undefined;
+        if (width) {
+          const replicas = await this.replicaRepo.listByFile(fileId);
+          const cReplica = replicas.find(
+            (r) => r.provider === 'cloudinary' && r.status === 'AVAILABLE',
+          );
+          const cRef: ProviderRef = {
+            provider: 'cloudinary',
+            key:
+              cReplica?.providerKey ?? (file.legacyPublicId || file.storageKey),
+            meta: cReplica?.providerMeta,
+          };
+          const directUrl = await cDriver.getDirectUrl(cRef, {
+            disposition: options?.disposition ?? verifiedSignedDisp,
+            transform: {
+              width,
+              height: width,
+              format: 'webp',
+            },
+          });
+          if (directUrl) {
+            this.recordReadSuccess('cloudinary');
+            return {
+              kind: 'redirect',
+              statusCode: 302,
+              url: directUrl,
+              headers: {
+                ...baseHeaders,
+                Location: directUrl,
+              },
+              file,
+            };
+          }
+        }
+      }
+
+      // Check persisted derivative metadata
+      const variantMeta = file.derivatives?.[variantName];
+      if (!variantMeta) {
+        throw new NotFoundError(
+          `Derivative variant '${variantName}' not found for file '${fileId}'`,
+        );
+      }
+
+      const variantEtag = `"${file.id}-${variantName}-${file.version}"`;
+      const variantHeaders: Record<string, string> = {
+        ...baseHeaders,
+        'Content-Type': variantMeta.mimetype,
+        'Content-Length': String(variantMeta.size),
+        ETag: variantEtag,
+      };
+
+      if (options?.ifNoneMatch) {
+        const clientEtags = options.ifNoneMatch
+          .split(',')
+          .map((e) => e.trim().replace(/^W\//, ''));
+        const rawEtag = variantEtag.replace(/^W\//, '');
+        if (clientEtags.includes('*') || clientEtags.includes(rawEtag)) {
+          return {
+            kind: 'not_modified',
+            statusCode: 304,
+            headers: variantHeaders,
+            file,
+          };
+        }
+      }
+
+      if (options?.isHead) {
+        return {
+          kind: 'stream',
+          statusCode: 200,
+          headers: variantHeaders,
+          stream: Readable.from([]),
+          file,
+          size: variantMeta.size,
+        };
+      }
+
+      const primaryDriver = this.storageRegistry.get(file.primaryProvider);
+      const downloadRes = await primaryDriver.downloadStream({
+        provider: file.primaryProvider,
+        key: variantMeta.key,
+      });
+
+      this.recordReadSuccess(file.primaryProvider);
+      return {
+        kind: 'stream',
+        statusCode: 200,
+        headers: variantHeaders,
+        stream: downloadRes.stream,
+        file,
+        size: variantMeta.size,
+      };
     }
 
     // 6. Determine Content-Disposition & Headers

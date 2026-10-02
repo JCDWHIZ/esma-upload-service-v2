@@ -338,6 +338,12 @@ export class AppConfigService {
   get redriveMaxTimes(): number {
     return this.config.REDRIVE_MAX_TIMES;
   }
+  get derivativeMaxInputPixels(): number {
+    return this.config.DERIVATIVE_MAX_INPUT_PIXELS;
+  }
+  get derivativeConcurrency(): number {
+    return this.config.DERIVATIVE_CONCURRENCY;
+  }
 
   // --- Rollout Flags ---
   get legacyEngine(): 'legacy' | 'core' {

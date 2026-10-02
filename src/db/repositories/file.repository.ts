@@ -12,7 +12,10 @@ import type {
   PaginatedResult,
 } from '../../core/types.js';
 import { decodeCursor, encodeCursor, mapFileRow } from '../mappers.js';
-import { OptimisticLockError } from '../../core/errors/app-error.js';
+import {
+  NotFoundError,
+  OptimisticLockError,
+} from '../../core/errors/app-error.js';
 
 @Injectable()
 export class FileRepository extends BaseRepository {
@@ -225,6 +228,9 @@ export class FileRepository extends BaseRepository {
     if (updates.attributes !== undefined) {
       updateValues.attributes = updates.attributes;
     }
+    if (updates.derivatives !== undefined) {
+      updateValues.derivatives = updates.derivatives;
+    }
 
     const result = await this.getExecutor(trx)
       .updateTable('files')
@@ -238,6 +244,28 @@ export class FileRepository extends BaseRepository {
       throw new OptimisticLockError(
         `Optimistic lock collision updating file ${id} at version ${currentVersion}`,
       );
+    }
+
+    return mapFileRow(result);
+  }
+
+  async updateDerivatives(
+    id: string,
+    derivatives: Record<string, unknown>,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<FileRecord> {
+    const result = await this.getExecutor(trx)
+      .updateTable('files')
+      .set({
+        derivatives,
+        version: sql`version + 1`,
+      })
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirst();
+
+    if (!result) {
+      throw new NotFoundError(`File ${id} not found`);
     }
 
     return mapFileRow(result);

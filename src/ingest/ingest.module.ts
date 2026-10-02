@@ -3,6 +3,7 @@ import { IngestValidationPipe } from './ingest-validation.pipe.js';
 import { StagingCleanupInterceptor } from './staging-cleanup.js';
 import { NoopVirusScanner, VIRUS_SCANNER } from './virus-scanner.js';
 import { ClamAvScanner } from './clamav.scanner.js';
+import { DerivativesService } from './derivatives.service.js';
 import { ConfigModule } from '../config/config.module.js';
 
 @Module({
@@ -16,6 +17,7 @@ import { ConfigModule } from '../config/config.module.js';
     },
     ClamAvScanner,
     NoopVirusScanner,
+    DerivativesService,
   ],
   exports: [
     IngestValidationPipe,
@@ -23,6 +25,7 @@ import { ConfigModule } from '../config/config.module.js';
     VIRUS_SCANNER,
     ClamAvScanner,
     NoopVirusScanner,
+    DerivativesService,
   ],
 })
 export class IngestModule {}

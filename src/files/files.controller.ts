@@ -551,6 +551,11 @@ export class FilesController {
     required: false,
     enum: ['local', 'cloudinary', 'seaweedfs'],
   })
+  @ApiQuery({
+    name: 'variant',
+    required: false,
+    description: 'Image derivative variant name (e.g. thumb, medium)',
+  })
   @ApiResponse({ status: 200, description: 'Full file content stream' })
   @ApiResponse({ status: 206, description: 'Partial content byte range slice' })
   @ApiResponse({ status: 302, description: 'Direct storage / CDN redirect' })
@@ -578,6 +583,7 @@ export class FilesController {
       sig?: string;
       redirect?: 'auto' | 'always' | 'never';
       provider?: 'local' | 'cloudinary' | 'seaweedfs';
+      variant?: string;
     },
     @Headers('range') range?: string,
     @Headers('if-none-match') ifNoneMatch?: string,
@@ -599,6 +605,7 @@ export class FilesController {
       provider: query.provider,
       ifNoneMatch,
       isHead,
+      variant: query.variant,
     });
 
     if (!res) {

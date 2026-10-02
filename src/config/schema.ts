@@ -165,6 +165,8 @@ export const rawConfigSchema = z.object({
   SWEEP_DELETING_AFTER_MINUTES: intCoerce(10).default(10),
   REDRIVE_AFTER_HOURS: intCoerce(0).default(0),
   REDRIVE_MAX_TIMES: intCoerce(3).default(3),
+  DERIVATIVE_MAX_INPUT_PIXELS: intCoerce(50000000).default(50000000),
+  DERIVATIVE_CONCURRENCY: intCoerce(2).default(2),
 
   // --- Rollout flags (removed in P6-10) ---
   LEGACY_ENGINE: z.enum(['legacy', 'core']).default('legacy'),

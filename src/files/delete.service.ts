@@ -180,6 +180,32 @@ export class DeleteService {
       }
     }
 
+    // Purge image derivatives on primary storage provider (P5-08)
+    const file = await this.fileRepo.findById(fileId);
+    if (file?.derivatives && typeof file.derivatives === 'object') {
+      try {
+        const primaryDriver = this.storageRegistry.get(file.primaryProvider);
+        for (const [varName, deriv] of Object.entries(file.derivatives)) {
+          if (deriv && typeof deriv === 'object' && deriv.key) {
+            try {
+              await primaryDriver.delete({
+                provider: file.primaryProvider,
+                key: deriv.key,
+              });
+            } catch (derivErr: unknown) {
+              this.logger.warn(
+                `Failed to purge derivative "${varName}" for file ${fileId}: ${String(derivErr)}`,
+              );
+            }
+          }
+        }
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Could not access primary driver to purge derivatives for file ${fileId}: ${String(err)}`,
+        );
+      }
+    }
+
     if (allReplicasPurged) {
       await this.fileRepo.markDeleted(fileId);
     } else {

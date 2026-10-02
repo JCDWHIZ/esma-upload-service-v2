@@ -38,6 +38,7 @@ export interface FilesTable {
   uploaded_by: string;
   tags: Generated<string[]>;
   attributes: Generated<Record<string, unknown>>;
+  derivatives: Generated<Record<string, unknown>>;
   legacy_public_id: string | null;
   idempotency_key: string | null;
   correlation_id: string;

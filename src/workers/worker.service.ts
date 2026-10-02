@@ -12,6 +12,7 @@ import { ReplicationWorker } from './replication.worker.js';
 import { ScanWorker } from './scan.worker.js';
 import { SweeperService } from './sweeper.service.js';
 import { DlqWorker } from './dlq.worker.js';
+import { ProcessingWorker } from './processing.worker.js';
 
 @Injectable()
 export class WorkerService
@@ -27,6 +28,7 @@ export class WorkerService
     private readonly outboxRetention: OutboxRetentionService,
     private readonly replicationWorker: ReplicationWorker,
     private readonly scanWorker: ScanWorker,
+    private readonly processingWorker: ProcessingWorker,
     private readonly sweeperService: SweeperService,
     private readonly dlqWorker: DlqWorker,
   ) {}
@@ -61,8 +63,11 @@ export class WorkerService
     }
 
     if (roles.includes('processing') && !this.runningRoles.has('processing')) {
-      this.logger.log('Starting processing role: ScanWorker');
+      this.logger.log(
+        'Starting processing role: ScanWorker and ProcessingWorker',
+      );
       await this.scanWorker.start();
+      await this.processingWorker.start();
       this.runningRoles.add('processing');
     }
 
@@ -91,6 +96,7 @@ export class WorkerService
     }
     if (this.runningRoles.has('processing')) {
       await this.scanWorker.stop();
+      await this.processingWorker.stop();
       this.runningRoles.delete('processing');
     }
     if (this.runningRoles.has('sweeper')) {
@@ -104,9 +110,9 @@ export class WorkerService
     this.runningRoles.clear();
   }
 
-  onApplicationShutdown(signal?: string) {
+  async onApplicationShutdown(signal?: string): Promise<void> {
     this.logger.log(`Worker shutdown signal: ${signal ?? 'none'}`);
-    void this.stopRoles();
+    await this.stopRoles();
   }
 
   getRunningRoles(): string[] {

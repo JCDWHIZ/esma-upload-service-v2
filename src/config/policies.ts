@@ -13,6 +13,12 @@ export interface FieldRule {
   readonly maxCount: number;
 }
 
+export type DerivativeName = 'thumb' | 'medium';
+export const VALID_DERIVATIVE_NAMES: readonly DerivativeName[] = Object.freeze([
+  'thumb',
+  'medium',
+]);
+
 export interface UploadPolicy {
   readonly namespace: string;
   readonly maxFileSizeBytes: number;
@@ -24,6 +30,7 @@ export interface UploadPolicy {
   readonly cloudinaryReplication: CloudinaryReplication;
   readonly cloudinaryRootFolder: string;
   readonly requireVirusScan: boolean;
+  readonly derivatives?: readonly DerivativeName[];
   readonly fieldRules?: Readonly<Record<string, FieldRule>>;
 }
 
@@ -337,6 +344,29 @@ export function validatePolicy(policy: UploadPolicy): PolicyValidationIssue[] {
     }
   }
 
+  // Derivatives check (optional)
+  if (policy.derivatives !== undefined) {
+    if (!Array.isArray(policy.derivatives)) {
+      issues.push({
+        namespace: ns,
+        field: 'derivatives',
+        message: 'derivatives must be an array of strings',
+      });
+    } else {
+      for (const d of policy.derivatives) {
+        if (
+          !(VALID_DERIVATIVE_NAMES as readonly string[]).includes(String(d))
+        ) {
+          issues.push({
+            namespace: ns,
+            field: 'derivatives',
+            message: `Invalid derivative "${String(d)}". Allowed: ${VALID_DERIVATIVE_NAMES.join(', ')}`,
+          });
+        }
+      }
+    }
+  }
+
   return issues;
 }
 
@@ -355,6 +385,7 @@ export const DEFAULT_POLICIES: Readonly<Record<string, UploadPolicy>> =
       cloudinaryReplication: 'public-only',
       cloudinaryRootFolder: 'uploads/schools',
       requireVirusScan: false,
+      derivatives: ['thumb', 'medium'],
       fieldRules: {
         avatar: { maxCount: 1 },
         gallery: { maxCount: 5 },
@@ -371,6 +402,7 @@ export const DEFAULT_POLICIES: Readonly<Record<string, UploadPolicy>> =
       cloudinaryReplication: 'public-only',
       cloudinaryRootFolder: 'admin',
       requireVirusScan: false,
+      derivatives: ['thumb', 'medium'],
       fieldRules: {
         profile_image: { maxCount: 1 },
         gallery_images: { maxCount: 5 },

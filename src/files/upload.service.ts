@@ -532,6 +532,31 @@ export class UploadService {
             });
             await this.outboxWriter.enqueue(trx, scanEnvelope);
           }
+
+          // 4. file.process event when image derivatives are configured (P5-08)
+          const isImage = file.detectedMime.startsWith('image/');
+          const hasCloudinaryForPublic =
+            visibility === 'public' &&
+            (primaryDriver.name === 'cloudinary' ||
+              plannedSecondaries.includes('cloudinary'));
+
+          if (
+            isImage &&
+            policy.derivatives &&
+            policy.derivatives.length > 0 &&
+            !hasCloudinaryForPublic
+          ) {
+            const processEnvelope = createEnvelope({
+              eventType: EVENT_TYPES.FILE_PROCESS,
+              partitionKey: fileId,
+              context: ctx,
+              payload: {
+                fileId,
+                operations: [...policy.derivatives],
+              },
+            });
+            await this.outboxWriter.enqueue(trx, processEnvelope);
+          }
         }
 
         return { file: inserted, replicas: insertedReplicas };

@@ -44,11 +44,22 @@ export interface FileRecord {
   idempotencyKey: string | null;
   correlationId: string;
   version: number;
+  derivatives?: FileDerivatives;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
   expiresAt?: Date | null;
 }
+
+export interface FileDerivative {
+  key: string;
+  size: number;
+  width: number;
+  height: number;
+  mimetype: string;
+}
+
+export type FileDerivatives = Record<string, FileDerivative>;
 
 export interface NewFileRecord {
   id?: string;
@@ -70,6 +81,7 @@ export interface NewFileRecord {
   uploadedBy: string;
   tags?: string[];
   attributes?: Record<string, unknown>;
+  derivatives?: FileDerivatives;
   legacyPublicId?: string | null;
   idempotencyKey?: string | null;
   correlationId: string;
@@ -107,6 +119,7 @@ export interface FileStatusUpdate {
   sha256?: string | null;
   sizeBytes?: bigint | number;
   attributes?: Record<string, unknown>;
+  derivatives?: FileDerivatives;
   expiresAt?: Date | null;
 }
 

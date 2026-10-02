@@ -8,7 +8,10 @@ import type {
   DeliveryMeta,
   MessageHandler,
 } from '../../src/events/broker.interface.js';
-import { createEnvelope, type EventEnvelope } from '../../src/events/envelope.js';
+import {
+  createEnvelope,
+  type EventEnvelope,
+} from '../../src/events/envelope.js';
 
 describe('DlqWorker (P5-06)', () => {
   let worker: DlqWorker;

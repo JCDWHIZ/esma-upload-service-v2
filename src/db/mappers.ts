@@ -12,6 +12,7 @@ import type {
 import type {
   FileRecord,
   FileReplica,
+  FileDerivatives,
   OutboxEvent,
   ProcessedEvent,
   AuditLogEntry,
@@ -60,6 +61,7 @@ export function mapFileRow(row: Selectable<FilesTable>): FileRecord {
     uploadedBy: row.uploaded_by,
     tags: Array.isArray(row.tags) ? row.tags : [],
     attributes: row.attributes ?? {},
+    derivatives: (row.derivatives as unknown as FileDerivatives) ?? {},
     legacyPublicId: row.legacy_public_id,
     idempotencyKey: row.idempotency_key,
     correlationId: row.correlation_id,

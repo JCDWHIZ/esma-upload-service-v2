@@ -14,7 +14,10 @@ import type { OutboxRepository } from '../../src/db/repositories/outbox.reposito
 import type { AuditRepository } from '../../src/db/repositories/audit.repository.js';
 import type { DatabaseService } from '../../src/db/database.service.js';
 import type { AppConfigService } from '../../src/config/config.service.js';
-import { createEnvelope, type EventEnvelope } from '../../src/events/envelope.js';
+import {
+  createEnvelope,
+  type EventEnvelope,
+} from '../../src/events/envelope.js';
 
 interface MockOutboxEntry {
   topic: string;

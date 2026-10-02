@@ -10,6 +10,7 @@ import { ReplicationWorker } from './replication.worker.js';
 import { ScanWorker } from './scan.worker.js';
 import { SweeperService } from './sweeper.service.js';
 import { DlqWorker } from './dlq.worker.js';
+import { ProcessingWorker } from './processing.worker.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { DlqWorker } from './dlq.worker.js';
     WorkerService,
     ReplicationWorker,
     ScanWorker,
+    ProcessingWorker,
     SweeperService,
     DlqWorker,
   ],
@@ -31,6 +33,7 @@ import { DlqWorker } from './dlq.worker.js';
     WorkerService,
     ReplicationWorker,
     ScanWorker,
+    ProcessingWorker,
     SweeperService,
     DlqWorker,
   ],

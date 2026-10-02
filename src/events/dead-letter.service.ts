@@ -11,8 +11,6 @@ import type {
   DeadLetterRecord,
   PaginatedResult,
 } from '../core/types.js';
-import type { Transaction } from 'kysely';
-import type { Database } from '../db/types.js';
 import { NotFoundError, ValidationError } from '../core/errors/app-error.js';
 import type { EventEnvelope } from './envelope.js';
 
@@ -192,7 +190,7 @@ export class DeadLetterService {
     } else {
       // Direct update when database transaction is mocked or direct mode requested
       await this.outboxWriter.enqueue(
-        null as unknown as Transaction<Database>,
+        null,
         redrivenEnvelope as unknown as EventEnvelope<unknown>,
         targetTopic,
       );
