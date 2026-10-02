@@ -356,6 +356,29 @@ export class AppConfigService {
     return this.config.AUDIT_STREAM;
   }
 
+  // --- Rate Limiting & Quotas (P6-02) ---
+  get rateLimitEnabled(): boolean {
+    return this.config.RATE_LIMIT_ENABLED;
+  }
+  get rateLimitFailOpenReads(): boolean {
+    return this.config.RATE_LIMIT_FAIL_OPEN_READS;
+  }
+  get rateLimitFailClosedMutations(): boolean {
+    return this.config.RATE_LIMIT_FAIL_CLOSED_MUTATIONS;
+  }
+  get defaultUploadLimitPerMin(): number {
+    return this.config.DEFAULT_UPLOAD_LIMIT_PER_MIN;
+  }
+  get defaultUploadBytesPerMin(): number {
+    return this.config.DEFAULT_UPLOAD_BYTES_PER_MIN;
+  }
+  get defaultReadLimitPerMin(): number {
+    return this.config.DEFAULT_READ_LIMIT_PER_MIN;
+  }
+  get defaultFailedAuthLimitPerMin(): number {
+    return this.config.DEFAULT_FAILED_AUTH_LIMIT_PER_MIN;
+  }
+
   // --- Rollout Flags ---
   get legacyEngine(): 'legacy' | 'core' {
     return this.config.LEGACY_ENGINE;

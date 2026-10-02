@@ -174,7 +174,7 @@ describe('AuditService (P6-01)', () => {
   });
 
   it('enqueues outbox event when auditStream is enabled', async () => {
-    mockConfig.auditStream = true;
+    (mockConfig as Record<string, unknown>).auditStream = true;
 
     await auditService.recordSync({
       action: 'FILE_UPLOAD',
@@ -196,7 +196,7 @@ describe('AuditService (P6-01)', () => {
   });
 
   it('ignores read audit entries when auditReads is off', async () => {
-    mockConfig.auditReads = 'off';
+    (mockConfig as Record<string, unknown>).auditReads = 'off';
 
     auditService.recordAsync({
       action: 'FILE_READ',

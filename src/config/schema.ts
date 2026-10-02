@@ -187,6 +187,15 @@ export const rawConfigSchema = z.object({
     .default(0.1),
   AUDIT_STREAM: booleanCoerce.default(false),
 
+  // --- Rate Limiting & Quotas (P6-02) ---
+  RATE_LIMIT_ENABLED: booleanCoerce.default(true),
+  RATE_LIMIT_FAIL_OPEN_READS: booleanCoerce.default(true),
+  RATE_LIMIT_FAIL_CLOSED_MUTATIONS: booleanCoerce.default(true),
+  DEFAULT_UPLOAD_LIMIT_PER_MIN: intCoerce(60).default(60),
+  DEFAULT_UPLOAD_BYTES_PER_MIN: intCoerce(524288000).default(524288000),
+  DEFAULT_READ_LIMIT_PER_MIN: intCoerce(600).default(600),
+  DEFAULT_FAILED_AUTH_LIMIT_PER_MIN: intCoerce(10).default(10),
+
   // --- Rollout flags (removed in P6-10) ---
   LEGACY_ENGINE: z.enum(['legacy', 'core']).default('legacy'),
   LEGACY_DEFAULT_VISIBILITY: z.enum(['public', 'private']).default('public'),

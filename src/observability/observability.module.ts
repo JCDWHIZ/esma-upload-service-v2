@@ -17,6 +17,9 @@ import { StorageModule } from '../storage/storage.module.js';
 
 import { AuditService } from './audit.service.js';
 import { AuditController } from './audit.controller.js';
+import { RedisService } from '../common/redis.service.js';
+import { RateLimiterService } from '../common/rate-limiter.service.js';
+import { RateLimiterGuard } from '../common/guards/rate-limiter.guard.js';
 
 interface SerializedReq {
   id?: unknown;
@@ -118,7 +121,18 @@ interface SerializedRes {
     StructuredLogger,
     HealthService,
     AuditService,
+    RedisService,
+    RateLimiterService,
+    RateLimiterGuard,
   ],
-  exports: [PinoLoggerModule, StructuredLogger, HealthService, AuditService],
+  exports: [
+    PinoLoggerModule,
+    StructuredLogger,
+    HealthService,
+    AuditService,
+    RedisService,
+    RateLimiterService,
+    RateLimiterGuard,
+  ],
 })
 export class ObservabilityModule {}

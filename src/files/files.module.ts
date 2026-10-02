@@ -10,7 +10,8 @@ import { FileQueryService } from './file-query.service.js';
 import { PresignedUploadService } from './presigned-upload.service.js';
 import { KeyService } from '../core/storage-key.service.js';
 import { AuthorizationModule } from '../authz/authorization.module.js';
-import { NoOpQuotaGate, QUOTA_GATE } from './quota-gate.interface.js';
+import { QUOTA_GATE } from './quota-gate.interface.js';
+import { DatabaseQuotaGate } from './quota-gate.service.js';
 import { EventsModule } from '../events/events.module.js';
 
 import { AuthModule } from '../auth/auth.module.js';
@@ -31,9 +32,10 @@ import { ReplicaSelector } from './replica-selector.js';
     FileQueryService,
     PresignedUploadService,
     KeyService,
+    DatabaseQuotaGate,
     {
       provide: QUOTA_GATE,
-      useClass: NoOpQuotaGate,
+      useClass: DatabaseQuotaGate,
     },
   ],
   exports: [
