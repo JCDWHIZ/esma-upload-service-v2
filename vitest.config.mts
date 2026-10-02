@@ -63,6 +63,24 @@ export default defineConfig({
           globals: true,
         },
       },
+      {
+        test: {
+          name: 'perf',
+          include: ['tests/perf/**/*.spec.ts'],
+          testTimeout: 60000,
+          environment: 'node',
+          globals: true,
+        },
+      },
+      {
+        test: {
+          name: 'chaos',
+          include: ['tests/chaos/**/*.spec.ts'],
+          testTimeout: 30000,
+          environment: 'node',
+          globals: true,
+        },
+      },
     ],
   },
 });

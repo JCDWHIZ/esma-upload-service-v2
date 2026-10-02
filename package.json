@@ -55,7 +55,10 @@
     "storage:promote": "ts-node src/scripts/storage-promote-cli.ts",
     "storage:promote:prod": "node dist/src/scripts/storage-promote-cli.js",
     "file:hard-delete": "ts-node src/scripts/hard-delete-cli.ts",
-    "file:hard-delete:prod": "node dist/src/scripts/hard-delete-cli.js"
+    "file:hard-delete:prod": "node dist/src/scripts/hard-delete-cli.js",
+    "perf:fixtures": "ts-node tests/perf/generate-fixtures.ts",
+    "test:perf": "vitest run --project perf",
+    "test:chaos": "vitest run --project chaos"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",
