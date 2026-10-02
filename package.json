@@ -51,7 +51,11 @@
     "dlq:list:prod": "node dist/src/scripts/dlq-cli.js list",
     "dlq:redrive:prod": "node dist/src/scripts/dlq-cli.js redrive",
     "dlq:discard:prod": "node dist/src/scripts/dlq-cli.js discard",
-    "dlq:stats:prod": "node dist/src/scripts/dlq-cli.js stats"
+    "dlq:stats:prod": "node dist/src/scripts/dlq-cli.js stats",
+    "storage:promote": "ts-node src/scripts/storage-promote-cli.ts",
+    "storage:promote:prod": "node dist/src/scripts/storage-promote-cli.js",
+    "file:hard-delete": "ts-node src/scripts/hard-delete-cli.ts",
+    "file:hard-delete:prod": "node dist/src/scripts/hard-delete-cli.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",

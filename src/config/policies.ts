@@ -32,6 +32,7 @@ export interface UploadPolicy {
   readonly requireVirusScan: boolean;
   readonly derivatives?: readonly DerivativeName[];
   readonly fieldRules?: Readonly<Record<string, FieldRule>>;
+  readonly tombstoneRetentionDays?: number;
 }
 
 export interface PolicyValidationIssue {
@@ -364,6 +365,21 @@ export function validatePolicy(policy: UploadPolicy): PolicyValidationIssue[] {
           });
         }
       }
+    }
+  }
+
+  // Tombstone retention check (optional override)
+  if (policy.tombstoneRetentionDays !== undefined) {
+    if (
+      typeof policy.tombstoneRetentionDays !== 'number' ||
+      !Number.isInteger(policy.tombstoneRetentionDays) ||
+      policy.tombstoneRetentionDays <= 0
+    ) {
+      issues.push({
+        namespace: ns,
+        field: 'tombstoneRetentionDays',
+        message: 'tombstoneRetentionDays must be a positive integer',
+      });
     }
   }
 

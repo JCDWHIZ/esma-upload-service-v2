@@ -365,11 +365,12 @@ export class FileRepository extends BaseRepository {
     olderThan: Date,
     limit = 100,
     trx?: Transaction<Database> | Kysely<Database>,
+    namespace?: string,
   ): Promise<number> {
     const result = await this.getExecutor(trx)
       .deleteFrom('files')
-      .where('id', 'in', (eb) =>
-        eb
+      .where('id', 'in', (eb) => {
+        let sub = eb
           .selectFrom('files')
           .select('id')
           .where('status', '=', 'DELETED')
@@ -378,9 +379,12 @@ export class FileRepository extends BaseRepository {
               w('deleted_at', '<', olderThan),
               w('updated_at', '<', olderThan),
             ]),
-          )
-          .limit(limit),
-      )
+          );
+        if (namespace) {
+          sub = sub.where('namespace', '=', namespace);
+        }
+        return sub.limit(limit);
+      })
       .executeTakeFirst();
 
     return Number(result.numDeletedRows);

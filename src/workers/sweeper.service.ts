@@ -1,8 +1,9 @@
-import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationShutdown, Optional } from '@nestjs/common';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { sql } from 'kysely';
 import { AppConfigService } from '../config/config.service.js';
+import { PolicyRegistry } from '../config/policy-registry.js';
 import { DatabaseService } from '../db/database.service.js';
 import { FileRepository } from '../db/repositories/file.repository.js';
 import { ReplicaRepository } from '../db/repositories/replica.repository.js';
@@ -38,6 +39,7 @@ export class SweeperService implements OnApplicationShutdown {
     private readonly outboxRepo: OutboxRepository,
     private readonly outboxWriter: OutboxWriter,
     private readonly idempotencyRepo?: IdempotencyRepository,
+    @Optional() private readonly policyRegistry?: PolicyRegistry,
   ) {}
 
   start(): void {
@@ -407,13 +409,14 @@ export class SweeperService implements OnApplicationShutdown {
   }
 
   /**
-   * 5. Tombstone sweep: Hard-deletes file records in DELETED status older than TOMBSTONE_RETENTION_DAYS.
+   * 5. Tombstone sweep: Hard-deletes file records in DELETED status older than TOMBSTONE_RETENTION_DAYS
+   * (or per-namespace override if configured in PolicyRegistry).
    */
   async sweepTombstones(dryRun = false): Promise<number> {
     const database = this.db.getDb();
     if (!database) return 0;
 
-    const cutoff = new Date(
+    const globalCutoff = new Date(
       Date.now() -
         this.configService.tombstoneRetentionDays * 24 * 60 * 60 * 1000,
     );
@@ -428,30 +431,79 @@ export class SweeperService implements OnApplicationShutdown {
         return 0;
       }
 
+      let totalDeleted = 0;
+
+      // 1. Process namespaces with specific retention overrides
+      if (this.policyRegistry) {
+        for (const [ns, policy] of this.policyRegistry.getAll().entries()) {
+          if (
+            policy.tombstoneRetentionDays !== undefined &&
+            policy.tombstoneRetentionDays > 0
+          ) {
+            const nsCutoff = new Date(
+              Date.now() -
+                policy.tombstoneRetentionDays * 24 * 60 * 60 * 1000,
+            );
+
+            if (dryRun) {
+              const nsTombstones = await this.fileRepo.findStaleByStatus(
+                'DELETED',
+                nsCutoff,
+                100,
+                trx,
+              );
+              const filtered = nsTombstones.filter((f) => f.namespace === ns);
+              if (filtered.length > 0) {
+                this.logger.log(
+                  `[DRY-RUN] Tombstone sweep for namespace "${ns}": found ${filtered.length} DELETED tombstones older than ${policy.tombstoneRetentionDays}d`,
+                );
+                totalDeleted += filtered.length;
+              }
+            } else {
+              const nsDeleted = await this.fileRepo.hardDeleteTombstones(
+                nsCutoff,
+                100,
+                trx,
+                ns,
+              );
+              if (nsDeleted > 0) {
+                this.logger.log(
+                  `Tombstone sweep for namespace "${ns}": hard-deleted ${nsDeleted} tombstones older than ${policy.tombstoneRetentionDays}d`,
+                );
+                totalDeleted += nsDeleted;
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Process global fallback for remaining namespaces
       if (dryRun) {
         const tombstones = await this.fileRepo.findStaleByStatus(
           'DELETED',
-          cutoff,
+          globalCutoff,
           100,
           trx,
         );
         this.logger.log(
-          `[DRY-RUN] Tombstone sweep: found ${tombstones.length} DELETED tombstones`,
+          `[DRY-RUN] Global tombstone sweep: found ${tombstones.length} DELETED tombstones older than ${this.configService.tombstoneRetentionDays}d`,
         );
-        return tombstones.length;
+        return totalDeleted + tombstones.length;
       }
 
-      const deletedCount = await this.fileRepo.hardDeleteTombstones(
-        cutoff,
+      const globalDeleted = await this.fileRepo.hardDeleteTombstones(
+        globalCutoff,
         100,
         trx,
       );
-      if (deletedCount > 0) {
+      if (globalDeleted > 0) {
         this.logger.log(
-          `Tombstone sweep: hard-deleted ${deletedCount} file tombstones older than ${this.configService.tombstoneRetentionDays}d`,
+          `Global tombstone sweep: hard-deleted ${globalDeleted} tombstones older than ${this.configService.tombstoneRetentionDays}d`,
         );
+        totalDeleted += globalDeleted;
       }
-      return deletedCount;
+
+      return totalDeleted;
     });
   }
 

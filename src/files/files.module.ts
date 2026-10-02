@@ -6,6 +6,7 @@ import { UploadService } from './upload.service.js';
 import { FileReadService } from './file-read.service.js';
 import { SignedUrlService } from './signed-url.service.js';
 import { DeleteService } from './delete.service.js';
+import { HardDeleteService } from './hard-delete.service.js';
 import { FileQueryService } from './file-query.service.js';
 import { PresignedUploadService } from './presigned-upload.service.js';
 import { KeyService } from '../core/storage-key.service.js';
@@ -31,6 +32,7 @@ import { IdempotencyService } from './idempotency.service.js';
     ReplicaSelector,
     SignedUrlService,
     DeleteService,
+    HardDeleteService,
     FileQueryService,
     PresignedUploadService,
     KeyService,
@@ -48,6 +50,7 @@ import { IdempotencyService } from './idempotency.service.js';
     ReplicaSelector,
     SignedUrlService,
     DeleteService,
+    HardDeleteService,
     FileQueryService,
     PresignedUploadService,
     KeyService,
