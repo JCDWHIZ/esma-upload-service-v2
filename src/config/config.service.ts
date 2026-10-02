@@ -345,6 +345,17 @@ export class AppConfigService {
     return this.config.DERIVATIVE_CONCURRENCY;
   }
 
+  // --- Audit Logging ---
+  get auditReads(): 'all' | 'sampled' | 'off' {
+    return this.config.AUDIT_READS;
+  }
+  get auditSampleRate(): number {
+    return this.config.AUDIT_SAMPLE_RATE;
+  }
+  get auditStream(): boolean {
+    return this.config.AUDIT_STREAM;
+  }
+
   // --- Rollout Flags ---
   get legacyEngine(): 'legacy' | 'core' {
     return this.config.LEGACY_ENGINE;

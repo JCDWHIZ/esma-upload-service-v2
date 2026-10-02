@@ -168,6 +168,25 @@ export const rawConfigSchema = z.object({
   DERIVATIVE_MAX_INPUT_PIXELS: intCoerce(50000000).default(50000000),
   DERIVATIVE_CONCURRENCY: intCoerce(2).default(2),
 
+  // --- Audit Logging (P6-01) ---
+  AUDIT_READS: z
+    .preprocess(
+      (val) => (typeof val === 'string' ? val.trim().toLowerCase() : val),
+      z.enum(['all', 'sampled', 'off']),
+    )
+    .default('all'),
+  AUDIT_SAMPLE_RATE: z
+    .preprocess((val) => {
+      if (typeof val === 'number') return val;
+      if (typeof val === 'string' && val.trim() !== '') {
+        const parsed = parseFloat(val.trim());
+        return isNaN(parsed) ? val : parsed;
+      }
+      return 0.1;
+    }, z.number().min(0.0).max(1.0))
+    .default(0.1),
+  AUDIT_STREAM: booleanCoerce.default(false),
+
   // --- Rollout flags (removed in P6-10) ---
   LEGACY_ENGINE: z.enum(['legacy', 'core']).default('legacy'),
   LEGACY_DEFAULT_VISIBILITY: z.enum(['public', 'private']).default('public'),

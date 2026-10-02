@@ -5,7 +5,8 @@ import {
   FileResourceLoader,
   DefaultResourceLoader,
 } from './resource-loader.js';
-import { AUDIT_SINK, NoopAuditSink } from './audit-sink.js';
+import { AUDIT_SINK } from './audit-sink.js';
+import { AuditService } from '../observability/audit.service.js';
 
 @Module({
   providers: [
@@ -15,7 +16,7 @@ import { AUDIT_SINK, NoopAuditSink } from './audit-sink.js';
     AuthorizationGuard,
     {
       provide: AUDIT_SINK,
-      useClass: NoopAuditSink,
+      useExisting: AuditService,
     },
   ],
   exports: [

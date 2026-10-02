@@ -15,6 +15,9 @@ import { HealthService } from './health.service.js';
 
 import { StorageModule } from '../storage/storage.module.js';
 
+import { AuditService } from './audit.service.js';
+import { AuditController } from './audit.controller.js';
+
 interface SerializedReq {
   id?: unknown;
   method?: string;
@@ -106,7 +109,7 @@ interface SerializedRes {
       }),
     }),
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, AuditController],
   providers: [
     {
       provide: APP_INTERCEPTOR,
@@ -114,7 +117,8 @@ interface SerializedRes {
     },
     StructuredLogger,
     HealthService,
+    AuditService,
   ],
-  exports: [PinoLoggerModule, StructuredLogger, HealthService],
+  exports: [PinoLoggerModule, StructuredLogger, HealthService, AuditService],
 })
 export class ObservabilityModule {}
