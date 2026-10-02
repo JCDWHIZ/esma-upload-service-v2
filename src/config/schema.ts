@@ -204,10 +204,6 @@ export const rawConfigSchema = z.object({
   DEFAULT_UPLOAD_BYTES_PER_MIN: intCoerce(524288000).default(524288000),
   DEFAULT_READ_LIMIT_PER_MIN: intCoerce(600).default(600),
   DEFAULT_FAILED_AUTH_LIMIT_PER_MIN: intCoerce(10).default(10),
-
-  // --- Rollout flags (removed in P6-10) ---
-  LEGACY_ENGINE: z.enum(['legacy', 'core']).default('legacy'),
-  LEGACY_DEFAULT_VISIBILITY: z.enum(['public', 'private']).default('public'),
 });
 
 export type RawConfig = z.infer<typeof rawConfigSchema>;

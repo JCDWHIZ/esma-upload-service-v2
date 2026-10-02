@@ -1,10 +1,9 @@
 # ESMA Upload Service: Generic Architecture & Evolution Roadmap (v2)
 
-> **Status:** Revised 2026-09-23 (v2.3). Supersedes v1 and v2.2.
-> **Key Architecture Decision (2026-09-23):** Legacy facade endpoints (`/api/tenant/upload/*` and `/api/admin/upload/*`) and their baggage (dual error formats, legacy public_id mapping, `x-school-id` headers) have been **dropped entirely**. All clients unify on the modern `/api/v1/files/*` API. Authentication is unified through the live ESMA Identity Service (`https://api.esma.elsoft.ng/identity`) via standard OIDC / JWKS (RS256).
-> **Workspace layout:** `esma-upload-services/esma-upload-service/` is the frozen legacy Express v1 app — reference only, never edited or ported from. `esma-upload-services/esma-upload-service-v2/` is the NestJS rewrite where all work happens, built from the functional requirements below. `esma-upload-services/docs/` contains all documentation.
-> **Companion documents:** `CURRENT_ARCHITECTURE_AND_IMPLEMENTATION (1).md` (as-is, legacy Express app), `REVIEW_FINDINGS_AND_DECISIONS.md` (every change from v1 and why), `BACKEND_TASKS.md` (executable task list).
-> References such as `F-17` point to findings and `ADR-04` to decisions in the review document. Section references such as `ARCH §5.1` are used by the task list.
+> **Status:** Fully Implemented (v2.4 - 2026-10-02). Supersedes all previous drafts.
+> **Production Status:** All Phases (Phase 1 through Phase 6) and Milestones (M1, M2, M3, M4) are complete. The legacy Express engine has been decommissioned; legacy rollout flags have been removed. The active service runs on NestJS 10 with PostgreSQL system-of-record, zero-RAM disk staging, multi-driver storage (`local`, `seaweedfs`, `cloudinary`, `hybrid`), pluggable message brokers (`kafka`, `pulsar`, `memory`), ClamAV scanning, and comprehensive observability.
+> **Workspace layout:** `esma-upload-services/esma-upload-service/` is the frozen legacy Express v1 app (historical reference only). `esma-upload-services/esma-upload-service-v2/` is the production service. `esma-upload-services/docs/` contains documentation.
+> **Companion documents:** `docs/CURRENT_ARCHITECTURE_AND_IMPLEMENTATION.md` (historical v1 reference), `docs/REVIEW_FINDINGS_AND_DECISIONS.md` (architectural decisions), `docs/BACKEND_TASKS.md` (task execution log).
 
 ---
 
@@ -1078,12 +1077,12 @@ How to read the numbers (they are planning estimates, not commitments):
 
 ### 13.2 Milestones and exit criteria
 
-| Milestone | Phases | Exit criteria |
-| :--- | :--- | :--- |
-| M1 Foundation and core online | 1 to 3 | No unauthenticated admin routes, no leaked secrets, no temp-file leak (built in from P1-01, not patched later). All legacy-facade routes served by the core engine over the Cloudinary driver with response shapes matching the documented legacy contract (P1-14). `/api/v1` live. Backfill complete. Rollback flag proven. |
-| M2 Replicated | 4 | `STORAGE_DRIVER=hybrid` works with the memory broker: fast path, replicas, delete propagation, reconciler. |
-| M3 Enterprise bus | 5 | Kafka and Pulsar pass the same contract suite. DLQ tooling. Scan gating. |
-| M4 Production | 6 | Audit, quotas, metrics, CI gates, backups, load test report, legacy app decommissioned. |
+| Milestone | Phases | Exit criteria | Status |
+| :--- | :--- | :--- | :--- |
+| M1 Foundation and core online | 1 to 3 | No unauthenticated admin routes, no leaked secrets, no temp-file leak (built in from P1-01, not patched later). All legacy-facade routes served by the core engine over the Cloudinary driver with response shapes matching the documented legacy contract (P1-14). `/api/v1` live. Backfill complete. Rollback flag proven. | **COMPLETED** |
+| M2 Replicated | 4 | `STORAGE_DRIVER=hybrid` works with the memory broker: fast path, replicas, delete propagation, reconciler. | **COMPLETED** |
+| M3 Enterprise bus | 5 | Kafka and Pulsar pass the same contract suite. DLQ tooling. Scan gating. | **COMPLETED** |
+| M4 Production | 6 | Audit, quotas, metrics, CI gates, backups, load test report, legacy app decommissioned. | **COMPLETED** |
 
 ---
 

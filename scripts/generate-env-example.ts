@@ -192,17 +192,6 @@ const sections: EnvSection[] = [
       { key: 'CLAMAV_PORT', placeholder: '3310' },
     ],
   },
-  {
-    title: 'Rollout flags (removed in P6-10)',
-    vars: [
-      {
-        key: 'LEGACY_ENGINE',
-        placeholder: 'legacy',
-        comment: 'legacy | core',
-      },
-      { key: 'LEGACY_DEFAULT_VISIBILITY', placeholder: 'public' },
-    ],
-  },
 ];
 
 export function generateEnvExampleContent(): string {

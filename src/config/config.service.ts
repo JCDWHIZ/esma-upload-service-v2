@@ -401,12 +401,4 @@ export class AppConfigService {
   get defaultFailedAuthLimitPerMin(): number {
     return this.config.DEFAULT_FAILED_AUTH_LIMIT_PER_MIN;
   }
-
-  // --- Rollout Flags ---
-  get legacyEngine(): 'legacy' | 'core' {
-    return this.config.LEGACY_ENGINE;
-  }
-  get legacyDefaultVisibility(): 'public' | 'private' {
-    return this.config.LEGACY_DEFAULT_VISIBILITY;
-  }
 }
