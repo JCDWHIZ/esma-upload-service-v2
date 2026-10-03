@@ -9,6 +9,8 @@ import {
   type FileRecord,
   type FileReplica,
   type FileVisibility,
+  type NewFileReplica,
+  type Provider,
 } from '../core/types.js';
 import {
   AppError,
@@ -20,7 +22,13 @@ import {
 } from '../core/errors/app-error.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { StorageRegistry } from '../storage/registry.js';
-import type { DriverUploadResult, ProviderRef } from '../storage/types.js';
+import { StoragePlacementService } from '../storage/placement.service.js';
+import type {
+  DriverUploadResult,
+  IStorageDriver,
+  ProviderName,
+  ProviderRef,
+} from '../storage/types.js';
 import { DatabaseService } from '../db/database.service.js';
 import { FileRepository } from '../db/repositories/file.repository.js';
 import { ReplicaRepository } from '../db/repositories/replica.repository.js';
@@ -28,12 +36,17 @@ import { UsageRepository } from '../db/repositories/usage.repository.js';
 import { OutboxWriter } from '../events/outbox-writer.js';
 import { createEnvelope } from '../events/envelope.js';
 import { EVENT_TYPES } from '../events/catalog.js';
+import { deriveReplicationStatus } from '../core/replication-state.js';
 import type { IngestedFile } from '../ingest/types.js';
 import {
   type IQuotaGate,
   NoOpQuotaGate,
   QUOTA_GATE,
 } from './quota-gate.interface.js';
+
+export interface UploadMetrics {
+  primaryFailovers: number;
+}
 
 export interface UploadOptions {
   folder?: string;
@@ -68,6 +81,9 @@ interface CompletedUpload {
 @Injectable()
 export class UploadService {
   private readonly logger = new Logger(UploadService.name);
+  private readonly metrics: UploadMetrics = {
+    primaryFailovers: 0,
+  };
 
   constructor(
     private readonly storageRegistry: StorageRegistry,
@@ -82,7 +98,13 @@ export class UploadService {
     @Optional()
     @Inject(QUOTA_GATE)
     private readonly quotaGate: IQuotaGate = new NoOpQuotaGate(),
+    @Optional()
+    private readonly storagePlacement?: StoragePlacementService,
   ) {}
+
+  public getMetrics(): Readonly<UploadMetrics> {
+    return { ...this.metrics };
+  }
 
   /**
    * Upload a batch of ingested files according to upload policy and options.
@@ -217,53 +239,125 @@ export class UploadService {
       );
     }
 
-    // 6. Upload to primary driver with up to 2 retries on RetryableError
-    const primaryDriver = this.storageRegistry.getPrimary();
+    // 6. Plan placement candidates (primary candidates + secondary targets)
+    const placementPlan = this.storagePlacement
+      ? this.storagePlacement.plan(ctx, policy, {
+          size: file.size,
+          detectedMime: file.detectedMime,
+          visibility,
+        })
+      : {
+          primaryCandidates: [this.storageRegistry.getPrimary().name],
+          secondaries: [] as ProviderName[],
+        };
+
+    if (placementPlan.primaryCandidates.length === 0) {
+      throw new StorageUnavailableError(
+        'No primary storage driver candidate is available for upload',
+      );
+    }
+
+    const preferredPrimary = placementPlan.primaryCandidates[0];
+    let primaryDriver: IStorageDriver | null = null;
     let uploadResult: DriverUploadResult | null = null;
     let lastError: unknown;
-    const maxAttempts = 3;
+    const perDriverMaxRetries = 1;
 
     try {
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-          uploadResult = await primaryDriver.upload({
-            key: storageKey,
-            source: () => file.openReadStream(),
-            size: file.size,
-            sha256: file.sha256,
-            mimetype: file.detectedMime,
-            visibility,
-            tags: options?.tags,
-            attributes: options?.attributes,
-          });
-          break;
-        } catch (err: unknown) {
-          lastError = err;
-          if (err instanceof RetryableError && attempt < maxAttempts) {
-            if (err.retryAfterMs && err.retryAfterMs > 0) {
-              await new Promise((resolve) =>
-                setTimeout(resolve, err.retryAfterMs),
+      for (const candidateName of placementPlan.primaryCandidates) {
+        if (!this.storageRegistry.has(candidateName)) {
+          continue;
+        }
+
+        const candidateDriver = this.storageRegistry.get(candidateName);
+        let candidateSuccess = false;
+        const candidateStartTime = Date.now();
+
+        for (let attempt = 1; attempt <= perDriverMaxRetries + 1; attempt++) {
+          try {
+            uploadResult = await candidateDriver.upload({
+              key: storageKey,
+              source: () => file.openReadStream(),
+              size: file.size,
+              sha256: file.sha256,
+              mimetype: file.detectedMime,
+              visibility,
+              tags: options?.tags,
+              attributes: options?.attributes,
+            });
+            primaryDriver = candidateDriver;
+            candidateSuccess = true;
+
+            const duration = Date.now() - candidateStartTime;
+            this.logger.debug(
+              `Uploaded file ${fileId} to primary candidate "${candidateName}" in ${duration}ms`,
+            );
+
+            if (candidateName !== preferredPrimary) {
+              this.metrics.primaryFailovers++;
+              this.logger.warn(
+                `Primary storage failed over from "${preferredPrimary}" to "${candidateName}" for file ${fileId}`,
               );
             }
-            continue;
+            break;
+          } catch (err: unknown) {
+            lastError = err;
+            if (
+              err instanceof RetryableError &&
+              attempt <= perDriverMaxRetries
+            ) {
+              if (err.retryAfterMs && err.retryAfterMs > 0) {
+                await new Promise((resolve) =>
+                  setTimeout(resolve, err.retryAfterMs),
+                );
+              }
+              continue;
+            }
+            this.logger.warn(
+              `Candidate primary driver "${candidateName}" failed: ${err instanceof Error ? err.message : String(err)}. Checking next candidate...`,
+            );
+            break;
           }
-          throw err;
+        }
+
+        if (candidateSuccess && uploadResult && primaryDriver) {
+          break;
         }
       }
 
-      if (!uploadResult) {
+      if (!uploadResult || !primaryDriver) {
         throw lastError instanceof AppError
           ? lastError
-          : new StorageUnavailableError('Primary driver upload failed', {
-              cause: lastError,
-            });
+          : new StorageUnavailableError(
+              'All primary storage candidates failed',
+              {
+                cause: lastError,
+              },
+            );
       }
     } catch (driverErr: unknown) {
       await this.quotaGate.release(ctx, file.size).catch(() => {});
       throw driverErr;
     }
 
-    // 7. Database transaction
+    // 7. Determine planned secondaries & skipped providers
+    const plannedSecondaries = placementPlan.secondaries.filter(
+      (s) => s !== primaryDriver.name,
+    );
+
+    let skippedProviders: Provider[] = [];
+    try {
+      const topology = this.storageRegistry.getTopology();
+      if (topology && Array.isArray(topology.secondaries)) {
+        skippedProviders = topology.secondaries.filter(
+          (p) => p !== primaryDriver.name && !plannedSecondaries.includes(p),
+        );
+      }
+    } catch {
+      // Single-driver mode or topology not initialized
+    }
+
+    // 8. Database transaction
     const db = this.databaseService?.getDb();
     if (!db) {
       // DB connection is unavailable: compensate primary upload immediately
@@ -279,7 +373,7 @@ export class UploadService {
     }
 
     let fileRecord: FileRecord;
-    let replicaRecord: FileReplica;
+    let allReplicas: FileReplica[];
 
     try {
       const txResult = await db.transaction().execute(async (trx) => {
@@ -296,6 +390,70 @@ export class UploadService {
             `Tenant storage quota exceeded for tenant "${ctx.tenantId}" in namespace "${ctx.namespace}"`,
           );
         }
+
+        // Build replica records to insert (primary AVAILABLE + secondaries QUEUED)
+        const replicaRecordsToInsert: NewFileReplica[] = [
+          {
+            fileId,
+            provider: primaryDriver.name,
+            role: 'primary',
+            status: 'AVAILABLE',
+            providerKey: uploadResult.ref.key,
+            providerMeta: uploadResult.ref.meta ?? {},
+            url: uploadResult.url ?? null,
+            etag: uploadResult.etag ?? null,
+            syncedAt: new Date(),
+          },
+        ];
+
+        for (const secondaryName of plannedSecondaries) {
+          let secondaryProviderKey = storageKey;
+          if (secondaryName === 'cloudinary') {
+            if (this.storageRegistry.has('cloudinary')) {
+              const cDriver = this.storageRegistry.get('cloudinary');
+              if (
+                cDriver &&
+                typeof (cDriver as unknown as { computePublicId?: unknown })
+                  .computePublicId === 'function'
+              ) {
+                const res = (
+                  cDriver as unknown as {
+                    computePublicId: (
+                      k: string,
+                      m?: string,
+                    ) => {
+                      publicId: string;
+                    };
+                  }
+                ).computePublicId(storageKey, file.detectedMime);
+                secondaryProviderKey = res.publicId;
+              } else if (legacyPublicId) {
+                secondaryProviderKey = legacyPublicId;
+              }
+            } else if (legacyPublicId) {
+              secondaryProviderKey = legacyPublicId;
+            }
+          }
+
+          replicaRecordsToInsert.push({
+            fileId,
+            provider: secondaryName,
+            role: 'secondary',
+            status: 'QUEUED',
+            providerKey: secondaryProviderKey,
+            providerMeta: {},
+            url: null,
+            etag: null,
+            syncedAt: null,
+          });
+        }
+
+        const derivedReplicationStatus = deriveReplicationStatus(
+          replicaRecordsToInsert.map((r) => ({
+            role: r.role,
+            status: r.status ?? 'QUEUED',
+          })),
+        );
 
         // Insert into files table
         const inserted = await this.fileRepo.insert(
@@ -314,7 +472,7 @@ export class UploadService {
             visibility,
             status: 'ACTIVE',
             scanStatus: policy.requireVirusScan ? 'PENDING' : 'NOT_REQUIRED',
-            replicationStatus: 'NOT_REQUIRED',
+            replicationStatus: derivedReplicationStatus,
             primaryProvider: primaryDriver.name,
             uploadedBy: ctx.actor.id,
             tags: options?.tags ?? [],
@@ -326,26 +484,15 @@ export class UploadService {
           trx,
         );
 
-        // Insert primary replica record
-        const replicas = await this.replicaRepo.insertMany(
-          [
-            {
-              fileId,
-              provider: primaryDriver.name,
-              role: 'primary',
-              status: 'AVAILABLE',
-              providerKey: uploadResult.ref.key,
-              providerMeta: uploadResult.ref.meta ?? {},
-              url: uploadResult.url ?? null,
-              etag: uploadResult.etag ?? null,
-              syncedAt: new Date(),
-            },
-          ],
+        // Insert replica records
+        const insertedReplicas = await this.replicaRepo.insertMany(
+          replicaRecordsToInsert,
           trx,
         );
 
-        // Outbox event (EVENTS_ENABLED is now true by default per P4-04)
+        // Outbox events
         if (this.configService.eventsEnabled) {
+          // 1. file.uploaded event
           const uploadedEnvelope = createEnvelope({
             eventType: EVENT_TYPES.FILE_UPLOADED,
             partitionKey: fileId,
@@ -358,13 +505,27 @@ export class UploadService {
             },
           });
           await this.outboxWriter.enqueue(trx, uploadedEnvelope);
+
+          // 2. file.replicate event per planned secondary
+          for (const secondaryName of plannedSecondaries) {
+            const replicateEnvelope = createEnvelope({
+              eventType: EVENT_TYPES.FILE_REPLICATE,
+              partitionKey: fileId,
+              context: ctx,
+              payload: {
+                fileId,
+                targetProvider: secondaryName,
+              },
+            });
+            await this.outboxWriter.enqueue(trx, replicateEnvelope);
+          }
         }
 
-        return { file: inserted, replica: replicas[0] };
+        return { file: inserted, replicas: insertedReplicas };
       });
 
       fileRecord = txResult.file;
-      replicaRecord = txResult.replica;
+      allReplicas = txResult.replicas;
     } catch (txErr: unknown) {
       // Compensation: best-effort delete primary object
       try {
@@ -388,8 +549,9 @@ export class UploadService {
 
     const manifest = toManifest(
       fileRecord,
-      [replicaRecord],
+      allReplicas,
       this.configService.appBaseUrl,
+      { skippedProviders },
     );
 
     return {
@@ -404,14 +566,15 @@ export class UploadService {
     ctx: RequestContext,
     completed: CompletedUpload[],
   ): Promise<void> {
-    const primaryDriver = this.storageRegistry.getPrimary();
-
     for (const item of [...completed].reverse()) {
       try {
-        await primaryDriver.delete(item.ref);
+        const driver = this.storageRegistry.has(item.ref.provider)
+          ? this.storageRegistry.get(item.ref.provider)
+          : this.storageRegistry.getPrimary();
+        await driver.delete(item.ref);
       } catch (delErr: unknown) {
         this.logger.error(
-          `Compensation failed during batch rollback for ${item.ref.key}: ${String(delErr)}`,
+          `Compensation failed during batch rollback for ${item.ref.key} on ${item.ref.provider}: ${String(delErr)}`,
         );
       }
 
