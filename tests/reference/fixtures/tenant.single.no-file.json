@@ -1,0 +1,28 @@
+{
+  "status": 400,
+  "contentType": "application/problem+json",
+  "body": {
+    "code": "BAD_REQUEST",
+    "correlationId": "unknown",
+    "detail": "File is required",
+    "error": "BAD_REQUEST",
+    "errors": [],
+    "message": "File is required",
+    "status": 400,
+    "statusCode": 400,
+    "title": "Bad request",
+    "type": "<URL>"
+  },
+  "bodyShape": {
+    "code": "string",
+    "correlationId": "string",
+    "detail": "string",
+    "error": "string",
+    "errors": "array<unknown>",
+    "message": "string",
+    "status": "number",
+    "statusCode": "number",
+    "title": "string",
+    "type": "string"
+  }
+}

@@ -42,6 +42,14 @@ export class AppConfigService {
     return this.config;
   }
 
+  get(): AppConfig {
+    return this.config;
+  }
+
+  get jwtKeys(): string | undefined {
+    return this.config.JWT_KEYS;
+  }
+
   toSafeObject(): Record<string, unknown> {
     return redactConfig(this.config);
   }
@@ -134,6 +142,9 @@ export class AppConfigService {
   get defaultMaxFileSizeBytes(): number {
     return this.config.DEFAULT_MAX_FILE_SIZE_BYTES;
   }
+  get policiesFile(): string | undefined {
+    return this.config.POLICIES_FILE;
+  }
 
   // --- Storage ---
   get storageDriver(): 'local' | 'cloudinary' | 'seaweedfs' | 'hybrid' {
@@ -142,7 +153,7 @@ export class AppConfigService {
   get hybridPrimary(): 'local' | 'cloudinary' | 'seaweedfs' {
     return this.config.HYBRID_PRIMARY;
   }
-  get hybridPrimaryFailover(): 'local' | 'cloudinary' | 'seaweedfs' {
+  get hybridPrimaryFailover(): string {
     return this.config.HYBRID_PRIMARY_FAILOVER;
   }
   get hybridReplicas(): string {
@@ -207,6 +218,9 @@ export class AppConfigService {
   get allowMemoryBroker(): boolean {
     return this.config.ALLOW_MEMORY_BROKER;
   }
+  get eventsEnabled(): boolean {
+    return this.config.EVENTS_ENABLED;
+  }
   get kafkaBrokers(): string {
     return this.config.KAFKA_BROKERS;
   }
@@ -241,6 +255,18 @@ export class AppConfigService {
   }
   get outboxRetentionHours(): number {
     return this.config.OUTBOX_RETENTION_HOURS;
+  }
+  get outboxPollMinMs(): number {
+    return this.config.OUTBOX_POLL_MIN_MS;
+  }
+  get outboxPollMaxMs(): number {
+    return this.config.OUTBOX_POLL_MAX_MS;
+  }
+  get outboxBatchSize(): number {
+    return this.config.OUTBOX_BATCH_SIZE;
+  }
+  get outboxListenNotify(): boolean {
+    return this.config.OUTBOX_LISTEN_NOTIFY;
   }
   get tombstoneRetentionDays(): number {
     return this.config.TOMBSTONE_RETENTION_DAYS;

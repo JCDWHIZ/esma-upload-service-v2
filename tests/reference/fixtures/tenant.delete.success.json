@@ -1,0 +1,24 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "message": "File deleted successfully",
+    "result": {
+      "result": "ok"
+    },
+    "tenant": {
+      "schoolId": "sch-01",
+      "schoolName": "Test School"
+    }
+  },
+  "bodyShape": {
+    "message": "string",
+    "result": {
+      "result": "string"
+    },
+    "tenant": {
+      "schoolId": "string",
+      "schoolName": "string"
+    }
+  }
+}

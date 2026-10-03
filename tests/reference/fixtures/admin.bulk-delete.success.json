@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "failed": [],
+    "message": "Bulk delete completed",
+    "successful": [
+      "admin/banners/del1.png",
+      "admin/banners/del2.png"
+    ],
+    "total": 2
+  },
+  "bodyShape": {
+    "failed": "array<unknown>",
+    "message": "string",
+    "successful": "array<string>",
+    "total": "number"
+  }
+}

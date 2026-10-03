@@ -1,0 +1,28 @@
+{
+  "status": 401,
+  "contentType": "application/problem+json",
+  "body": {
+    "code": "UNAUTHENTICATED",
+    "correlationId": "unknown",
+    "detail": "Missing or invalid authorization header",
+    "error": "UNAUTHENTICATED",
+    "errors": [],
+    "message": "Missing or invalid authorization header",
+    "status": 401,
+    "statusCode": 401,
+    "title": "Unauthenticated",
+    "type": "<URL>"
+  },
+  "bodyShape": {
+    "code": "string",
+    "correlationId": "string",
+    "detail": "string",
+    "error": "string",
+    "errors": "array<unknown>",
+    "message": "string",
+    "status": "number",
+    "statusCode": "number",
+    "title": "string",
+    "type": "string"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "status": 201,
+  "contentType": "application/json",
+  "body": {
+    "data": {
+      "public_id": "uploads/schools/sch-01/branches/br-01/<ID>.png",
+      "secure_url": "<URL>",
+      "tenant": {
+        "branchId": "br-01",
+        "schoolId": "sch-01",
+        "schoolName": "Test School"
+      }
+    },
+    "message": "File uploaded successfully"
+  },
+  "bodyShape": {
+    "data": {
+      "public_id": "string",
+      "secure_url": "string",
+      "tenant": {
+        "branchId": "string",
+        "schoolId": "string",
+        "schoolName": "string"
+      }
+    },
+    "message": "string"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "status": 201,
+  "contentType": "application/json",
+  "body": {
+    "files": [
+      {
+        "public_id": "admin/gallery/01a0df82-1.png",
+        "secure_url": "<URL>"
+      },
+      {
+        "public_id": "admin/gallery/01a0df82-2.png",
+        "secure_url": "<URL>"
+      }
+    ],
+    "folder": "admin/gallery",
+    "message": "Files uploaded successfully",
+    "total": 2
+  },
+  "bodyShape": {
+    "files": "array<[object Object] | [object Object]>",
+    "folder": "string",
+    "message": "string",
+    "total": "number"
+  }
+}

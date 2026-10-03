@@ -7,5 +7,13 @@ dist
 !.env.example
 npm-debug.log
 yarn-error.log
+*.log
 coverage
+tests
 test
+scripts
+ops
+docs
+*.md
+docker-compose*.yml
+.gitlab-ci.yml

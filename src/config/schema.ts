@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 export const SECRET_KEYS = new Set<string>([
   'JWT_SECRET',
+  'JWT_KEYS',
   'SIGNED_URL_SECRET',
   'DATABASE_URL',
   'REDIS_URL',
@@ -59,6 +60,7 @@ export const rawConfigSchema = z.object({
     .string()
     .default('dev-insecure-jwt-secret-do-not-use-in-production-min-32-chars'),
   JWT_ALGORITHMS: z.string().default('HS256'),
+  JWT_KEYS: z.string().optional(),
   JWT_CLOCK_TOLERANCE_SECONDS: intCoerce(5).default(5),
   ADMIN_ALLOWED_ROLES: z.string().default('superadmin'),
   ADMIN_AUTH_MODE: z.enum(['off', 'report', 'enforce']).default('enforce'),
@@ -83,6 +85,7 @@ export const rawConfigSchema = z.object({
   STAGING_DIR: z.string().default('/tmp/gus-staging'),
   STAGING_MAX_AGE_MINUTES: intCoerce(60).default(60),
   DEFAULT_MAX_FILE_SIZE_BYTES: intCoerce(20971520).default(20971520),
+  POLICIES_FILE: z.string().optional(),
 
   // --- Storage selection: local | cloudinary | seaweedfs | hybrid ---
   STORAGE_DRIVER: z
@@ -91,9 +94,7 @@ export const rawConfigSchema = z.object({
   HYBRID_PRIMARY: z
     .enum(['local', 'cloudinary', 'seaweedfs'])
     .default('seaweedfs'),
-  HYBRID_PRIMARY_FAILOVER: z
-    .enum(['local', 'cloudinary', 'seaweedfs'])
-    .default('local'),
+  HYBRID_PRIMARY_FAILOVER: z.string().default('local'),
   HYBRID_REPLICAS: z.string().default('cloudinary,local'),
   HYBRID_STRICT: booleanCoerce.default(true),
   DRIVER_HEALTH_INTERVAL_SECONDS: intCoerce(30).default(30),
@@ -120,6 +121,7 @@ export const rawConfigSchema = z.object({
   // --- Event pipeline: memory | kafka | pulsar ---
   EVENT_BROKER: z.enum(['memory', 'kafka', 'pulsar']).default('memory'),
   ALLOW_MEMORY_BROKER: booleanCoerce.default(false),
+  EVENTS_ENABLED: booleanCoerce.default(true),
   KAFKA_BROKERS: z.string().default('localhost:9092'),
   KAFKA_CLIENT_ID: z.string().default('esma-upload-service'),
   KAFKA_GROUP_ID: z.string().default('esma-upload-workers'),
@@ -133,6 +135,10 @@ export const rawConfigSchema = z.object({
   REPLICATION_MAX_ATTEMPTS: intCoerce(6).default(6),
   REPLICATION_CONCURRENCY: intCoerce(4).default(4),
   OUTBOX_RETENTION_HOURS: intCoerce(72).default(72),
+  OUTBOX_POLL_MIN_MS: intCoerce(100).default(100),
+  OUTBOX_POLL_MAX_MS: intCoerce(2000).default(2000),
+  OUTBOX_BATCH_SIZE: intCoerce(50).default(50),
+  OUTBOX_LISTEN_NOTIFY: booleanCoerce.default(true),
   TOMBSTONE_RETENTION_DAYS: intCoerce(30).default(30),
   CLAMAV_HOST: z.string().default(''),
   CLAMAV_PORT: intCoerce(3310).default(3310),
@@ -188,9 +194,14 @@ function usesStorageDriver(
   if (data.STORAGE_DRIVER === driver) return true;
   if (data.STORAGE_DRIVER === 'hybrid') {
     if (data.HYBRID_PRIMARY === driver) return true;
-    if (data.HYBRID_PRIMARY_FAILOVER === driver) return true;
-    const replicas = data.HYBRID_REPLICAS.split(',').map((r) => r.trim());
-    if (replicas.includes(driver)) return true;
+    const failovers = (data.HYBRID_PRIMARY_FAILOVER ?? '')
+      .split(',')
+      .map((r) => r.trim());
+    if (failovers.includes(driver)) return true;
+    const replicas = (data.HYBRID_REPLICAS ?? '')
+      .split(',')
+      .map((r) => r.trim());
+    if (replicas.includes(driver) || replicas.includes('auto')) return true;
   }
   return false;
 }
@@ -328,6 +339,54 @@ export function runCrossFieldGuards(
     );
   }
 
+  // JWT_KEYS JSON validation
+  if (
+    data.JWT_KEYS &&
+    typeof data.JWT_KEYS === 'string' &&
+    data.JWT_KEYS.trim() !== ''
+  ) {
+    try {
+      const parsed: unknown = JSON.parse(data.JWT_KEYS);
+      if (!Array.isArray(parsed)) {
+        addIssue('JWT_KEYS', 'JWT_KEYS must be a JSON array of key objects');
+      } else {
+        for (let i = 0; i < parsed.length; i++) {
+          const k: unknown = parsed[i];
+          if (!k || typeof k !== 'object') {
+            addIssue('JWT_KEYS', `JWT_KEYS[${i}] must be an object`);
+          } else {
+            const entry = k as Record<string, unknown>;
+            if (!entry.kid || typeof entry.kid !== 'string') {
+              addIssue(
+                'JWT_KEYS',
+                `JWT_KEYS[${i}].kid is required and must be a string`,
+              );
+            }
+            if (!entry.secret || typeof entry.secret !== 'string') {
+              addIssue(
+                'JWT_KEYS',
+                `JWT_KEYS[${i}].secret is required and must be a string`,
+              );
+            } else if (isProd && entry.secret.length < 32) {
+              addIssue(
+                'JWT_KEYS',
+                `JWT_KEYS[${i}].secret must be at least 32 characters in production`,
+              );
+            }
+            if (entry.status !== 'active' && entry.status !== 'verify-only') {
+              addIssue(
+                'JWT_KEYS',
+                `JWT_KEYS[${i}].status must be "active" or "verify-only"`,
+              );
+            }
+          }
+        }
+      }
+    } catch {
+      addIssue('JWT_KEYS', 'JWT_KEYS must be valid JSON');
+    }
+  }
+
   // Production guards
   if (isProd) {
     if (!data.JWT_SECRET || String(data.JWT_SECRET).length < 32) {
@@ -434,7 +493,7 @@ export function redactConfig(
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(config)) {
     if (SECRET_KEYS.has(key)) {
-      result[key] = '[REDACTED]';
+      result[key] = value !== undefined ? '[REDACTED]' : undefined;
     } else {
       result[key] = value;
     }

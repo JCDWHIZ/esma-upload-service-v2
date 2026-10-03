@@ -4,10 +4,14 @@
   "description": "",
   "author": "",
   "private": true,
-  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "nest build",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"tests/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -15,25 +19,44 @@
     "start:worker": "nest start --entryFile worker",
     "start:worker:dev": "nest start --watch --entryFile worker",
     "start:worker:prod": "node dist/worker",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
+    "lint": "eslint \"{src,apps,libs,test,tests}/**/*.ts\" --fix",
+    "test": "vitest run --project unit",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:reference": "vitest run --project reference",
+    "test:contract": "vitest run --project contract",
+    "test:all": "vitest run",
+    "test:watch": "vitest --project unit",
+    "test:cov": "vitest run --coverage",
+    "test:jest": "jest",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "env:example": "ts-node scripts/generate-env-example.ts",
     "env:check": "ts-node scripts/generate-env-example.ts --check",
     "secret:scan": "ts-node scripts/scan-secrets.ts",
     "db:migrate": "node dist/src/db/migrate.js migrate",
-    "db:status": "node dist/src/db/migrate.js status"
+    "db:status": "node dist/src/db/migrate.js status",
+    "apikey:create": "ts-node src/scripts/apikey-cli.ts create",
+    "apikey:revoke": "ts-node src/scripts/apikey-cli.ts revoke",
+    "apikey:list": "ts-node src/scripts/apikey-cli.ts list",
+    "apikey:create:prod": "node dist/src/scripts/apikey-cli.js create",
+    "apikey:revoke:prod": "node dist/src/scripts/apikey-cli.js revoke",
+    "apikey:list:prod": "node dist/src/scripts/apikey-cli.js list"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
+    "@aws-sdk/lib-storage": "^3.1141.0",
+    "@aws-sdk/s3-request-presigner": "^3.1141.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.4.7",
+    "cloudinary": "^2.11.0",
+    "file-type": "^22.1.1",
     "helmet": "^8.3.0",
+    "jose": "^6.2.12",
     "kysely": "^0.29.6",
+    "multer": "^2.4.0",
     "nestjs-pino": "^5.2.0",
     "pg": "^8.23.0",
     "pino": "^10.3.1",
@@ -49,13 +72,16 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
+    "@swc/core": "^1.16.2",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
+    "@types/multer": "^2.2.0",
     "@types/node": "^22.10.7",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^11.0.0",
+    "@vitest/coverage-v8": "^5.0.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
@@ -70,7 +96,9 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.20.0"
+    "typescript-eslint": "^8.20.0",
+    "unplugin-swc": "^2.0.0",
+    "vitest": "^5.0.2"
   },
   "jest": {
     "moduleFileExtensions": [
@@ -84,7 +112,7 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "transformIgnorePatterns": [
-      "[/\\\\]node_modules[/\\\\](?!.*kysely)"
+      "[/\\\\]node_modules[/\\\\](?!.*(kysely|jose))"
     ],
     "moduleNameMapper": {
       "^(\\.\\.?/.*)\\.js$": "$1"
@@ -94,5 +122,10 @@
     ],
     "coverageDirectory": "./coverage",
     "testEnvironment": "node"
+  },
+  "pnpm": {
+    "overrides": {
+      "multer": "^2.4.0"
+    }
   }
 }

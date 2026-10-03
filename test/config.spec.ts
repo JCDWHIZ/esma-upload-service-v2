@@ -249,6 +249,8 @@ describe('Configuration & Secret Hygiene (P1-02)', () => {
       const service = new AppConfigService({
         ...baseDevEnv,
         JWT_SECRET: 'very-secret-jwt-key',
+        JWT_KEYS:
+          '[{"kid":"k1","secret":"very-secret-jwt-key-at-least-32-chars","status":"active"}]',
         SIGNED_URL_SECRET: 'very-secret-signed-url-key',
         DATABASE_URL: 'postgres://app:db_password_123@db.prod:5432/app',
         REDIS_URL: 'redis://:redis_password_xyz@redis.prod:6379',

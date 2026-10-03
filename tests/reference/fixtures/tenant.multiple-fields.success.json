@@ -1,0 +1,43 @@
+{
+  "status": 201,
+  "contentType": "application/json",
+  "body": {
+    "files": {
+      "avatar": [
+        {
+          "public_id": "uploads/schools/sch-01/01a0df82-avatar-1.png",
+          "secure_url": "<URL>"
+        }
+      ],
+      "documents": [
+        {
+          "public_id": "uploads/schools/sch-01/01a0df82-documents-1.png",
+          "secure_url": "<URL>"
+        }
+      ],
+      "gallery": [
+        {
+          "public_id": "uploads/schools/sch-01/01a0df82-gallery-1.png",
+          "secure_url": "<URL>"
+        }
+      ]
+    },
+    "message": "Files uploaded successfully",
+    "tenant": {
+      "schoolId": "sch-01",
+      "schoolName": "Test School"
+    }
+  },
+  "bodyShape": {
+    "files": {
+      "avatar": "array<[object Object]>",
+      "documents": "array<[object Object]>",
+      "gallery": "array<[object Object]>"
+    },
+    "message": "string",
+    "tenant": {
+      "schoolId": "string",
+      "schoolName": "string"
+    }
+  }
+}

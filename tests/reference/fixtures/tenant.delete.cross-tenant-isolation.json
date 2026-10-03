@@ -1,0 +1,28 @@
+{
+  "status": 404,
+  "contentType": "application/problem+json",
+  "body": {
+    "code": "NOT_FOUND",
+    "correlationId": "unknown",
+    "detail": "File not found",
+    "error": "NOT_FOUND",
+    "errors": [],
+    "message": "File not found",
+    "status": 404,
+    "statusCode": 404,
+    "title": "Not found",
+    "type": "<URL>"
+  },
+  "bodyShape": {
+    "code": "string",
+    "correlationId": "string",
+    "detail": "string",
+    "error": "string",
+    "errors": "array<unknown>",
+    "message": "string",
+    "status": "number",
+    "statusCode": "number",
+    "title": "string",
+    "type": "string"
+  }
+}

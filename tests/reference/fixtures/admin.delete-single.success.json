@@ -1,0 +1,18 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "message": "File deleted successfully",
+    "publicId": "admin/banners/to-delete.png",
+    "result": {
+      "result": "ok"
+    }
+  },
+  "bodyShape": {
+    "message": "string",
+    "publicId": "string",
+    "result": {
+      "result": "string"
+    }
+  }
+}

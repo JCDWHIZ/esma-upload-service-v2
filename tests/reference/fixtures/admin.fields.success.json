@@ -1,0 +1,37 @@
+{
+  "status": 201,
+  "contentType": "application/json",
+  "body": {
+    "files": {
+      "documents": [
+        {
+          "public_id": "admin/events/documents/01a0df82-1.png",
+          "secure_url": "<URL>"
+        }
+      ],
+      "gallery_images": [
+        {
+          "public_id": "admin/events/gallery_images/01a0df82-1.png",
+          "secure_url": "<URL>"
+        }
+      ],
+      "profile_image": [
+        {
+          "public_id": "admin/events/profile_image/01a0df82-1.png",
+          "secure_url": "<URL>"
+        }
+      ]
+    },
+    "folder": "admin/events",
+    "message": "Files uploaded successfully"
+  },
+  "bodyShape": {
+    "files": {
+      "documents": "array<[object Object]>",
+      "gallery_images": "array<[object Object]>",
+      "profile_image": "array<[object Object]>"
+    },
+    "folder": "string",
+    "message": "string"
+  }
+}
