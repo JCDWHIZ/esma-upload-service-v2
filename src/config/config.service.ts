@@ -268,6 +268,12 @@ export class AppConfigService {
   get outboxListenNotify(): boolean {
     return this.config.OUTBOX_LISTEN_NOTIFY;
   }
+  get consumerHandlerTimeoutMs(): number {
+    return this.config.CONSUMER_HANDLER_TIMEOUT_MS;
+  }
+  get consumerShutdownTimeoutMs(): number {
+    return this.config.CONSUMER_SHUTDOWN_TIMEOUT_MS;
+  }
   get tombstoneRetentionDays(): number {
     return this.config.TOMBSTONE_RETENTION_DAYS;
   }

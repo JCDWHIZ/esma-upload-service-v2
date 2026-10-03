@@ -139,6 +139,8 @@ export const rawConfigSchema = z.object({
   OUTBOX_POLL_MAX_MS: intCoerce(2000).default(2000),
   OUTBOX_BATCH_SIZE: intCoerce(50).default(50),
   OUTBOX_LISTEN_NOTIFY: booleanCoerce.default(true),
+  CONSUMER_HANDLER_TIMEOUT_MS: intCoerce(30000).default(30000),
+  CONSUMER_SHUTDOWN_TIMEOUT_MS: intCoerce(10000).default(10000),
   TOMBSTONE_RETENTION_DAYS: intCoerce(30).default(30),
   CLAMAV_HOST: z.string().default(''),
   CLAMAV_PORT: intCoerce(3310).default(3310),
