@@ -22,7 +22,7 @@ jobs:
       - name: Enable Corepack & Setup pnpm
         run: |
           corepack enable
-          corepack prepare pnpm@latest --activate
+          corepack prepare --activate
 
       - name: Get pnpm store directory
         id: pnpm-cache
@@ -70,7 +70,7 @@ jobs:
       - name: Enable Corepack & Setup pnpm
         run: |
           corepack enable
-          corepack prepare pnpm@latest --activate
+          corepack prepare --activate
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
@@ -121,7 +121,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  deploy-staging:
+  deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
@@ -137,5 +137,5 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/server-setup/esma
-            chmod +x ./deploy/deploy.sh
-            DEPLOY_TAG=${{ github.sha }} ./deploy/deploy.sh
+            chmod +x restart && dos2unix restart
+            ./restart esma-upload-service

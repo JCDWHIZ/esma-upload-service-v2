@@ -76,6 +76,9 @@ export class AppConfigService {
   get appBaseUrl(): string {
     return this.config.APP_BASE_URL;
   }
+  get basePath(): string {
+    return this.config.BASE_PATH;
+  }
   get logLevel(): string {
     return this.config.LOG_LEVEL;
   }

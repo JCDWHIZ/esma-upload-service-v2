@@ -1,0 +1,5 @@
+overrides:
+  multer: ^2.4.0
+
+onlyBuiltDependencies:
+  - '@confluentinc/kafka-javascript'

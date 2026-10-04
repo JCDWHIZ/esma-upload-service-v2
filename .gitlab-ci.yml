@@ -28,7 +28,7 @@ cache:
   stage: verify
   before_script:
     - corepack enable
-    - corepack prepare pnpm@latest --activate
+    - corepack prepare --activate
     - pnpm config set store-dir .pnpm-store
     - pnpm install --frozen-lockfile
 
@@ -162,11 +162,11 @@ deploy-production:
     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
-    - ssh-keyscan -H $PROD_SSH_HOST >> ~/.ssh/known_hosts
+    - ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
   script:
     - echo "Deploying release ${CI_COMMIT_TAG} to production server..."
     - |
-      ssh -o StrictHostKeyChecking=no $PROD_SSH_USER@$PROD_SSH_HOST \
+      ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST \
         "cd ~/server-setup/esma && \
         chmod +x ./deploy/deploy.sh && \
         DEPLOY_TAG=${CI_COMMIT_TAG} ./deploy/deploy.sh"

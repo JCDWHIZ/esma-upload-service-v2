@@ -27,6 +27,11 @@ const sections: EnvSection[] = [
         comment: 'current service port (v1 docs said 5000; see F-01)',
       },
       { key: 'APP_BASE_URL', placeholder: 'http://localhost:7030' },
+      {
+        key: 'BASE_PATH',
+        placeholder: '/uploads',
+        comment: 'application base path / global route prefix',
+      },
       { key: 'LOG_LEVEL', placeholder: 'info' },
       {
         key: 'TRUST_PROXY',

@@ -45,6 +45,7 @@ export const rawConfigSchema = z.object({
     .default('development'),
   PORT: intCoerce(7030).pipe(z.number().min(1).max(65535)).default(7030),
   APP_BASE_URL: z.string().default('http://localhost:7030'),
+  BASE_PATH: z.string().default('/uploads'),
   LOG_LEVEL: z
     .preprocess(
       (val) => (typeof val === 'string' ? val.trim().toLowerCase() : val),
