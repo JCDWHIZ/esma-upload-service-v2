@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { HardDeleteService } from '../../src/files/hard-delete.service.js';
 import type { DatabaseService } from '../../src/db/database.service.js';
@@ -67,7 +67,7 @@ describe('HardDeleteService [P6-07]', () => {
         }),
       }),
       transaction: () => ({
-        execute: async (callback: any) => {
+        execute: async (callback: (trx: unknown) => Promise<unknown>) => {
           const trx = {
             deleteFrom: () => ({
               where: () => ({

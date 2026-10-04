@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Reflector } from '@nestjs/core';
+import type { Type } from '@nestjs/common';
 import { IS_PUBLIC_KEY } from '../../src/auth/decorators/public.decorator.js';
 import { AuthGuard } from '../../src/auth/guards/auth.guard.js';
 import { FilesController } from '../../src/files/files.controller.js';
@@ -21,7 +22,7 @@ interface RouteAuditEntry {
 describe('Automated Route Security Audit (P6-09 / F-41 Mechanical Prevention)', () => {
   const reflector = new Reflector();
 
-  const CONTROLLERS = [
+  const CONTROLLERS: Type<unknown>[] = [
     FilesController,
     AuditController,
     QuotaController,
@@ -30,13 +31,20 @@ describe('Automated Route Security Audit (P6-09 / F-41 Mechanical Prevention)', 
     HealthController,
   ];
 
-  function auditControllerRoutes(controllerClass: any): RouteAuditEntry[] {
+  function auditControllerRoutes(
+    controllerClass: Type<unknown>,
+  ): RouteAuditEntry[] {
     const controllerName = controllerClass.name;
-    const classGuards: any[] = Reflect.getMetadata('__guards__', controllerClass) || [];
-    const classIsPublic = reflector.get<boolean>(IS_PUBLIC_KEY, controllerClass) || false;
-    const classHasAuthGuard = classGuards.some((g) => g === AuthGuard || g.name === 'AuthGuard');
+    const classGuards =
+      (Reflect.getMetadata('__guards__', controllerClass) as unknown[]) || [];
+    const classIsPublic =
+      reflector.get<boolean>(IS_PUBLIC_KEY, controllerClass) || false;
+    const classHasAuthGuard = classGuards.some(
+      (g) =>
+        g === AuthGuard || (typeof g === 'function' && g.name === 'AuthGuard'),
+    );
 
-    const prototype = controllerClass.prototype;
+    const prototype = controllerClass.prototype as Record<string, unknown>;
     const methodNames = Object.getOwnPropertyNames(prototype).filter(
       (m) => m !== 'constructor' && typeof prototype[m] === 'function',
     );
@@ -44,18 +52,26 @@ describe('Automated Route Security Audit (P6-09 / F-41 Mechanical Prevention)', 
     const routes: RouteAuditEntry[] = [];
 
     for (const methodName of methodNames) {
-      const method = prototype[methodName];
-      const methodGuards: any[] = Reflect.getMetadata('__guards__', method) || [];
-      const methodIsPublic = reflector.get<boolean>(IS_PUBLIC_KEY, method) || false;
+      const method = prototype[methodName] as object;
+      const methodGuards =
+        (Reflect.getMetadata('__guards__', method) as unknown[]) || [];
+      const methodIsPublic =
+        reflector.get<boolean>(IS_PUBLIC_KEY, method) || false;
       const isPublic = classIsPublic || methodIsPublic;
 
-      const methodHasAuthGuard = methodGuards.some((g) => g === AuthGuard || g.name === 'AuthGuard');
+      const methodHasAuthGuard = methodGuards.some(
+        (g) =>
+          g === AuthGuard ||
+          (typeof g === 'function' && g.name === 'AuthGuard'),
+      );
       const hasAuthGuard = classHasAuthGuard || methodHasAuthGuard;
 
-      const path = Reflect.getMetadata('path', method) || '';
-      const httpMethod = Reflect.getMetadata('method', method) !== undefined
-        ? String(Reflect.getMetadata('method', method))
-        : 'UNKNOWN';
+      const path =
+        (Reflect.getMetadata('path', method) as string | undefined) || '';
+      const rawMethod = Reflect.getMetadata('method', method) as
+        number | string | undefined;
+      const httpMethod =
+        rawMethod !== undefined ? String(rawMethod) : 'UNKNOWN';
 
       routes.push({
         controllerName,
@@ -97,7 +113,11 @@ describe('Automated Route Security Audit (P6-09 / F-41 Mechanical Prevention)', 
   });
 
   it('confirms that sensitive admin endpoints are never @Public()', () => {
-    const adminControllers = [AuditController, QuotaController, DlqController];
+    const adminControllers: Type<unknown>[] = [
+      AuditController,
+      QuotaController,
+      DlqController,
+    ];
 
     for (const controller of adminControllers) {
       const routes = auditControllerRoutes(controller);

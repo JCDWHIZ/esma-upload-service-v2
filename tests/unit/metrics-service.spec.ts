@@ -15,9 +15,18 @@ describe('MetricsService (P6-04)', () => {
   });
 
   it('registers all required custom GUS metrics per ARCH §12', async () => {
-    metricsService.uploadDurationSeconds.observe({ namespace: 'generic', provider: 'local' }, 0.15);
-    metricsService.uploadBytesTotal.inc({ namespace: 'generic', provider: 'local' }, 1024);
-    metricsService.uploadFailuresTotal.inc({ namespace: 'generic', code: 'QUOTA_EXCEEDED' });
+    metricsService.uploadDurationSeconds.observe(
+      { namespace: 'generic', provider: 'local' },
+      0.15,
+    );
+    metricsService.uploadBytesTotal.inc(
+      { namespace: 'generic', provider: 'local' },
+      1024,
+    );
+    metricsService.uploadFailuresTotal.inc({
+      namespace: 'generic',
+      code: 'QUOTA_EXCEEDED',
+    });
     metricsService.driverHealth.set({ provider: 'local' }, 1);
     metricsService.driverHealth.set({ provider: 'seaweedfs' }, 0);
     metricsService.outboxPending.set(12);

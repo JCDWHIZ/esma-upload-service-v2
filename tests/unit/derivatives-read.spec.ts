@@ -176,7 +176,9 @@ describe('FileReadService Image Derivatives (P5-08)', () => {
       // Read stream content
       const chunks: Buffer[] = [];
       for await (const chunk of res.stream) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        chunks.push(
+          Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array),
+        );
       }
       expect(Buffer.concat(chunks).toString()).toBe('THUMB_WEBP_BINARY_DATA');
     }
@@ -214,7 +216,9 @@ describe('FileReadService Image Derivatives (P5-08)', () => {
 
       const chunks: Buffer[] = [];
       for await (const chunk of res.stream) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        chunks.push(
+          Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array),
+        );
       }
       expect(chunks).toHaveLength(0);
     }

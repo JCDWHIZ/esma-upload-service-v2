@@ -9,6 +9,10 @@ import type { AppConfigService } from '../../src/config/config.service.js';
 import type { OutboxRelay } from '../../src/events/outbox-relay.js';
 import type { OutboxRetentionService } from '../../src/events/outbox-retention.service.js';
 import type { ReplicationWorker } from '../../src/workers/replication.worker.js';
+import type { ScanWorker } from '../../src/workers/scan.worker.js';
+import type { ProcessingWorker } from '../../src/workers/processing.worker.js';
+import type { SweeperService } from '../../src/workers/sweeper.service.js';
+import type { DlqWorker } from '../../src/workers/dlq.worker.js';
 import type { HealthService } from '../../src/observability/health.service.js';
 
 describe('Worker Lifecycle & Health Server (P4-07)', () => {
@@ -76,22 +80,22 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
     const mockScanWorker = {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as ScanWorker;
 
     const mockSweeperService = {
       start: vi.fn(),
       stop: vi.fn(),
-    } as any;
+    } as unknown as SweeperService;
 
     const mockDlqWorker = {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as DlqWorker;
 
     const mockProcessingWorker = {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as ProcessingWorker;
 
     const workerService = new WorkerService(
       mockLogger,
@@ -133,22 +137,22 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
     const mockScanWorker = {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as ScanWorker;
 
     const mockProcessingWorker = {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as ProcessingWorker;
 
     const mockSweeperService = {
       start: vi.fn(),
       stop: vi.fn(),
-    } as any;
+    } as unknown as SweeperService;
 
     const mockDlqWorker = {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as DlqWorker;
 
     const workerService = new WorkerService(
       mockLogger,
@@ -182,22 +186,22 @@ describe('Worker Lifecycle & Health Server (P4-07)', () => {
     const mockScanWorker = {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as ScanWorker;
 
     const mockProcessingWorker = {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as ProcessingWorker;
 
     const mockSweeperService = {
       start: vi.fn(),
       stop: vi.fn(),
-    } as any;
+    } as unknown as SweeperService;
 
     const mockDlqWorker = {
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as DlqWorker;
 
     const workerService = new WorkerService(
       mockLogger,

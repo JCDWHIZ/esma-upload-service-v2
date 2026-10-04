@@ -10,6 +10,8 @@ import type { FakeStorageDriver } from '../helpers/storage-driver.mock.js';
 describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
   let app: INestApplication;
   let storage: FakeStorageDriver;
+  const server = () =>
+    app.getHttpServer() as unknown as Parameters<typeof request>[0];
 
   beforeAll(async () => {
     const res = await createReferenceApp();
@@ -34,7 +36,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
       });
       const file = makeFile('png');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/tenant/upload/single')
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-01')
@@ -50,7 +52,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
 
     it('rejects unauthenticated request (missing token)', async () => {
       const file = makeFile('png');
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/tenant/upload/single')
         .set('x-school-id', 'sch-01')
         .attach('file', file.buffer, file.filename);
@@ -69,7 +71,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
       });
       const file = makeFile('png');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/tenant/upload/single')
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'different-school')
@@ -89,7 +91,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
       });
       const fakeFile = makeFile('fake-executable');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/tenant/upload/single')
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-01')
@@ -108,7 +110,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
         roles: ['school_admin'],
       });
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/tenant/upload/single')
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-01');
@@ -128,7 +130,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
       });
       const file = makeFile('png');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/tenant/upload/single')
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-01')
@@ -152,7 +154,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
       const file1 = makeFile('png');
       const file2 = makeFile('jpeg');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/tenant/upload/multiple')
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-01')
@@ -178,7 +180,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
       const gallery = makeFile('jpeg');
       const doc = makeFile('pdf');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/tenant/upload/multiple-fields')
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-01')
@@ -199,7 +201,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
         roles: ['school_admin'],
       });
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/tenant/upload/multiple-fields')
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-01');
@@ -219,7 +221,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
         roles: ['school_admin'],
       });
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .get('/api/tenant/upload/files/sch-01')
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-01');
@@ -237,7 +239,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
         roles: ['school_admin'],
       });
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .get('/api/tenant/upload/files/sch-02')
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-01');
@@ -258,7 +260,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
         roles: ['school_admin'],
       });
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .get('/api/tenant/upload/files/sch-01/br-01')
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-01')
@@ -281,7 +283,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
       const fileKey = 'uploads/schools/sch-01/sample.png';
       await storage.put(fileKey, Buffer.from('test'));
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .delete(`/api/tenant/upload/files/${encodeURIComponent(fileKey)}`)
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-01');
@@ -302,7 +304,7 @@ describe('Tenant Contract Reference Suite (/api/tenant/upload/*)', () => {
       const targetFileKey = 'uploads/schools/sch-10/target.png';
       await storage.put(targetFileKey, Buffer.from('test'));
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .delete(`/api/tenant/upload/files/${encodeURIComponent(targetFileKey)}`)
         .set('Authorization', `Bearer ${token}`)
         .set('x-school-id', 'sch-1');

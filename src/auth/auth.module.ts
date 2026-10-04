@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthService } from './auth.service.js';
 import { EsmaTenantContextResolver } from './resolvers/tenant-context.resolver.js';
@@ -9,6 +9,7 @@ import { JwtVerifierService } from './jwt/jwt-verifier.service.js';
 import { ApiKeyAuthenticatorService } from './apikey/apikey-authenticator.service.js';
 import { AuthGuard } from './guards/auth.guard.js';
 
+@Global()
 @Module({
   providers: [
     AuthService,

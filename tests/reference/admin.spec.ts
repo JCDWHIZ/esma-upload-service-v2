@@ -10,6 +10,8 @@ import type { FakeStorageDriver } from '../helpers/storage-driver.mock.js';
 describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
   let app: INestApplication;
   let storage: FakeStorageDriver;
+  const server = () =>
+    app.getHttpServer() as unknown as Parameters<typeof request>[0];
 
   beforeAll(async () => {
     const res = await createReferenceApp();
@@ -30,7 +32,7 @@ describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
       const token = await tokens.admin();
       const file = makeFile('png');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/admin/upload/single?folder=banners')
         .set('Authorization', `Bearer ${token}`)
         .attach('file', file.buffer, file.filename);
@@ -45,7 +47,7 @@ describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
     it('rejects unauthenticated request (corrected defect F-40)', async () => {
       const file = makeFile('png');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/admin/upload/single?folder=banners')
         .attach('file', file.buffer, file.filename);
 
@@ -62,7 +64,7 @@ describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
       });
       const file = makeFile('png');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/admin/upload/single?folder=banners')
         .set('Authorization', `Bearer ${token}`)
         .attach('file', file.buffer, file.filename);
@@ -78,7 +80,7 @@ describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
       const token = await tokens.admin();
       const fakeFile = makeFile('fake-executable');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/admin/upload/single?folder=banners')
         .set('Authorization', `Bearer ${token}`)
         .attach('file', fakeFile.buffer, fakeFile.filename);
@@ -97,7 +99,7 @@ describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
       const file1 = makeFile('png');
       const file2 = makeFile('jpeg');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/admin/upload/multiple?folder=gallery')
         .set('Authorization', `Bearer ${token}`)
         .attach('files', file1.buffer, file1.filename)
@@ -118,7 +120,7 @@ describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
       const img2 = makeFile('jpeg');
       const doc = makeFile('pdf');
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .post('/api/admin/upload/fields?folder=events')
         .set('Authorization', `Bearer ${token}`)
         .attach('profile_image', img1.buffer, img1.filename)
@@ -137,7 +139,7 @@ describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
     it('retrieves paginated list of admin files', async () => {
       const token = await tokens.admin();
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .get('/api/admin/upload/files?folder=banners&limit=50')
         .set('Authorization', `Bearer ${token}`);
 
@@ -155,7 +157,7 @@ describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
       const key = 'admin/banners/sample.png';
       await storage.put(key, Buffer.from('test'));
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .get(`/api/admin/upload/file/${encodeURIComponent(key)}`)
         .set('Authorization', `Bearer ${token}`);
 
@@ -173,7 +175,7 @@ describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
       const key = 'admin/banners/to-delete.png';
       await storage.put(key, Buffer.from('test'));
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .delete(`/api/admin/upload/file/${encodeURIComponent(key)}`)
         .set('Authorization', `Bearer ${token}`);
 
@@ -193,7 +195,7 @@ describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
         await storage.put(k, Buffer.from('test'));
       }
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .delete('/api/admin/upload/files')
         .set('Authorization', `Bearer ${token}`)
         .send({ publicIds: keys });
@@ -213,7 +215,7 @@ describe('Admin Contract Reference Suite (/api/admin/upload/*)', () => {
         (_, i) => `admin/bulk/file_${i}.png`,
       );
 
-      const res = await request(app.getHttpServer())
+      const res = await request(server())
         .delete('/api/admin/upload/files')
         .set('Authorization', `Bearer ${token}`)
         .send({ publicIds: oversizeKeys });

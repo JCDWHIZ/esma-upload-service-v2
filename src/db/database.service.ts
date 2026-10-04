@@ -10,6 +10,7 @@ import { AppConfigService } from '../config/config.service.js';
 import { closePgPool, createPgPool } from './pool.js';
 import { createKysely } from './kysely.js';
 import type { Database } from './types.js';
+import { runMigrations } from './migrate.js';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
@@ -19,9 +20,30 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
 
   constructor(private readonly configService: AppConfigService) {}
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
     if (this.configService.raw.DB_ENABLED) {
       this.initConnection();
+      await this.autoMigrate();
+    }
+  }
+
+  private async autoMigrate(): Promise<void> {
+    if (!this.db) return;
+    try {
+      this.logger.log('Checking database migrations on startup...');
+      const results = await runMigrations(this.db, { allowLockWait: true });
+      const executed = results.filter((r) => r.status === 'Success');
+      if (executed.length > 0) {
+        this.logger.log(
+          `Successfully applied ${executed.length} database migration(s): ${executed.map((e) => e.migrationName).join(', ')}`,
+        );
+      } else {
+        this.logger.log('Database schema is up to date.');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Automatic database migration failed: ${message}`);
+      throw err;
     }
   }
 

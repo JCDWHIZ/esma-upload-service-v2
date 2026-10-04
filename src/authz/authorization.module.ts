@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
 import { AuthorizationService } from './authorization.service.js';
 import { AuthorizationGuard } from './guards/authorization.guard.js';
 import {
@@ -8,6 +8,7 @@ import {
 import { AUDIT_SINK } from './audit-sink.js';
 import { AuditService } from '../observability/audit.service.js';
 
+@Global()
 @Module({
   providers: [
     AuthorizationService,

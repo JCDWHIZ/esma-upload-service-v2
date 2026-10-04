@@ -18,10 +18,16 @@ describe('MetricsController (P6-04)', () => {
 
     metricsService = new MetricsService(mockConfig as AppConfigService);
     metricsService.onModuleInit();
-    controller = new MetricsController(metricsService, mockConfig as AppConfigService);
+    controller = new MetricsController(
+      metricsService,
+      mockConfig as AppConfigService,
+    );
   });
 
-  function createMockResponse(): { res: Partial<Response>; headers: Record<string, string> } {
+  function createMockResponse(): {
+    res: Partial<Response>;
+    headers: Record<string, string>;
+  } {
     const headers: Record<string, string> = {};
 
     const res: Partial<Response> = {
@@ -29,8 +35,8 @@ describe('MetricsController (P6-04)', () => {
         headers[key.toLowerCase()] = val;
         return res;
       }),
-      status: vi.fn().mockImplementation((_s: number) => res),
-      send: vi.fn().mockImplementation((_b: any) => res),
+      status: vi.fn().mockImplementation(() => res),
+      send: vi.fn().mockImplementation(() => res),
     };
 
     return { res, headers };
@@ -40,14 +46,21 @@ describe('MetricsController (P6-04)', () => {
     const { res } = createMockResponse();
     await controller.getMetrics(undefined, undefined, res as Response);
 
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', expect.stringContaining('text/plain'));
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      expect.stringContaining('text/plain'),
+    );
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.send).toHaveBeenCalledWith(expect.stringContaining('gus_'));
   });
 
   it('enforces METRICS_TOKEN validation when configured', async () => {
-    (mockConfig as Record<string, any>).metricsToken = 'secret-metrics-token-123';
-    controller = new MetricsController(metricsService, mockConfig as AppConfigService);
+    (mockConfig as Record<string, any>).metricsToken =
+      'secret-metrics-token-123';
+    controller = new MetricsController(
+      metricsService,
+      mockConfig as AppConfigService,
+    );
 
     // Missing token
     await expect(
@@ -61,7 +74,11 @@ describe('MetricsController (P6-04)', () => {
 
     // Valid token
     const { res } = createMockResponse();
-    await controller.getMetrics('Bearer secret-metrics-token-123', undefined, res as Response);
+    await controller.getMetrics(
+      'Bearer secret-metrics-token-123',
+      undefined,
+      res as Response,
+    );
     expect(res.status).toHaveBeenCalledWith(200);
   });
 });

@@ -15,13 +15,29 @@ interface BenchmarkMetric {
   errors: number;
 }
 
-function calculatePercentiles(latencies: number[], errors = 0): BenchmarkMetric {
+function calculatePercentiles(
+  latencies: number[],
+  errors = 0,
+): BenchmarkMetric {
   if (latencies.length === 0) {
-    return { count: 0, min: 0, max: 0, mean: 0, p50: 0, p90: 0, p95: 0, p99: 0, errors };
+    return {
+      count: 0,
+      min: 0,
+      max: 0,
+      mean: 0,
+      p50: 0,
+      p90: 0,
+      p95: 0,
+      p99: 0,
+      errors,
+    };
   }
   const sorted = [...latencies].sort((a, b) => a - b);
   const sum = sorted.reduce((acc, val) => acc + val, 0);
-  const p = (pct: number) => sorted[Math.min(sorted.length - 1, Math.floor((pct / 100) * sorted.length))];
+  const p = (pct: number) =>
+    sorted[
+      Math.min(sorted.length - 1, Math.floor((pct / 100) * sorted.length))
+    ];
 
   return {
     count: sorted.length,
@@ -75,15 +91,17 @@ export async function profileAdr09Ingestion(fixtures: {
   pdf1Mb: string;
   pdf5Mb: string;
   pdf20Mb: string;
-}): Promise<{
-  sizeMb: number;
-  diskStagingMs: number;
-  storageWriteMs: number;
-  dbTxMs: number;
-  outboxMs: number;
-  totalMs: number;
-  stagingRatioPct: number;
-}[]> {
+}): Promise<
+  {
+    sizeMb: number;
+    diskStagingMs: number;
+    storageWriteMs: number;
+    dbTxMs: number;
+    outboxMs: number;
+    totalMs: number;
+    stagingRatioPct: number;
+  }[]
+> {
   const tmpStagingDir = path.resolve('tests/perf/fixtures/staging-profile-tmp');
   fs.mkdirSync(tmpStagingDir, { recursive: true });
 
@@ -100,14 +118,20 @@ export async function profileAdr09Ingestion(fixtures: {
 
     // 1. Measure disk staging (Multer diskStorage write)
     const stagingStart = performance.now();
-    const stagedFile = path.join(tmpStagingDir, `staged-${path.basename(run.file)}`);
+    const stagedFile = path.join(
+      tmpStagingDir,
+      `staged-${path.basename(run.file)}`,
+    );
     fs.writeFileSync(stagedFile, buffer);
     const diskStagingMs = performance.now() - stagingStart;
 
     // 2. Measure read + driver storage copy (e.g. SeaweedFS / S3 / Local storage stream)
     const storageStart = performance.now();
     const readStream = fs.createReadStream(stagedFile);
-    const sinkPath = path.join(tmpStagingDir, `sink-${path.basename(run.file)}`);
+    const sinkPath = path.join(
+      tmpStagingDir,
+      `sink-${path.basename(run.file)}`,
+    );
     const writeStream = fs.createWriteStream(sinkPath);
     await new Promise<void>((resolve, reject) => {
       readStream.pipe(writeStream);
@@ -135,7 +159,9 @@ export async function profileAdr09Ingestion(fixtures: {
     const outboxMs = performance.now() - outboxStart;
 
     const totalMs = diskStagingMs + storageWriteMs + dbTxMs + outboxMs;
-    const stagingRatioPct = Number(((diskStagingMs / totalMs) * 100).toFixed(1));
+    const stagingRatioPct = Number(
+      ((diskStagingMs / totalMs) * 100).toFixed(1),
+    );
 
     results.push({
       sizeMb: run.size / (1024 * 1024),
@@ -159,11 +185,17 @@ export async function profileAdr09Ingestion(fixtures: {
 
 export async function runBenchmark(): Promise<void> {
   // eslint-disable-next-line no-console
-  console.log('===============================================================');
+  console.log(
+    '===============================================================',
+  );
   // eslint-disable-next-line no-console
-  console.log('  ESMA Upload Service v2 - Performance & Resilience Benchmark  ');
+  console.log(
+    '  ESMA Upload Service v2 - Performance & Resilience Benchmark  ',
+  );
   // eslint-disable-next-line no-console
-  console.log('===============================================================\n');
+  console.log(
+    '===============================================================\n',
+  );
 
   // 1. Generate Fixtures
   const fixtures = generatePerfFixtures();
@@ -177,7 +209,9 @@ export async function runBenchmark(): Promise<void> {
 
   // 4. Ingestion Profiling under ADR-09
   // eslint-disable-next-line no-console
-  console.log('>>> [1/3] Profiling Multer Disk Staging vs Storage Ingest (ADR-09)...');
+  console.log(
+    '>>> [1/3] Profiling Multer Disk Staging vs Storage Ingest (ADR-09)...',
+  );
   const adr09Profiles = await profileAdr09Ingestion(fixtures);
   // eslint-disable-next-line no-console
   console.table(adr09Profiles);
@@ -198,16 +232,21 @@ export async function runBenchmark(): Promise<void> {
     const result = await runWorkerPool(vu, tasks, async (task) => {
       const start = performance.now();
       // Simulate payload transfer and ingestion pipeline
-      const buf = fs.readFileSync(task.file);
+      fs.readFileSync(task.file);
       await new Promise((r) => setTimeout(r, 15 + Math.random() * 25)); // simulated server processing
       return performance.now() - start;
     });
 
-    uploadMetrics[`5MiB_${vu}VUs`] = calculatePercentiles(result.latencies, result.errors);
+    uploadMetrics[`5MiB_${vu}VUs`] = calculatePercentiles(
+      result.latencies,
+      result.errors,
+    );
   }
 
   // eslint-disable-next-line no-console
-  console.log('\nFast-Path Latency for 5 MiB File (ARCH §12 Target: p95 < 1500 ms):');
+  console.log(
+    '\nFast-Path Latency for 5 MiB File (ARCH §12 Target: p95 < 1500 ms):',
+  );
   // eslint-disable-next-line no-console
   console.table(uploadMetrics);
 
@@ -215,13 +254,20 @@ export async function runBenchmark(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log('\n>>> [3/3] Benchmarking Keyset Cursor Pagination (100 VUs)...');
   const paginationTasks = Array.from({ length: 200 }, (_, i) => ({ page: i }));
-  const paginationResult = await runWorkerPool(100, paginationTasks, async () => {
-    const start = performance.now();
-    // Simulate keyset lookup WHERE id > :afterId ORDER BY id ASC LIMIT 20
-    await new Promise((r) => setTimeout(r, 3 + Math.random() * 8));
-    return performance.now() - start;
-  });
-  const paginationMetric = calculatePercentiles(paginationResult.latencies, paginationResult.errors);
+  const paginationResult = await runWorkerPool(
+    100,
+    paginationTasks,
+    async () => {
+      const start = performance.now();
+      // Simulate keyset lookup WHERE id > :afterId ORDER BY id ASC LIMIT 20
+      await new Promise((r) => setTimeout(r, 3 + Math.random() * 8));
+      return performance.now() - start;
+    },
+  );
+  const paginationMetric = calculatePercentiles(
+    paginationResult.latencies,
+    paginationResult.errors,
+  );
   // eslint-disable-next-line no-console
   console.table({ KeysetPagination_100VUs: paginationMetric });
 
@@ -232,20 +278,34 @@ export async function runBenchmark(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log('\n================ Performance Telemetry ================');
   // eslint-disable-next-line no-console
-  console.log(`Event Loop Delay (Mean): ${(elHistogram.mean / 1e6).toFixed(2)} ms`);
+  console.log(
+    `Event Loop Delay (Mean): ${(elHistogram.mean / 1e6).toFixed(2)} ms`,
+  );
   // eslint-disable-next-line no-console
-  console.log(`Event Loop Delay (p95):  ${(elHistogram.percentile(95) / 1e6).toFixed(2)} ms`);
+  console.log(
+    `Event Loop Delay (p95):  ${(elHistogram.percentile(95) / 1e6).toFixed(2)} ms`,
+  );
   // eslint-disable-next-line no-console
-  console.log(`Event Loop Delay (Max):  ${(elHistogram.max / 1e6).toFixed(2)} ms`);
+  console.log(
+    `Event Loop Delay (Max):  ${(elHistogram.max / 1e6).toFixed(2)} ms`,
+  );
   // eslint-disable-next-line no-console
-  console.log(`Heap Used Delta:         ${((memAfter.heapUsed - memBefore.heapUsed) / 1024 / 1024).toFixed(2)} MB`);
+  console.log(
+    `Heap Used Delta:         ${((memAfter.heapUsed - memBefore.heapUsed) / 1024 / 1024).toFixed(2)} MB`,
+  );
   // eslint-disable-next-line no-console
-  console.log(`RSS Memory:              ${(memAfter.rss / 1024 / 1024).toFixed(2)} MB`);
+  console.log(
+    `RSS Memory:              ${(memAfter.rss / 1024 / 1024).toFixed(2)} MB`,
+  );
   // eslint-disable-next-line no-console
   console.log('========================================================\n');
 }
 
-if (process.argv[1] && (process.argv[1].endsWith('perf-runner.ts') || process.argv[1].endsWith('perf-runner.js'))) {
+if (
+  process.argv[1] &&
+  (process.argv[1].endsWith('perf-runner.ts') ||
+    process.argv[1].endsWith('perf-runner.js'))
+) {
   runBenchmark()
     .then(() => process.exit(0))
     .catch((err) => {

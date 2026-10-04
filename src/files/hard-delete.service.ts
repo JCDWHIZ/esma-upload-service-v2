@@ -66,8 +66,8 @@ export class HardDeleteService {
 
     // 1. Purge objects across all physical storage providers
     for (const replica of replicas) {
-      if (this.storageRegistry.has(replica.provider as any)) {
-        const driver = this.storageRegistry.get(replica.provider as any);
+      if (this.storageRegistry.has(replica.provider)) {
+        const driver = this.storageRegistry.get(replica.provider);
         if (dryRun) {
           this.logger.log(
             `[DRY-RUN] Would delete physical storage key "${replica.provider_key}" on provider "${replica.provider}"`,
@@ -76,7 +76,7 @@ export class HardDeleteService {
         } else {
           try {
             await driver.delete({
-              provider: replica.provider as any,
+              provider: replica.provider,
               key: replica.provider_key,
             });
             replicasDeletedCount++;
