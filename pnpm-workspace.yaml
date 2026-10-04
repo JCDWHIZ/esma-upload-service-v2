@@ -3,3 +3,11 @@ overrides:
 
 onlyBuiltDependencies:
   - '@confluentinc/kafka-javascript'
+  - '@parcel/watcher'
+  - '@scarf/scarf'
+  - '@swc/core'
+  - cpu-features
+  - protobufjs
+  - sharp
+  - ssh2
+  - unrs-resolver
