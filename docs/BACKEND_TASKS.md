@@ -231,7 +231,7 @@ There is no Phase 0. The legacy app (`esma-upload-service`) is frozen and is nev
 | P6-05 | Full-stack Docker Compose (development and production) | L | High | P5-02, P5-07, P2-04 | DONE |
 | P6-06 | CI/CD overhaul and deployment | L | High | P1-13, P6-05 | DONE |
 | P6-07 | Retention, purge, backup and disaster recovery | L | High | P4-10, P6-05 | DONE |
-| P6-08 | Performance and resilience testing | L | Medium | P6-04, P6-05 | TODO |
+| P6-08 | Performance and resilience testing | L | Medium | P6-04, P6-05 | DONE |
 | P6-09 | Security review and verification | L | High | P6-01, P6-02, P5-07 | TODO |
 | P6-10 | Remove the legacy engine, finalize documentation | M | Medium | P3-05, P6-09 | TODO |
 
