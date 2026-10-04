@@ -12,7 +12,7 @@ import type { RequestContext } from '../../src/core/request-context.js';
 import { OutboxWriter } from '../../src/events/outbox-writer.js';
 import type { OutboxRepository } from '../../src/db/repositories/outbox.repository.js';
 import { EVENT_TYPES } from '../../src/events/catalog.js';
-import type { EventEnvelope } from '../../src/events/envelope.js';
+import { createEnvelope, type EventEnvelope } from '../../src/events/envelope.js';
 
 describe('Chaos & Resilience Test Suite (P6-08 / ARCH §12)', () => {
   const mockCtx: RequestContext = {
@@ -62,14 +62,13 @@ describe('Chaos & Resilience Test Suite (P6-08 / ARCH §12)', () => {
       );
 
       // During a broker outage, outbox writer enqueues to postgres table in same DB transaction
-      const envelope: EventEnvelope<unknown> = {
+      const envelope: EventEnvelope<unknown> = createEnvelope({
         eventId: '0198f3a2-7c1e-7b40-9d2a-5e6f1a8c0001',
         eventType: EVENT_TYPES.FILE_UPLOADED,
         timestamp: new Date().toISOString(),
         partitionKey: 'file-chaos-123',
-        traceContext: {},
         payload: { fileId: 'file-chaos-123', bytes: 1048576 },
-      };
+      });
 
       await outboxWriter.enqueue(null, envelope);
 

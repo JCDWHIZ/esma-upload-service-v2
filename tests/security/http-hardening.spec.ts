@@ -48,7 +48,7 @@ describe('HTTP Security Hardening & Information Leakage Defense (P6-09)', () => 
       const mockConfig = {
         auditBufferFlushIntervalMs: 1000,
       } as unknown as AppConfigService;
-      const auditService = new AuditService(mockAuditRepo, mockConfig);
+      const auditService = new AuditService(mockConfig, mockAuditRepo);
 
       const sensitivePayload = {
         userId: 'usr-123',
