@@ -39,6 +39,7 @@ import { SignedUrlService } from './signed-url.service.js';
 import { DeleteService } from './delete.service.js';
 import { FileQueryService } from './file-query.service.js';
 import { PresignedUploadService } from './presigned-upload.service.js';
+import { IdempotencyService } from './idempotency.service.js';
 import {
   InitiatePresignedUploadDto,
   InitiatePresignedUploadResponse,
@@ -66,6 +67,10 @@ import {
   fileUploadMetadataSchema,
 } from './dto/files.dto.js';
 import { FileRepository } from '../db/repositories/file.repository.js';
+import { ReplicaRepository } from '../db/repositories/replica.repository.js';
+import { OutboxRepository } from '../db/repositories/outbox.repository.js';
+import { OutboxWriter } from '../events/outbox-writer.js';
+import { DatabaseService } from '../db/database.service.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { AuthGuard } from '../auth/guards/auth.guard.js';
 import { ContextGuard } from '../auth/guards/context.guard.js';
@@ -86,9 +91,13 @@ import type { RequestContext } from '../core/request-context.js';
 import {
   ForbiddenError,
   NotFoundError,
+  StorageUnavailableError,
   ValidationError,
 } from '../core/errors/app-error.js';
 import type { UploadManifestResponse } from '../core/manifest.js';
+import { EVENT_TYPES } from '../events/catalog.js';
+import { createEnvelope } from '../events/envelope.js';
+import type { Provider } from '../core/types.js';
 
 function getRequestContext(
   req?: AuthenticatedHttpRequest,
@@ -137,8 +146,13 @@ export class FilesController {
     private readonly fileQueryService: FileQueryService,
     private readonly presignedUploadService: PresignedUploadService,
     private readonly fileRepo: FileRepository,
+    private readonly replicaRepo: ReplicaRepository,
+    private readonly outboxRepo: OutboxRepository,
+    private readonly outboxWriter: OutboxWriter,
+    private readonly dbService: DatabaseService,
     private readonly authzService: AuthorizationService,
     private readonly policyRegistry: PolicyRegistry,
+    private readonly idempotencyService: IdempotencyService,
   ) {}
 
   // ── 1. Multipart Upload ─────────────────────────────────────────────────────
@@ -242,6 +256,31 @@ export class FilesController {
       throw new ValidationError('No files were provided for upload');
     }
 
+    if (idempotencyKey) {
+      const combinedHash = fileList.map((f) => f.sha256).join(':');
+      const fingerprint = this.idempotencyService.computeFingerprint(
+        combinedHash,
+        body.folder ?? '',
+        body.visibility ?? 'tenant',
+        body.tags ?? [],
+      );
+      const evalResult = await this.idempotencyService.acquireOrCheck(
+        ctx.tenantId,
+        idempotencyKey,
+        fingerprint,
+      );
+
+      if (evalResult.status === 'REPLAYED') {
+        if (res) {
+          res.setHeader('Idempotent-Replayed', 'true');
+          return res
+            .status(evalResult.responseStatus)
+            .json(evalResult.responseBody);
+        }
+        return evalResult.responseBody;
+      }
+    }
+
     const options: UploadOptions = {
       folder: body.folder,
       visibility: body.visibility,
@@ -251,14 +290,25 @@ export class FilesController {
       idempotencyKey,
     };
 
-    const outcomes = await this.uploadService.upload(
-      ctx,
-      policy,
-      fileList,
-      options,
-    );
+    let outcomes;
+    try {
+      outcomes = await this.uploadService.upload(
+        ctx,
+        policy,
+        fileList,
+        options,
+      );
+    } catch (err: unknown) {
+      if (idempotencyKey) {
+        await this.idempotencyService.releaseKey(ctx.tenantId, idempotencyKey);
+      }
+      throw err;
+    }
 
     const hasFailure = outcomes.some((o) => !o.success);
+    if (hasFailure && idempotencyKey) {
+      await this.idempotencyService.releaseKey(ctx.tenantId, idempotencyKey);
+    }
 
     if (!hasFailure) {
       const manifests = outcomes.map(
@@ -275,6 +325,18 @@ export class FilesController {
               data: manifests,
               files: manifests,
             };
+
+      if (idempotencyKey) {
+        const firstId =
+          manifests.length === 1 ? manifests[0].data.fileId : undefined;
+        await this.idempotencyService.recordCompleted(
+          ctx.tenantId,
+          idempotencyKey,
+          HttpStatus.CREATED,
+          responsePayload as Record<string, unknown>,
+          firstId,
+        );
+      }
 
       if (res) {
         return res.status(HttpStatus.CREATED).json(responsePayload);
@@ -539,6 +601,11 @@ export class FilesController {
     required: false,
     enum: ['local', 'cloudinary', 'seaweedfs'],
   })
+  @ApiQuery({
+    name: 'variant',
+    required: false,
+    description: 'Image derivative variant name (e.g. thumb, medium)',
+  })
   @ApiResponse({ status: 200, description: 'Full file content stream' })
   @ApiResponse({ status: 206, description: 'Partial content byte range slice' })
   @ApiResponse({ status: 302, description: 'Direct storage / CDN redirect' })
@@ -566,6 +633,7 @@ export class FilesController {
       sig?: string;
       redirect?: 'auto' | 'always' | 'never';
       provider?: 'local' | 'cloudinary' | 'seaweedfs';
+      variant?: string;
     },
     @Headers('range') range?: string,
     @Headers('if-none-match') ifNoneMatch?: string,
@@ -587,6 +655,7 @@ export class FilesController {
       provider: query.provider,
       ifNoneMatch,
       isHead,
+      variant: query.variant,
     });
 
     if (!res) {
@@ -622,6 +691,11 @@ export class FilesController {
       });
       stream.on('close', () => {
         streamFinished = true;
+      });
+      stream.on('error', (err) => {
+        if (res.headersSent) {
+          res.destroy(err instanceof Error ? err : new Error(String(err)));
+        }
       });
 
       const cleanup = () => {
@@ -805,6 +879,138 @@ export class FilesController {
       deletedCount: result.deletedCount,
       failedCount: result.failedCount,
       results: result.results,
+    };
+  }
+
+  // ── 9. Operational Admin Endpoints [P4-10] ─────────────────────────────────
+
+  @Post(':fileId/replicate')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RequireAction('admin')
+  @ApiOperation({
+    summary: 'Manually trigger replication for a file (admin)',
+    description:
+      'Enqueues file.replicate outbox events for specified target providers or missing secondary replicas.',
+  })
+  @ApiParam({ name: 'fileId', description: 'UUIDv7 identifier of the file' })
+  @ApiResponse({
+    status: 202,
+    description: 'Replication jobs enqueued successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'File not found or cross-tenant',
+    type: ProblemDetailsDto,
+  })
+  async triggerReplication(
+    @Param(new ZodValidationPipe(fileIdParamSchema)) param: { fileId: string },
+    @Body() body?: { targetProvider?: string; targetProviders?: string[] },
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const file = await this.fileRepo.findById(param.fileId);
+    if (!file || file.status === 'DELETED') {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    const ctx = getRequestContext(req, 'req-manual-replicate');
+    if (!this.authzService.canAccessTenant(ctx, file.tenantId)) {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    let targets: Provider[] = [];
+    if (body?.targetProvider) {
+      targets.push(body.targetProvider as Provider);
+    } else if (
+      Array.isArray(body?.targetProviders) &&
+      body.targetProviders.length > 0
+    ) {
+      targets = body.targetProviders as Provider[];
+    } else {
+      const replicas = await this.replicaRepo.listByFile(param.fileId);
+      const missing = replicas.filter((r) => r.status !== 'AVAILABLE');
+      if (missing.length > 0) {
+        targets = missing.map((r) => r.provider);
+      } else {
+        targets = (['local', 'seaweedfs', 'cloudinary'] as Provider[]).filter(
+          (p) => p !== file.primaryProvider,
+        );
+      }
+    }
+
+    const database = this.dbService.getDb();
+    if (!database) {
+      throw new StorageUnavailableError('Database service unavailable');
+    }
+
+    const enqueuedTargets: Provider[] = [];
+
+    await database.transaction().execute(async (trx) => {
+      for (const provider of targets) {
+        const replicas = await this.replicaRepo.listByFile(param.fileId, trx);
+        const existing = replicas.find((r) => r.provider === provider);
+
+        if (!existing) {
+          await this.replicaRepo.insertMany(
+            [
+              {
+                fileId: param.fileId,
+                provider,
+                role: 'secondary',
+                status: 'QUEUED',
+                providerKey: file.storageKey,
+              },
+            ],
+            trx,
+          );
+        } else if (
+          existing.status !== 'AVAILABLE' &&
+          existing.status !== 'IN_PROGRESS'
+        ) {
+          await this.replicaRepo.requeue(param.fileId, provider, trx);
+        }
+
+        const envelope = createEnvelope({
+          eventType: EVENT_TYPES.FILE_REPLICATE,
+          partitionKey: param.fileId,
+          payload: { fileId: param.fileId, targetProvider: provider },
+          context: ctx,
+          namespace: file.namespace,
+          tenantId: file.tenantId,
+        });
+
+        await this.outboxWriter.enqueue(trx, envelope);
+        enqueuedTargets.push(provider);
+      }
+    });
+
+    return {
+      fileId: param.fileId,
+      status: 'QUEUED',
+      enqueuedTargets,
+    };
+  }
+
+  @Get('/api/v1/admin/replication')
+  @RequireAction('admin')
+  @ApiOperation({
+    summary:
+      'Get replication engine operational metrics and status summary (admin)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Replication operational metrics summary',
+  })
+  async getReplicationAdminSummary() {
+    const statusCounts = await this.replicaRepo.countByStatus();
+    const oldestQueuedAgeSeconds =
+      await this.replicaRepo.getOldestQueuedAgeSeconds();
+    const outboxPending = await this.outboxRepo.countUnpublished();
+
+    return {
+      statusCounts,
+      oldestQueuedAgeSeconds,
+      outboxPending,
+      dlqDepth: 0,
     };
   }
 }

@@ -385,4 +385,86 @@ export class ReplicaRepository extends BaseRepository {
 
     return rows.map(mapReplicaRow);
   }
+
+  async findQueuedWithoutUnpublishedOutbox(
+    olderThan: Date,
+    limit = 50,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<FileReplica[]> {
+    const rows = await this.getExecutor(trx)
+      .selectFrom('file_replicas')
+      .selectAll()
+      .where('status', '=', 'QUEUED')
+      .where('updated_at', '<', olderThan)
+      .where('file_id', 'not in', (eb) =>
+        eb
+          .selectFrom('outbox_events')
+          .select('partition_key')
+          .where('published_at', 'is', null)
+          .where('event_type', '=', 'file.replicate'),
+      )
+      .orderBy('updated_at', 'asc')
+      .limit(limit)
+      .execute();
+
+    return rows.map(mapReplicaRow);
+  }
+
+  async findFailedOlderThan(
+    olderThan: Date,
+    maxAttempts = 3,
+    limit = 50,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<FileReplica[]> {
+    const rows = await this.getExecutor(trx)
+      .selectFrom('file_replicas')
+      .selectAll()
+      .where('status', '=', 'FAILED')
+      .where('updated_at', '<', olderThan)
+      .where('attempts', '<=', maxAttempts)
+      .orderBy('updated_at', 'asc')
+      .limit(limit)
+      .execute();
+
+    return rows.map(mapReplicaRow);
+  }
+
+  async countByStatus(
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<Record<string, number>> {
+    const rows = await this.getExecutor(trx)
+      .selectFrom('file_replicas')
+      .select(['status', sql<number>`count(*)::int`.as('count')])
+      .groupBy('status')
+      .execute();
+
+    const counts: Record<string, number> = {
+      AVAILABLE: 0,
+      QUEUED: 0,
+      IN_PROGRESS: 0,
+      FAILED: 0,
+      DELETING: 0,
+      DELETED: 0,
+    };
+    for (const row of rows) {
+      counts[row.status] = Number(row.count);
+    }
+    return counts;
+  }
+
+  async getOldestQueuedAgeSeconds(
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<number | null> {
+    const row = await this.getExecutor(trx)
+      .selectFrom('file_replicas')
+      .select(
+        sql<number>`EXTRACT(EPOCH FROM (now() - MIN(updated_at)))::int`.as(
+          'age',
+        ),
+      )
+      .where('status', '=', 'QUEUED')
+      .executeTakeFirst();
+
+    return row?.age != null ? Math.max(0, Number(row.age)) : null;
+  }
 }

@@ -6,4 +6,5 @@ export * from './staging-cleanup.js';
 export * from './multer-options.js';
 export * from './ingest-validation.pipe.js';
 export * from './virus-scanner.js';
+export * from './derivatives.service.js';
 export * from './ingest.module.js';

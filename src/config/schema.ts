@@ -12,6 +12,7 @@ export const SECRET_KEYS = new Set<string>([
   'CLOUDINARY_API_KEY',
   'CLOUDINARY_API_SECRET',
   'PULSAR_AUTH_TOKEN',
+  'KAFKA_SASL_PASSWORD',
 ]);
 
 const booleanCoerce = z.preprocess((val) => {
@@ -125,13 +126,23 @@ export const rawConfigSchema = z.object({
   KAFKA_BROKERS: z.string().default('localhost:9092'),
   KAFKA_CLIENT_ID: z.string().default('esma-upload-service'),
   KAFKA_GROUP_ID: z.string().default('esma-upload-workers'),
+  KAFKA_TOPIC_PREFIX: z.string().default('esma.files'),
+  KAFKA_TOPIC_PARTITIONS: intCoerce(6).default(6),
+  KAFKA_TOPIC_REPLICATION_FACTOR: intCoerce(1).default(1),
+  KAFKA_SSL: booleanCoerce.default(false),
+  KAFKA_SASL_MECHANISM: z
+    .enum(['plain', 'scram-sha-256', 'scram-sha-512'])
+    .optional(),
+  KAFKA_SASL_USERNAME: z.string().default(''),
+  KAFKA_SASL_PASSWORD: z.string().default(''),
   PULSAR_SERVICE_URL: z.string().default('pulsar://localhost:6650'),
   PULSAR_AUTH_TOKEN: z.string().default(''),
   PULSAR_TENANT: z.string().default('esma'),
   PULSAR_NAMESPACE: z.string().default('uploads'),
 
   // --- Workers ---
-  WORKER_ROLES: z.string().default('relay,replication,processing,sweeper'),
+  WORKER_ROLES: z.string().default('relay,replication,processing,sweeper,dlq'),
+  WORKER_HEALTH_PORT: intCoerce(8081).default(8081),
   REPLICATION_MAX_ATTEMPTS: intCoerce(6).default(6),
   REPLICATION_CONCURRENCY: intCoerce(4).default(4),
   OUTBOX_RETENTION_HOURS: intCoerce(72).default(72),
@@ -142,8 +153,57 @@ export const rawConfigSchema = z.object({
   CONSUMER_HANDLER_TIMEOUT_MS: intCoerce(30000).default(30000),
   CONSUMER_SHUTDOWN_TIMEOUT_MS: intCoerce(10000).default(10000),
   TOMBSTONE_RETENTION_DAYS: intCoerce(30).default(30),
-  CLAMAV_HOST: z.string().default(''),
+  CLAMAV_HOST: z.string().default('localhost'),
   CLAMAV_PORT: intCoerce(3310).default(3310),
+  CLAMAV_TIMEOUT_MS: intCoerce(30000).default(30000),
+  SCAN_FAIL_MODE: z.enum(['closed', 'open']).default('closed'),
+  QUARANTINE_RETENTION_DAYS: intCoerce(7).default(7),
+  PURGE_INLINE: booleanCoerce.default(false),
+  SWEEP_INTERVAL_SECONDS: intCoerce(60).default(60),
+  SWEEP_QUEUED_AFTER_MINUTES: intCoerce(10).default(10),
+  SWEEP_LEASE_TIMEOUT_MINUTES: intCoerce(15).default(15),
+  SWEEP_DELETING_AFTER_MINUTES: intCoerce(10).default(10),
+  REDRIVE_AFTER_HOURS: intCoerce(0).default(0),
+  REDRIVE_MAX_TIMES: intCoerce(3).default(3),
+  DERIVATIVE_MAX_INPUT_PIXELS: intCoerce(50000000).default(50000000),
+  DERIVATIVE_CONCURRENCY: intCoerce(2).default(2),
+  DEDUP_MODE: z.enum(['off', 'reference']).default('off'),
+  IDEMPOTENCY_KEY_TTL_HOURS: intCoerce(24).default(24),
+
+  // --- Observability & Metrics (P6-04) ---
+  METRICS_ENABLED: booleanCoerce.default(true),
+  METRICS_PORT: intCoerce(9090).default(9090),
+  METRICS_TOKEN: z.string().optional(),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().default('http://localhost:4317'),
+  OTEL_SERVICE_NAME: z.string().default('esma-upload-service'),
+
+  // --- Audit Logging (P6-01) ---
+  AUDIT_READS: z
+    .preprocess(
+      (val) => (typeof val === 'string' ? val.trim().toLowerCase() : val),
+      z.enum(['all', 'sampled', 'off']),
+    )
+    .default('all'),
+  AUDIT_SAMPLE_RATE: z
+    .preprocess((val) => {
+      if (typeof val === 'number') return val;
+      if (typeof val === 'string' && val.trim() !== '') {
+        const parsed = parseFloat(val.trim());
+        return isNaN(parsed) ? val : parsed;
+      }
+      return 0.1;
+    }, z.number().min(0.0).max(1.0))
+    .default(0.1),
+  AUDIT_STREAM: booleanCoerce.default(false),
+
+  // --- Rate Limiting & Quotas (P6-02) ---
+  RATE_LIMIT_ENABLED: booleanCoerce.default(true),
+  RATE_LIMIT_FAIL_OPEN_READS: booleanCoerce.default(true),
+  RATE_LIMIT_FAIL_CLOSED_MUTATIONS: booleanCoerce.default(true),
+  DEFAULT_UPLOAD_LIMIT_PER_MIN: intCoerce(60).default(60),
+  DEFAULT_UPLOAD_BYTES_PER_MIN: intCoerce(524288000).default(524288000),
+  DEFAULT_READ_LIMIT_PER_MIN: intCoerce(600).default(600),
+  DEFAULT_FAILED_AUTH_LIMIT_PER_MIN: intCoerce(10).default(10),
 
   // --- Rollout flags (removed in P6-10) ---
   LEGACY_ENGINE: z.enum(['legacy', 'core']).default('legacy'),

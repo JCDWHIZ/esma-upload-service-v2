@@ -222,6 +222,18 @@ describe('Event Catalog & Envelope Unit Tests (P4-03)', () => {
         invalidPayloads: [{}, { fileId: '' }],
       },
       {
+        type: EVENT_TYPES.FILE_ERASED,
+        validPayload: {
+          fileId: 'f-1',
+          tenantId: 't-1',
+          namespace: 'ns-1',
+          operator: 'op-1',
+          reason: 'GDPR Request',
+          erasedAt: '2026-10-02T22:00:00Z',
+        },
+        invalidPayloads: [{}, { fileId: 'f-1' }],
+      },
+      {
         type: EVENT_TYPES.FILE_SCANNED,
         validPayload: { fileId: 'f-1', result: 'clean' },
         invalidPayloads: [
@@ -244,8 +256,8 @@ describe('Event Catalog & Envelope Unit Tests (P4-03)', () => {
       },
     ];
 
-    it('verifies all 10 catalog event types have metadata defined', () => {
-      expect(Object.keys(EVENT_CATALOG).length).toBe(10);
+    it('verifies all 11 catalog event types have metadata defined', () => {
+      expect(Object.keys(EVENT_CATALOG).length).toBe(11);
       for (const tc of testCases) {
         const meta = EVENT_CATALOG[tc.type];
         expect(meta).toBeDefined();

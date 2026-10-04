@@ -1,0 +1,51 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Pending Outbox Events Gauge",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "gus_outbox_pending",
+          "legendFormat": "Outbox Pending Rows"
+        }
+      ]
+    },
+    {
+      "title": "Replication Lag p95 (Seconds)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gus_replication_lag_seconds_bucket[5m])) by (le, provider))",
+          "legendFormat": "Lag p95 - {{provider}}"
+        }
+      ]
+    },
+    {
+      "title": "Replication Completion Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 6 },
+      "targets": [
+        {
+          "expr": "sum(rate(gus_replica_status{status=\"AVAILABLE\"}[5m])) by (provider)",
+          "legendFormat": "Completed Replicas - {{provider}}"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["esma", "gus", "replication"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "ESMA GUS - Replication & Outbox",
+  "uid": "gus-replication-outbox"
+}

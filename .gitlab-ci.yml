@@ -1,26 +1,38 @@
 stages:
   - verify
+  - integration
+  - security
   - build
-  - deploy
+  - deploy-staging
+  - deploy-production
 
 variables:
   DOCKER_REGISTRY: "docker.io"
   IMAGE_NAME: "esma-upload-service-v2"
-  DOCKER_IMAGE: ${DOCKER_USERNAME}/${IMAGE_NAME}:latest
+  DOCKER_IMAGE: ${DOCKER_USERNAME}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}
+  DOCKER_IMAGE_LATEST: ${DOCKER_USERNAME}/${IMAGE_NAME}:latest
 
 default:
   image: node:22-bookworm
   tags:
     - esma
 
-# Verify Stage: quality gates (typecheck, lint, unit, audit)
+cache:
+  key:
+    files:
+      - pnpm-lock.yaml
+  paths:
+    - .pnpm-store
+
 .verify_template: &verify_template
   stage: verify
   before_script:
     - corepack enable
     - corepack prepare pnpm@latest --activate
+    - pnpm config set store-dir .pnpm-store
     - pnpm install --frozen-lockfile
 
+# ── 1. Verify Stage ────────────────────────────────────────────────────────
 typecheck:
   <<: *verify_template
   script:
@@ -35,17 +47,51 @@ lint:
 unit:
   <<: *verify_template
   script:
-    - pnpm run test
-    - pnpm run test:integration
-    - pnpm run test:reference
+    - pnpm run test:unit
 
-audit:
+env-check:
   <<: *verify_template
   script:
-    - pnpm audit --prod --audit-level=high
+    - pnpm run env:check
 
-# Build Stage: requires all verify jobs to succeed
-build-and-push:
+# ── 2. Integration & Contract Stage ─────────────────────────────────────────
+integration:
+  <<: *verify_template
+  stage: integration
+  needs:
+    - typecheck
+    - lint
+    - unit
+    - env-check
+  script:
+    - pnpm run test:integration
+
+contract-brokers:
+  <<: *verify_template
+  stage: integration
+  needs:
+    - typecheck
+    - unit
+  script:
+    - pnpm run test:contract
+  rules:
+    - changes:
+        - src/events/**/*
+        - tests/contract/**/*
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# ── 3. Security Stage ───────────────────────────────────────────────────────
+security:
+  <<: *verify_template
+  stage: security
+  needs:
+    - typecheck
+  script:
+    - pnpm run secret:scan
+    - pnpm audit --omit=dev --audit-level=high
+
+# ── 4. Multi-Arch Build Stage ───────────────────────────────────────────────
+build-multiarch:
   stage: build
   image: docker:24.0.5
   services:
@@ -54,7 +100,8 @@ build-and-push:
     - typecheck
     - lint
     - unit
-    - audit
+    - integration
+    - security
   variables:
     DOCKER_DRIVER: overlay2
     DOCKER_TLS_CERTDIR: "/certs"
@@ -63,27 +110,27 @@ build-and-push:
     - docker run --privileged --rm tonistiigi/binfmt --install all
     - docker buildx create --use
   script:
-    - echo "Logging in to Docker Hub..."
+    - echo "Logging in to Docker Registry..."
     - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-    - echo "Building and pushing Docker image..."
+    - echo "Building and pushing multi-arch Docker image (amd64, arm64)..."
     - |
       docker buildx build \
-        --platform linux/arm64 \
+        --platform linux/amd64,linux/arm64 \
         --push \
         -t $DOCKER_IMAGE \
-        -t ${DOCKER_USERNAME}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA} \
+        -t $DOCKER_IMAGE_LATEST \
         -f Dockerfile \
         .
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+/
 
-# Deploy Stage: deploys strictly from the default branch (main)
-deploy-to-server:
-  stage: deploy
+# ── 5. Deploy Staging (Automatic on main) ───────────────────────────────────
+deploy-staging:
+  stage: deploy-staging
   image: alpine:latest
   needs:
-    - build-and-push
+    - build-multiarch
   before_script:
     - apk add --no-cache openssh-client
     - eval $(ssh-agent -s)
@@ -92,13 +139,38 @@ deploy-to-server:
     - chmod 700 ~/.ssh
     - ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
   script:
-    - echo "Connecting to server and deploying..."
+    - echo "Connecting to staging server and deploying tag ${CI_COMMIT_SHORT_SHA}..."
     - |
       ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST \
         "cd ~/server-setup/esma && \
-        chmod +x ./restart && \
-        ./restart"
-    - echo "Deployment completed successfully"
+        chmod +x ./deploy/deploy.sh && \
+        DEPLOY_TAG=${CI_COMMIT_SHORT_SHA} ./deploy/deploy.sh"
+    - echo "Staging deployment completed successfully"
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
   when: on_success
+
+# ── 6. Deploy Production (Manual approval for release tags) ────────────────
+deploy-production:
+  stage: deploy-production
+  image: alpine:latest
+  needs:
+    - build-multiarch
+  before_script:
+    - apk add --no-cache openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H $PROD_SSH_HOST >> ~/.ssh/known_hosts
+  script:
+    - echo "Deploying release ${CI_COMMIT_TAG} to production server..."
+    - |
+      ssh -o StrictHostKeyChecking=no $PROD_SSH_USER@$PROD_SSH_HOST \
+        "cd ~/server-setup/esma && \
+        chmod +x ./deploy/deploy.sh && \
+        DEPLOY_TAG=${CI_COMMIT_TAG} ./deploy/deploy.sh"
+    - echo "Production deployment completed successfully"
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+/
+  when: manual

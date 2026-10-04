@@ -11,8 +11,18 @@ import {
 import { getCorrelationContext } from './correlation-context.js';
 import { StructuredLogger } from './logger.service.js';
 import { HealthController } from './health.controller.js';
+import { HealthService } from './health.service.js';
 
 import { StorageModule } from '../storage/storage.module.js';
+
+import { AuditService } from './audit.service.js';
+import { AuditController } from './audit.controller.js';
+import { RedisService } from '../common/redis.service.js';
+import { RateLimiterService } from '../common/rate-limiter.service.js';
+import { RateLimiterGuard } from '../common/guards/rate-limiter.guard.js';
+import { MetricsService } from './metrics.service.js';
+import { MetricsController } from './metrics.controller.js';
+import { MetricsInterceptor } from './metrics.interceptor.js';
 
 interface SerializedReq {
   id?: unknown;
@@ -51,11 +61,6 @@ interface SerializedRes {
               '*.key',
               '*.apiKey',
               '*.jwtSecret',
-              '*.signedUrlSecret',
-              '*.*.secret',
-              '*.*.token',
-              '*.*.password',
-              '*.*.key',
             ],
             censor: '[REDACTED]',
           },
@@ -105,14 +110,34 @@ interface SerializedRes {
       }),
     }),
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, AuditController, MetricsController],
   providers: [
     {
       provide: APP_INTERCEPTOR,
       useClass: CorrelationIdInterceptor,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
+    },
+    MetricsInterceptor,
     StructuredLogger,
+    HealthService,
+    AuditService,
+    RedisService,
+    RateLimiterService,
+    RateLimiterGuard,
+    MetricsService,
   ],
-  exports: [PinoLoggerModule, StructuredLogger],
+  exports: [
+    PinoLoggerModule,
+    StructuredLogger,
+    HealthService,
+    AuditService,
+    RedisService,
+    RateLimiterService,
+    RateLimiterGuard,
+    MetricsService,
+  ],
 })
 export class ObservabilityModule {}

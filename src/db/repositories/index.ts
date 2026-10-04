@@ -6,3 +6,5 @@ export * from './audit.repository.js';
 export * from './api-client.repository.js';
 export * from './usage.repository.js';
 export * from './processed-events.repository.js';
+export * from './dead-letter.repository.js';
+export * from './idempotency.repository.js';

@@ -27,7 +27,7 @@ export class OutboxWriter {
    * the envelope so that per-file ordering is preserved by the relay.
    */
   async enqueue<T>(
-    trx: Transaction<Database> | Kysely<Database>,
+    trx: Transaction<Database> | Kysely<Database> | null | undefined,
     envelope: EventEnvelope<T>,
     topicOverride?: LogicalTopic,
   ): Promise<void> {
@@ -44,7 +44,7 @@ export class OutboxWriter {
         // against the catalog schema before publishing.
         envelope: envelope as unknown as Record<string, unknown>,
       },
-      trx,
+      trx ?? undefined,
     );
   }
 }

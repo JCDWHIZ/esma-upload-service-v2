@@ -334,17 +334,21 @@ describe('UploadService (hybrid upload & primary failover) [P4-06]', () => {
     expect(secondaryRep?.status).toBe('QUEUED');
     expect(secondaryRep?.providerKey).toBeDefined();
 
-    // 5. Outbox events: file.uploaded + file.replicate
-    expect(enqueuedOutboxEvents).toHaveLength(2);
+    // 5. Outbox events: file.uploaded + file.replicate + file.process (derivatives)
+    expect(enqueuedOutboxEvents).toHaveLength(3);
     const uploadedEvent = enqueuedOutboxEvents.find(
       (e) => e.eventType === EVENT_TYPES.FILE_UPLOADED,
     ) as EventEnvelope<FileUploadedPayload> | undefined;
     const replicateEvent = enqueuedOutboxEvents.find(
       (e) => e.eventType === EVENT_TYPES.FILE_REPLICATE,
     ) as EventEnvelope<FileReplicatePayload> | undefined;
+    const processEvent = enqueuedOutboxEvents.find(
+      (e) => e.eventType === EVENT_TYPES.FILE_PROCESS,
+    );
 
     expect(uploadedEvent).toBeDefined();
     expect(replicateEvent).toBeDefined();
+    expect(processEvent).toBeDefined();
     expect(replicateEvent?.payload.targetProvider).toBe('cloudinary');
     expect(uploadedEvent?.payload.primaryProvider).toBe('seaweedfs');
 

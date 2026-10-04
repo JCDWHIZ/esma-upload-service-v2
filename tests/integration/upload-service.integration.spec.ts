@@ -16,6 +16,7 @@ import { DatabaseService } from '../../src/db/database.service.js';
 import { FileRepository } from '../../src/db/repositories/file.repository.js';
 import { ReplicaRepository } from '../../src/db/repositories/replica.repository.js';
 import { UsageRepository } from '../../src/db/repositories/usage.repository.js';
+import { OutboxRepository } from '../../src/db/repositories/outbox.repository.js';
 import {
   QuotaExceededError,
   StorageUnavailableError,
@@ -86,6 +87,10 @@ describe('UploadService Integration (NestJS Module & FakeStorageDriver)', () => 
     fileRepo = moduleRef.get(FileRepository);
     replicaRepo = moduleRef.get(ReplicaRepository);
     usageRepo = moduleRef.get(UsageRepository);
+    const outboxRepo = moduleRef.get(OutboxRepository);
+    vi.spyOn(outboxRepo, 'enqueue').mockResolvedValue(
+      {} as unknown as import('../../src/core/types.js').OutboxEvent,
+    );
 
     // Register test fake driver
     registry.register(fakeDriver);

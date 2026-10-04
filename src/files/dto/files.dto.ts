@@ -422,6 +422,7 @@ export const fileReadQuerySchema = z.object({
   sig: z.string().trim().optional(),
   redirect: z.enum(['auto', 'always', 'never']).optional(),
   provider: z.enum(['local', 'cloudinary', 'seaweedfs']).optional(),
+  variant: z.string().trim().optional(),
 });
 
 export class FileReadQueryDto {
@@ -454,6 +455,12 @@ export class FileReadQueryDto {
     description: 'Specific replica provider to read from (admin only)',
   })
   provider?: 'local' | 'cloudinary' | 'seaweedfs';
+
+  @ApiPropertyOptional({
+    description: 'Image derivative variant name (e.g. thumb, medium)',
+    example: 'thumb',
+  })
+  variant?: string;
 }
 
 // ============================================================================

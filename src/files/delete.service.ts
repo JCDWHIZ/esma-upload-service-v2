@@ -139,7 +139,20 @@ export class DeleteService {
       });
     }
 
-    // Inline purge phase: delete physical objects across replica drivers
+    // If PURGE_INLINE is enabled or events are disabled, execute inline purge (for environments without a worker)
+    if (this.configService.purgeInline || !this.configService.eventsEnabled) {
+      await this.executeInlinePurge(ctx, fileId);
+    }
+  }
+
+  /**
+   * Executes driver-level inline purge across all DELETING replicas.
+   * Used when PURGE_INLINE=true or when events are disabled.
+   */
+  private async executeInlinePurge(
+    ctx: RequestContext,
+    fileId: string,
+  ): Promise<void> {
     const replicas = await this.replicaRepo.listByFile(fileId);
     const deletingReplicas = replicas.filter((r) => r.status === 'DELETING');
 
@@ -163,6 +176,32 @@ export class DeleteService {
             fileId,
             provider: replica.provider,
           },
+        );
+      }
+    }
+
+    // Purge image derivatives on primary storage provider (P5-08)
+    const file = await this.fileRepo.findById(fileId);
+    if (file?.derivatives && typeof file.derivatives === 'object') {
+      try {
+        const primaryDriver = this.storageRegistry.get(file.primaryProvider);
+        for (const [varName, deriv] of Object.entries(file.derivatives)) {
+          if (deriv && typeof deriv === 'object' && deriv.key) {
+            try {
+              await primaryDriver.delete({
+                provider: file.primaryProvider,
+                key: deriv.key,
+              });
+            } catch (derivErr: unknown) {
+              this.logger.warn(
+                `Failed to purge derivative "${varName}" for file ${fileId}: ${String(derivErr)}`,
+              );
+            }
+          }
+        }
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Could not access primary driver to purge derivatives for file ${fileId}: ${String(err)}`,
         );
       }
     }

@@ -7,6 +7,7 @@ export interface AppErrorOptions {
   detail?: string;
   errors?: unknown[];
   correlationId?: string;
+  headers?: Record<string, string>;
 }
 
 export class AppError extends Error {
@@ -17,6 +18,7 @@ export class AppError extends Error {
   public readonly errors: unknown[];
   public override readonly cause?: unknown;
   public correlationId?: string;
+  public readonly headers?: Record<string, string>;
 
   constructor(optionsOrMessage: AppErrorOptions | string) {
     const opts: AppErrorOptions =
@@ -33,6 +35,7 @@ export class AppError extends Error {
     this.errors = opts.errors ?? [];
     this.cause = opts.cause;
     this.correlationId = opts.correlationId;
+    this.headers = opts.headers;
     Object.setPrototypeOf(this, new.target.prototype);
   }
 
@@ -194,6 +197,31 @@ export class ConflictError extends AppError {
   }
 }
 
+export class IdempotencyConflictError extends ConflictError {
+  constructor(
+    message = 'An upload with this idempotency key was already completed with a different payload',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'IDEMPOTENCY_CONFLICT',
+      ...options,
+    });
+  }
+}
+
+export class IdempotencyInProgressError extends ConflictError {
+  constructor(
+    message = 'A request with this idempotency key is currently in progress',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'IDEMPOTENCY_IN_PROGRESS',
+      headers: { 'Retry-After': '5', ...(options?.headers ?? {}) },
+      ...options,
+    });
+  }
+}
+
 export class FileNotReadyError extends ConflictError {
   constructor(
     message = 'File is still being ingested or replicated and is not ready',
@@ -213,6 +241,7 @@ export class ReplicaNotAvailableError extends ConflictError {
   ) {
     super(message, {
       code: 'REPLICA_NOT_AVAILABLE',
+      headers: { 'Retry-After': '30', ...(options?.headers ?? {}) },
       ...options,
     });
   }

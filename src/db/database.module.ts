@@ -8,6 +8,8 @@ import {
   ApiClientRepository,
   UsageRepository,
   ProcessedEventsRepository,
+  DeadLetterRepository,
+  IdempotencyRepository,
 } from './repositories/index.js';
 import { PG_POOL, KYSELY_DB } from './constants.js';
 
@@ -21,6 +23,8 @@ const repositories = [
   ApiClientRepository,
   UsageRepository,
   ProcessedEventsRepository,
+  DeadLetterRepository,
+  IdempotencyRepository,
 ];
 
 @Global()

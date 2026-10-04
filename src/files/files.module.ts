@@ -6,15 +6,21 @@ import { UploadService } from './upload.service.js';
 import { FileReadService } from './file-read.service.js';
 import { SignedUrlService } from './signed-url.service.js';
 import { DeleteService } from './delete.service.js';
+import { HardDeleteService } from './hard-delete.service.js';
 import { FileQueryService } from './file-query.service.js';
 import { PresignedUploadService } from './presigned-upload.service.js';
 import { KeyService } from '../core/storage-key.service.js';
 import { AuthorizationModule } from '../authz/authorization.module.js';
-import { NoOpQuotaGate, QUOTA_GATE } from './quota-gate.interface.js';
+import { QUOTA_GATE } from './quota-gate.interface.js';
+import { DatabaseQuotaGate } from './quota-gate.service.js';
 import { EventsModule } from '../events/events.module.js';
 
 import { AuthModule } from '../auth/auth.module.js';
 import { IngestModule } from '../ingest/ingest.module.js';
+
+import { ReplicaSelector } from './replica-selector.js';
+
+import { IdempotencyService } from './idempotency.service.js';
 
 @Module({
   imports: [AuthorizationModule, AuthModule, IngestModule, EventsModule],
@@ -23,25 +29,32 @@ import { IngestModule } from '../ingest/ingest.module.js';
     FilesService,
     UploadService,
     FileReadService,
+    ReplicaSelector,
     SignedUrlService,
     DeleteService,
+    HardDeleteService,
     FileQueryService,
     PresignedUploadService,
     KeyService,
+    DatabaseQuotaGate,
+    IdempotencyService,
     {
       provide: QUOTA_GATE,
-      useClass: NoOpQuotaGate,
+      useClass: DatabaseQuotaGate,
     },
   ],
   exports: [
     FilesService,
     UploadService,
     FileReadService,
+    ReplicaSelector,
     SignedUrlService,
     DeleteService,
+    HardDeleteService,
     FileQueryService,
     PresignedUploadService,
     KeyService,
+    IdempotencyService,
     QUOTA_GATE,
   ],
 })

@@ -1,20 +1,29 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { IVirusScanner } from './types.js';
+import type { IVirusScanner, ScanResult } from './types.js';
 
 export const VIRUS_SCANNER = 'VIRUS_SCANNER';
 
 /**
- * No-op VirusScanner implementation for Phase 1.
- * Real ClamAV scanner will be injected in Phase 5 (P5-07).
+ * No-op VirusScanner implementation.
+ * ClamAvScanner is used when ClamAV scanning is enabled.
  */
 @Injectable()
 export class NoopVirusScanner implements IVirusScanner {
   private readonly logger = new Logger(NoopVirusScanner.name);
 
-  scan(filePath: string): Promise<{ clean: boolean; threat?: string }> {
+  scan(filePath: string): Promise<ScanResult> {
     this.logger.debug(
       `NoopVirusScanner: passing file without scan (${filePath})`,
     );
-    return Promise.resolve({ clean: true });
+    return Promise.resolve({ clean: true, scannedBytes: 0 });
+  }
+
+  scanStream(): Promise<ScanResult> {
+    this.logger.debug('NoopVirusScanner: passing stream without scan');
+    return Promise.resolve({ clean: true, scannedBytes: 0 });
+  }
+
+  ping(): Promise<boolean> {
+    return Promise.resolve(true);
   }
 }

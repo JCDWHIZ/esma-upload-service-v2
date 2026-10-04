@@ -1,0 +1,51 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Dead-Letter Queue (DLQ) Depth",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "gus_dlq_depth",
+          "legendFormat": "Open DLQ Rows"
+        }
+      ]
+    },
+    {
+      "title": "Quarantined Files Count",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(gus_quarantined_files_total[5m])) by (namespace)",
+          "legendFormat": "{{namespace}}"
+        }
+      ]
+    },
+    {
+      "title": "Duplicate Content Hash Detections",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 6 },
+      "targets": [
+        {
+          "expr": "sum(rate(gus_duplicate_hash_total[5m])) by (tenant_id, namespace)",
+          "legendFormat": "Tenant {{tenant_id}} ({{namespace}})"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["esma", "gus", "dlq"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "ESMA GUS - DLQ & Broker",
+  "uid": "gus-dlq-broker"
+}

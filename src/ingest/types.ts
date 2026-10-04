@@ -18,8 +18,16 @@ export type IngestShape =
   | { type: 'array'; fieldName?: string; maxCount?: number }
   | { type: 'fields'; fields: Array<{ name: string; maxCount: number }> };
 
+export interface ScanResult {
+  readonly clean: boolean;
+  readonly threat?: string;
+  readonly scannedBytes?: number;
+}
+
 export interface IVirusScanner {
-  scan(filePath: string): Promise<{ clean: boolean; threat?: string }>;
+  scan(filePath: string): Promise<ScanResult>;
+  scanStream(stream: Readable): Promise<ScanResult>;
+  ping?(): Promise<boolean>;
 }
 
 export interface IngestValidationOptions {

@@ -41,12 +41,27 @@
     "apikey:list": "ts-node src/scripts/apikey-cli.ts list",
     "apikey:create:prod": "node dist/src/scripts/apikey-cli.js create",
     "apikey:revoke:prod": "node dist/src/scripts/apikey-cli.js revoke",
-    "apikey:list:prod": "node dist/src/scripts/apikey-cli.js list"
+    "apikey:list:prod": "node dist/src/scripts/apikey-cli.js list",
+    "reconcile:orphans": "ts-node src/scripts/reconcile-orphans.ts",
+    "reconcile:orphans:prod": "node dist/src/scripts/reconcile-orphans.js",
+    "dlq:list": "ts-node src/scripts/dlq-cli.ts list",
+    "dlq:redrive": "ts-node src/scripts/dlq-cli.ts redrive",
+    "dlq:discard": "ts-node src/scripts/dlq-cli.ts discard",
+    "dlq:stats": "ts-node src/scripts/dlq-cli.ts stats",
+    "dlq:list:prod": "node dist/src/scripts/dlq-cli.js list",
+    "dlq:redrive:prod": "node dist/src/scripts/dlq-cli.js redrive",
+    "dlq:discard:prod": "node dist/src/scripts/dlq-cli.js discard",
+    "dlq:stats:prod": "node dist/src/scripts/dlq-cli.js stats",
+    "storage:promote": "ts-node src/scripts/storage-promote-cli.ts",
+    "storage:promote:prod": "node dist/src/scripts/storage-promote-cli.js",
+    "file:hard-delete": "ts-node src/scripts/hard-delete-cli.ts",
+    "file:hard-delete:prod": "node dist/src/scripts/hard-delete-cli.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",
     "@aws-sdk/lib-storage": "^3.1141.0",
     "@aws-sdk/s3-request-presigner": "^3.1141.0",
+    "@confluentinc/kafka-javascript": "^1.10.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
@@ -54,6 +69,7 @@
     "cloudinary": "^2.11.0",
     "file-type": "^22.1.1",
     "helmet": "^8.3.0",
+    "ioredis": "^6.0.0",
     "jose": "^6.2.12",
     "kysely": "^0.29.6",
     "multer": "^2.4.0",
@@ -61,8 +77,11 @@
     "pg": "^8.23.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "prom-client": "^15.1.3",
+    "rate-limiter-flexible": "^11.2.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sharp": "^0.33.5",
     "uuid": "^11.0.5",
     "zod": "^4.6.5"
   },
@@ -75,6 +94,7 @@
     "@swc/core": "^1.16.2",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/express": "^5.0.0",
+    "@types/ioredis": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/multer": "^2.2.0",
     "@types/node": "^22.10.7",
@@ -126,6 +146,9 @@
   "pnpm": {
     "overrides": {
       "multer": "^2.4.0"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@confluentinc/kafka-javascript"
+    ]
   }
 }

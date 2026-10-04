@@ -1,0 +1,38 @@
+name: esma-upload-service-prod
+
+services:
+  postgres:
+    ports: []
+
+  redis:
+    ports: []
+
+  api:
+    environment:
+      NODE_ENV: production
+    ports:
+      - "${PORT:-7030}:7030"
+
+  worker:
+    environment:
+      NODE_ENV: production
+    ports: []
+
+  seaweedfs:
+    ports: []
+
+  kafka:
+    ports: []
+
+  pulsar:
+    ports: []
+
+  clamav:
+    ports: []
+
+  prometheus:
+    ports: []
+
+  grafana:
+    ports:
+      - "3000:3000"

@@ -391,6 +391,21 @@ export class PresignedUploadService {
           },
           trx,
         );
+
+        // file.scan command when virus scan is required (P5-07)
+        if (file.scanStatus === 'PENDING') {
+          await this.outboxRepo.enqueue(
+            {
+              topic: 'processing',
+              partitionKey: file.id,
+              eventType: 'file.scan',
+              envelope: {
+                fileId: file.id,
+              },
+            },
+            trx,
+          );
+        }
       }
 
       return { file: updatedFile, replica: replicas[0] };

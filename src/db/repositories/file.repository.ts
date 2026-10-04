@@ -6,12 +6,16 @@ import type { Database } from '../types.js';
 import type {
   FileListFilter,
   FileRecord,
+  FileStatus,
   FileStatusUpdate,
   NewFileRecord,
   PaginatedResult,
 } from '../../core/types.js';
 import { decodeCursor, encodeCursor, mapFileRow } from '../mappers.js';
-import { OptimisticLockError } from '../../core/errors/app-error.js';
+import {
+  NotFoundError,
+  OptimisticLockError,
+} from '../../core/errors/app-error.js';
 
 @Injectable()
 export class FileRepository extends BaseRepository {
@@ -94,6 +98,22 @@ export class FileRepository extends BaseRepository {
       .executeTakeFirst();
 
     return result ? mapFileRow(result) : null;
+  }
+
+  async countBySha256(
+    tenantId: string,
+    sha256: string,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<number> {
+    const result = await this.getExecutor(trx)
+      .selectFrom('files')
+      .select((eb) => eb.fn.count<string>('id').as('count'))
+      .where('tenant_id', '=', tenantId)
+      .where('sha256', '=', sha256)
+      .where('status', 'in', ['ACTIVE', 'PENDING_UPLOAD'])
+      .executeTakeFirst();
+
+    return result ? Number(result.count) : 0;
   }
 
   async list(
@@ -224,6 +244,9 @@ export class FileRepository extends BaseRepository {
     if (updates.attributes !== undefined) {
       updateValues.attributes = updates.attributes;
     }
+    if (updates.derivatives !== undefined) {
+      updateValues.derivatives = updates.derivatives;
+    }
 
     const result = await this.getExecutor(trx)
       .updateTable('files')
@@ -237,6 +260,28 @@ export class FileRepository extends BaseRepository {
       throw new OptimisticLockError(
         `Optimistic lock collision updating file ${id} at version ${currentVersion}`,
       );
+    }
+
+    return mapFileRow(result);
+  }
+
+  async updateDerivatives(
+    id: string,
+    derivatives: Record<string, unknown>,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<FileRecord> {
+    const result = await this.getExecutor(trx)
+      .updateTable('files')
+      .set({
+        derivatives,
+        version: sql`version + 1`,
+      })
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirst();
+
+    if (!result) {
+      throw new NotFoundError(`File ${id} not found`);
     }
 
     return mapFileRow(result);
@@ -296,5 +341,52 @@ export class FileRepository extends BaseRepository {
       .execute();
 
     return results.map(mapFileRow);
+  }
+
+  async findStaleByStatus(
+    status: FileStatus,
+    olderThan: Date,
+    limit = 50,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<FileRecord[]> {
+    const results = await this.getExecutor(trx)
+      .selectFrom('files')
+      .selectAll()
+      .where('status', '=', status)
+      .where('updated_at', '<', olderThan)
+      .orderBy('updated_at', 'asc')
+      .limit(limit)
+      .execute();
+
+    return results.map(mapFileRow);
+  }
+
+  async hardDeleteTombstones(
+    olderThan: Date,
+    limit = 100,
+    trx?: Transaction<Database> | Kysely<Database>,
+    namespace?: string,
+  ): Promise<number> {
+    const result = await this.getExecutor(trx)
+      .deleteFrom('files')
+      .where('id', 'in', (eb) => {
+        let sub = eb
+          .selectFrom('files')
+          .select('id')
+          .where('status', '=', 'DELETED')
+          .where((w) =>
+            w.or([
+              w('deleted_at', '<', olderThan),
+              w('updated_at', '<', olderThan),
+            ]),
+          );
+        if (namespace) {
+          sub = sub.where('namespace', '=', namespace);
+        }
+        return sub.limit(limit);
+      })
+      .executeTakeFirst();
+
+    return Number(result.numDeletedRows);
   }
 }

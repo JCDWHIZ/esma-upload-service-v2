@@ -230,6 +230,28 @@ export class AppConfigService {
   get kafkaGroupId(): string {
     return this.config.KAFKA_GROUP_ID;
   }
+  get kafkaTopicPrefix(): string {
+    return this.config.KAFKA_TOPIC_PREFIX;
+  }
+  get kafkaTopicPartitions(): number {
+    return this.config.KAFKA_TOPIC_PARTITIONS;
+  }
+  get kafkaTopicReplicationFactor(): number {
+    return this.config.KAFKA_TOPIC_REPLICATION_FACTOR;
+  }
+  get kafkaSsl(): boolean {
+    return this.config.KAFKA_SSL;
+  }
+  get kafkaSaslMechanism():
+    'plain' | 'scram-sha-256' | 'scram-sha-512' | undefined {
+    return this.config.KAFKA_SASL_MECHANISM;
+  }
+  get kafkaSaslUsername(): string {
+    return this.config.KAFKA_SASL_USERNAME;
+  }
+  get kafkaSaslPassword(): string {
+    return this.config.KAFKA_SASL_PASSWORD;
+  }
   get pulsarServiceUrl(): string {
     return this.config.PULSAR_SERVICE_URL;
   }
@@ -246,6 +268,9 @@ export class AppConfigService {
   // --- Workers ---
   get workerRoles(): string {
     return this.config.WORKER_ROLES;
+  }
+  get workerHealthPort(): number {
+    return this.config.WORKER_HEALTH_PORT;
   }
   get replicationMaxAttempts(): number {
     return this.config.REPLICATION_MAX_ATTEMPTS;
@@ -282,6 +307,99 @@ export class AppConfigService {
   }
   get clamavPort(): number {
     return this.config.CLAMAV_PORT;
+  }
+  get clamavTimeoutMs(): number {
+    return this.config.CLAMAV_TIMEOUT_MS;
+  }
+  get scanFailMode(): 'closed' | 'open' {
+    return this.config.SCAN_FAIL_MODE;
+  }
+  get quarantineRetentionDays(): number {
+    return this.config.QUARANTINE_RETENTION_DAYS;
+  }
+  get purgeInline(): boolean {
+    return this.config.PURGE_INLINE;
+  }
+  get sweepIntervalSeconds(): number {
+    return this.config.SWEEP_INTERVAL_SECONDS;
+  }
+  get sweepQueuedAfterMinutes(): number {
+    return this.config.SWEEP_QUEUED_AFTER_MINUTES;
+  }
+  get sweepLeaseTimeoutMinutes(): number {
+    return this.config.SWEEP_LEASE_TIMEOUT_MINUTES;
+  }
+  get sweepDeletingAfterMinutes(): number {
+    return this.config.SWEEP_DELETING_AFTER_MINUTES;
+  }
+  get redriveAfterHours(): number {
+    return this.config.REDRIVE_AFTER_HOURS;
+  }
+  get redriveMaxTimes(): number {
+    return this.config.REDRIVE_MAX_TIMES;
+  }
+  get derivativeMaxInputPixels(): number {
+    return this.config.DERIVATIVE_MAX_INPUT_PIXELS;
+  }
+  get derivativeConcurrency(): number {
+    return this.config.DERIVATIVE_CONCURRENCY;
+  }
+  get dedupMode(): 'off' | 'reference' {
+    return this.config.DEDUP_MODE;
+  }
+  get idempotencyKeyTtlHours(): number {
+    return this.config.IDEMPOTENCY_KEY_TTL_HOURS;
+  }
+
+  // --- Observability & Metrics (P6-04) ---
+  get metricsEnabled(): boolean {
+    return this.config.METRICS_ENABLED;
+  }
+  get metricsPort(): number {
+    return this.config.METRICS_PORT;
+  }
+  get metricsToken(): string | undefined {
+    return this.config.METRICS_TOKEN;
+  }
+  get otelExporterOtlpEndpoint(): string {
+    return this.config.OTEL_EXPORTER_OTLP_ENDPOINT;
+  }
+  get otelServiceName(): string {
+    return this.config.OTEL_SERVICE_NAME;
+  }
+
+  // --- Audit Logging ---
+  get auditReads(): 'all' | 'sampled' | 'off' {
+    return this.config.AUDIT_READS;
+  }
+  get auditSampleRate(): number {
+    return this.config.AUDIT_SAMPLE_RATE;
+  }
+  get auditStream(): boolean {
+    return this.config.AUDIT_STREAM;
+  }
+
+  // --- Rate Limiting & Quotas (P6-02) ---
+  get rateLimitEnabled(): boolean {
+    return this.config.RATE_LIMIT_ENABLED;
+  }
+  get rateLimitFailOpenReads(): boolean {
+    return this.config.RATE_LIMIT_FAIL_OPEN_READS;
+  }
+  get rateLimitFailClosedMutations(): boolean {
+    return this.config.RATE_LIMIT_FAIL_CLOSED_MUTATIONS;
+  }
+  get defaultUploadLimitPerMin(): number {
+    return this.config.DEFAULT_UPLOAD_LIMIT_PER_MIN;
+  }
+  get defaultUploadBytesPerMin(): number {
+    return this.config.DEFAULT_UPLOAD_BYTES_PER_MIN;
+  }
+  get defaultReadLimitPerMin(): number {
+    return this.config.DEFAULT_READ_LIMIT_PER_MIN;
+  }
+  get defaultFailedAuthLimitPerMin(): number {
+    return this.config.DEFAULT_FAILED_AUTH_LIMIT_PER_MIN;
   }
 
   // --- Rollout Flags ---

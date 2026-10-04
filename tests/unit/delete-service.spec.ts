@@ -459,4 +459,119 @@ describe('DeleteService [P2-08]', () => {
       ]);
     });
   });
+
+  describe('P4-09 Delete propagation & PURGE_INLINE behavior', () => {
+    it('commits DELETING state and enqueues file.purge without inline driver delete when PURGE_INLINE=false', async () => {
+      (
+        configService as unknown as {
+          eventsEnabled: boolean;
+          purgeInline: boolean;
+        }
+      ).eventsEnabled = true;
+      (
+        configService as unknown as {
+          eventsEnabled: boolean;
+          purgeInline: boolean;
+        }
+      ).purgeInline = false;
+
+      const file = createMockFile({ id: 'f-fast-delete' });
+      const queuedReplica = createMockReplica({
+        fileId: 'f-fast-delete',
+        provider: 'seaweedfs',
+        status: 'QUEUED',
+      });
+      const activeReplica = createMockReplica({
+        fileId: 'f-fast-delete',
+        provider: 'local',
+        status: 'AVAILABLE',
+      });
+      mockFiles.set('f-fast-delete', file);
+      mockReplicas.set('f-fast-delete', [activeReplica, queuedReplica]);
+
+      const driverDeleteSpy = vi.spyOn(fakeDriver, 'delete');
+
+      await deleteService.delete(mockContext, 'f-fast-delete');
+
+      // Fast-path: commits DELETING state and enqueues outbox event, does not call driver
+      expect(file.status).toBe('DELETING');
+      expect(queuedReplica.status).toBe('DELETED');
+      expect(activeReplica.status).toBe('DELETING');
+      expect(driverDeleteSpy).not.toHaveBeenCalled();
+
+      expect(enqueuedOutboxEvents).toHaveLength(1);
+      const envelope = enqueuedOutboxEvents[0] as Record<string, unknown>;
+      expect(envelope['eventType']).toBe('file.purge');
+      expect(envelope['partitionKey']).toBe('f-fast-delete');
+    });
+
+    it('executes inline driver delete when PURGE_INLINE=true even if events are enabled', async () => {
+      (
+        configService as unknown as {
+          eventsEnabled: boolean;
+          purgeInline: boolean;
+        }
+      ).eventsEnabled = true;
+      (
+        configService as unknown as {
+          eventsEnabled: boolean;
+          purgeInline: boolean;
+        }
+      ).purgeInline = true;
+
+      const file = createMockFile({ id: 'f-inline-override' });
+      const activeReplica = createMockReplica({
+        fileId: 'f-inline-override',
+        provider: 'local',
+        status: 'AVAILABLE',
+      });
+      mockFiles.set('f-inline-override', file);
+      mockReplicas.set('f-inline-override', [activeReplica]);
+
+      const driverDeleteSpy = vi.spyOn(fakeDriver, 'delete');
+
+      await deleteService.delete(mockContext, 'f-inline-override');
+
+      expect(driverDeleteSpy).toHaveBeenCalled();
+      expect(file.status).toBe('DELETED');
+      expect(activeReplica.status).toBe('DELETED');
+      expect(enqueuedOutboxEvents).toHaveLength(1);
+    });
+
+    it('emits one file.purge event per file during bulk delete when events are enabled', async () => {
+      (
+        configService as unknown as {
+          eventsEnabled: boolean;
+          purgeInline: boolean;
+        }
+      ).eventsEnabled = true;
+      (
+        configService as unknown as {
+          eventsEnabled: boolean;
+          purgeInline: boolean;
+        }
+      ).purgeInline = false;
+
+      const f1 = createMockFile({ id: 'bulk-1' });
+      const f2 = createMockFile({ id: 'bulk-2' });
+      mockFiles.set('bulk-1', f1);
+      mockFiles.set('bulk-2', f2);
+      mockReplicas.set('bulk-1', [createMockReplica({ fileId: 'bulk-1' })]);
+      mockReplicas.set('bulk-2', [createMockReplica({ fileId: 'bulk-2' })]);
+
+      const res = await deleteService.bulkDelete(mockContext, [
+        'bulk-1',
+        'bulk-2',
+      ]);
+
+      expect(res.deletedCount).toBe(2);
+      expect(enqueuedOutboxEvents).toHaveLength(2);
+      const events = enqueuedOutboxEvents as Array<Record<string, unknown>>;
+      expect(events.map((e) => e['partitionKey'])).toEqual([
+        'bulk-1',
+        'bulk-2',
+      ]);
+      expect(events.every((e) => e['eventType'] === 'file.purge')).toBe(true);
+    });
+  });
 });

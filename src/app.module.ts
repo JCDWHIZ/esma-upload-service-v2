@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { AuthorizationModule } from './authz/authorization.module.js';
 import { IngestModule } from './ingest/ingest.module.js';
 import { FilesModule } from './files/files.module.js';
+import { AdminModule } from './admin/admin.module.js';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { FilesModule } from './files/files.module.js';
     AuthorizationModule,
     IngestModule,
     FilesModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

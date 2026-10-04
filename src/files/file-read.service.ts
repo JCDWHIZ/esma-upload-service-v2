@@ -1,14 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Readable } from 'node:stream';
 import { AppConfigService } from '../config/config.service.js';
 import { RequestContext } from '../core/request-context.js';
-import { FileRecord, FileReplica } from '../core/types.js';
+import { FileRecord } from '../core/types.js';
 import { ProviderName, ProviderRef } from '../storage/types.js';
 import { StorageRegistry } from '../storage/registry.js';
 import { FileRepository } from '../db/repositories/file.repository.js';
 import { ReplicaRepository } from '../db/repositories/replica.repository.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { isEsmaAdminActor } from '../authz/authorize.js';
+import { ReplicaSelector } from './replica-selector.js';
 import {
   SignedUrlService,
   VerifySignatureQuery,
@@ -19,9 +20,13 @@ import {
   UnauthenticatedError,
   FileNotReadyError,
   FileQuarantinedError,
-  ReplicaNotAvailableError,
   StorageUnavailableError,
 } from '../core/errors/app-error.js';
+
+export interface ReadMetrics {
+  readsByProvider: Record<string, number>;
+  fallbacks: number;
+}
 
 export interface FileReadAuth {
   ctx?: RequestContext | null;
@@ -36,6 +41,7 @@ export interface FileReadOptions {
   ifNoneMatch?: string;
   signal?: AbortSignal;
   isHead?: boolean;
+  variant?: string;
 }
 
 export type FileReadResult =
@@ -78,6 +84,12 @@ function sanitizeFilename(name: string): string {
 @Injectable()
 export class FileReadService {
   private readonly logger = new Logger(FileReadService.name);
+  private readonly selector: ReplicaSelector;
+
+  public readonly metrics: ReadMetrics = {
+    readsByProvider: {},
+    fallbacks: 0,
+  };
 
   constructor(
     private readonly fileRepo: FileRepository,
@@ -86,7 +98,18 @@ export class FileReadService {
     private readonly authzService: AuthorizationService,
     private readonly signedUrlService: SignedUrlService,
     private readonly configService: AppConfigService,
-  ) {}
+    @Optional() replicaSelector?: ReplicaSelector,
+  ) {
+    this.selector =
+      replicaSelector ?? new ReplicaSelector(this.storageRegistry);
+  }
+
+  getMetrics(): ReadMetrics {
+    return {
+      readsByProvider: { ...this.metrics.readsByProvider },
+      fallbacks: this.metrics.fallbacks,
+    };
+  }
 
   /**
    * Resolves, authorizes and prepares a file for delivery (streaming, range or redirect).
@@ -133,7 +156,11 @@ export class FileReadService {
       throw new NotFoundError(`File '${fileId}' not found`);
     }
 
-    if (file.status === 'QUARANTINED' || file.scanStatus === 'INFECTED') {
+    if (
+      file.status === 'QUARANTINED' ||
+      file.scanStatus === 'INFECTED' ||
+      file.scanStatus === 'ERROR'
+    ) {
       throw new FileQuarantinedError(
         `File '${fileId}' has been quarantined due to security scan failure`,
       );
@@ -264,120 +291,117 @@ export class FileReadService {
       }
     }
 
-    // 6. Replica selection (ARCH §7.2)
-    const replicas = await this.replicaRepo.listByFile(fileId);
-    let chosenReplica: FileReplica | undefined;
+    // 5.5. Image Derivative Variant handling (P5-08 / ARCH §8.2)
+    if (options?.variant) {
+      const variantName = options.variant;
 
-    if (options?.provider) {
-      // ?provider=x requires files:admin
-      const isAdmin =
-        ctx &&
-        (isEsmaAdminActor(ctx) ||
-          ctx.actor.scopes?.includes('files:admin') ||
-          ctx.actor.scopes?.includes('*'));
-
-      if (!isAdmin) {
-        throw new ForbiddenError(
-          'Specifying provider replica requires admin privileges',
-        );
-      }
-
-      chosenReplica = replicas.find((r) => r.provider === options.provider);
-      if (!chosenReplica || chosenReplica.status !== 'AVAILABLE') {
-        const error = new ReplicaNotAvailableError(
-          `Requested provider replica '${options.provider}' is not available`,
-        );
-        // Expose Retry-After: 30
-        (error as unknown as { headers?: Record<string, string> }).headers = {
-          'Retry-After': '30',
-        };
-        throw error;
-      }
-    } else {
-      const available = replicas.filter((r) => r.status === 'AVAILABLE');
-      if (available.length > 0) {
-        // Preference: for public files with redirect, prefer cloudinary if available
-        if (options?.redirect !== 'never' && file.visibility === 'public') {
-          chosenReplica =
-            available.find((r) => r.provider === 'cloudinary') ??
-            available.find((r) => r.role === 'primary') ??
-            available[0];
-        } else {
-          chosenReplica =
-            available.find((r) => r.role === 'primary') ??
-            available.find((r) => r.provider === file.primaryProvider) ??
-            available[0];
-        }
-      } else {
-        // Fallback for single-driver mode when file record represents primary
-        chosenReplica = {
-          fileId: file.id,
-          provider: file.primaryProvider,
-          role: 'primary',
-          status: 'AVAILABLE',
-          providerKey: file.storageKey,
-          providerMeta: {},
-          url: null,
-          etag: file.sha256,
-          attempts: 0,
-          lastError: null,
-          syncedAt: null,
-          createdAt: file.createdAt,
-          updatedAt: file.updatedAt,
-        };
-      }
-    }
-
-    if (!chosenReplica) {
-      throw new StorageUnavailableError(
-        `No available storage replica found for file '${fileId}'`,
-      );
-    }
-
-    const driver = this.storageRegistry.get(chosenReplica.provider);
-    const providerRef: ProviderRef = {
-      provider: chosenReplica.provider,
-      key: chosenReplica.providerKey || file.storageKey,
-      meta: chosenReplica.providerMeta,
-    };
-
-    // 7. Redirection vs Streaming check
-    const redirectMode = options?.redirect ?? 'auto';
-    if (redirectMode !== 'never') {
-      let directUrl: string | null = null;
-
+      // For public files where Cloudinary is available, prefer Cloudinary transformation URLs
       if (
-        chosenReplica.provider === 'cloudinary' &&
-        file.visibility === 'public'
+        file.visibility === 'public' &&
+        this.storageRegistry.has('cloudinary')
       ) {
-        directUrl = await driver.getDirectUrl(providerRef, {
-          disposition: options?.disposition ?? verifiedSignedDisp,
-        });
-      } else if (
-        chosenReplica.provider === 'seaweedfs' &&
-        this.configService.seaweedfsPublicEndpoint
-      ) {
-        directUrl = await driver.getDirectUrl(providerRef, {
-          disposition: options?.disposition ?? verifiedSignedDisp,
-          expiresInSeconds: 900,
-        });
+        const cDriver = this.storageRegistry.get('cloudinary');
+        const width =
+          variantName === 'thumb'
+            ? 256
+            : variantName === 'medium'
+              ? 1024
+              : undefined;
+        if (width) {
+          const replicas = await this.replicaRepo.listByFile(fileId);
+          const cReplica = replicas.find(
+            (r) => r.provider === 'cloudinary' && r.status === 'AVAILABLE',
+          );
+          const cRef: ProviderRef = {
+            provider: 'cloudinary',
+            key:
+              cReplica?.providerKey ?? (file.legacyPublicId || file.storageKey),
+            meta: cReplica?.providerMeta,
+          };
+          const directUrl = await cDriver.getDirectUrl(cRef, {
+            disposition: options?.disposition ?? verifiedSignedDisp,
+            transform: {
+              width,
+              height: width,
+              format: 'webp',
+            },
+          });
+          if (directUrl) {
+            this.recordReadSuccess('cloudinary');
+            return {
+              kind: 'redirect',
+              statusCode: 302,
+              url: directUrl,
+              headers: {
+                ...baseHeaders,
+                Location: directUrl,
+              },
+              file,
+            };
+          }
+        }
       }
 
-      if (directUrl && (redirectMode === 'always' || redirectMode === 'auto')) {
+      // Check persisted derivative metadata
+      const variantMeta = file.derivatives?.[variantName];
+      if (!variantMeta) {
+        throw new NotFoundError(
+          `Derivative variant '${variantName}' not found for file '${fileId}'`,
+        );
+      }
+
+      const variantEtag = `"${file.id}-${variantName}-${file.version}"`;
+      const variantHeaders: Record<string, string> = {
+        ...baseHeaders,
+        'Content-Type': variantMeta.mimetype,
+        'Content-Length': String(variantMeta.size),
+        ETag: variantEtag,
+      };
+
+      if (options?.ifNoneMatch) {
+        const clientEtags = options.ifNoneMatch
+          .split(',')
+          .map((e) => e.trim().replace(/^W\//, ''));
+        const rawEtag = variantEtag.replace(/^W\//, '');
+        if (clientEtags.includes('*') || clientEtags.includes(rawEtag)) {
+          return {
+            kind: 'not_modified',
+            statusCode: 304,
+            headers: variantHeaders,
+            file,
+          };
+        }
+      }
+
+      if (options?.isHead) {
         return {
-          kind: 'redirect',
-          statusCode: 302,
-          url: directUrl,
-          headers: {
-            ...baseHeaders,
-            Location: directUrl,
-          },
+          kind: 'stream',
+          statusCode: 200,
+          headers: variantHeaders,
+          stream: Readable.from([]),
           file,
+          size: variantMeta.size,
         };
       }
+
+      const primaryDriver = this.storageRegistry.get(file.primaryProvider);
+      const downloadRes = await primaryDriver.downloadStream({
+        provider: file.primaryProvider,
+        key: variantMeta.key,
+      });
+
+      this.recordReadSuccess(file.primaryProvider);
+      return {
+        kind: 'stream',
+        statusCode: 200,
+        headers: variantHeaders,
+        stream: downloadRes.stream,
+        file,
+        size: variantMeta.size,
+      };
     }
 
-    // 8. Determine Content-Disposition
+    // 6. Determine Content-Disposition & Headers
     const effectiveDisp =
       options?.disposition ??
       verifiedSignedDisp ??
@@ -392,14 +416,16 @@ export class FileReadService {
 
     baseHeaders['Content-Disposition'] = dispositionHeader;
 
-    // 9. Byte Range handling
+    // 7. Byte Range parsing
     const totalBytes = Number(file.sizeBytes);
     const rangeHeader = options?.range?.trim();
+    let parsedRange: { start: number; end: number; chunkSize: number } | null =
+      null;
 
     if (rangeHeader && rangeHeader.startsWith('bytes=')) {
       const rangeSpec = rangeHeader.slice('bytes='.length).trim();
 
-      // If multi-range (e.g. contains comma), answer as full 200 per ARCH §7.2
+      // Multi-range: answer full 200 per ARCH §7.2
       if (!rangeSpec.includes(',')) {
         const match = /^(\d*)-(\d*)$/.exec(rangeSpec);
         if (match) {
@@ -448,69 +474,187 @@ export class FileReadService {
 
           end = Math.min(end, totalBytes - 1);
           const chunkSize = end - start + 1;
-
-          const rangeHeaders = {
-            ...baseHeaders,
-            'Content-Range': `bytes ${start}-${end}/${totalBytes}`,
-            'Content-Length': String(chunkSize),
-          };
-
-          if (options?.isHead) {
-            return {
-              kind: 'stream',
-              statusCode: 206,
-              headers: rangeHeaders,
-              stream: Readable.from([]),
-              file,
-              size: chunkSize,
-            };
-          }
-
-          const { stream } = await driver.downloadStream(providerRef, {
-            range: { start, end },
-            signal: options?.signal,
-          });
-
-          return {
-            kind: 'stream',
-            statusCode: 206,
-            headers: rangeHeaders,
-            stream,
-            file,
-            size: chunkSize,
-          };
+          parsedRange = { start, end, chunkSize };
         }
       }
     }
 
-    // Full 200 delivery
-    const fullHeaders = {
-      ...baseHeaders,
-      'Content-Length': String(totalBytes),
-    };
+    // 8. Replica Candidate Selection via ReplicaSelector (ARCH §7.2, BACKEND_TASKS P4-08)
+    if (options?.provider) {
+      // ?provider=x requires files:admin
+      const isAdmin =
+        ctx &&
+        (isEsmaAdminActor(ctx) ||
+          ctx.actor.scopes?.includes('files:admin') ||
+          ctx.actor.scopes?.includes('*'));
 
-    if (options?.isHead) {
-      return {
-        kind: 'stream',
-        statusCode: 200,
-        headers: fullHeaders,
-        stream: Readable.from([]),
-        file,
-        size: totalBytes,
-      };
+      if (!isAdmin) {
+        throw new ForbiddenError(
+          'Specifying provider replica requires admin privileges',
+        );
+      }
     }
 
-    const { stream } = await driver.downloadStream(providerRef, {
-      signal: options?.signal,
+    const replicas = await this.replicaRepo.listByFile(fileId);
+    const candidates = this.selector.selectCandidates(file, replicas, {
+      preferredProvider: options?.provider,
+      redirectAllowed: options?.redirect !== 'never',
     });
 
-    return {
-      kind: 'stream',
-      statusCode: 200,
-      headers: fullHeaders,
-      stream,
-      file,
-      size: totalBytes,
-    };
+    if (candidates.length === 0) {
+      throw new StorageUnavailableError(
+        `No available storage replica found for file '${fileId}'`,
+      );
+    }
+
+    // 9. Mid-Request Fallback Loop (ARCH §7.2)
+    // If opening the chosen replica fails before headers are sent, try the next candidate
+    let lastError: unknown = null;
+    const redirectMode = options?.redirect ?? 'auto';
+
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
+      const driver = this.storageRegistry.get(candidate.provider);
+      const providerRef: ProviderRef = {
+        provider: candidate.provider,
+        key: candidate.providerKey || file.storageKey,
+        meta: candidate.providerMeta,
+      };
+
+      try {
+        // A. Direct URL Redirection check
+        if (redirectMode !== 'never') {
+          let directUrl: string | null = null;
+
+          if (
+            candidate.provider === 'cloudinary' &&
+            file.visibility === 'public'
+          ) {
+            directUrl = await driver.getDirectUrl(providerRef, {
+              disposition: options?.disposition ?? verifiedSignedDisp,
+            });
+          } else if (
+            candidate.provider === 'seaweedfs' &&
+            this.configService.seaweedfsPublicEndpoint
+          ) {
+            directUrl = await driver.getDirectUrl(providerRef, {
+              disposition: options?.disposition ?? verifiedSignedDisp,
+              expiresInSeconds: 900,
+            });
+          }
+
+          if (
+            directUrl &&
+            (redirectMode === 'always' || redirectMode === 'auto')
+          ) {
+            this.recordReadSuccess(candidate.provider);
+            return {
+              kind: 'redirect',
+              statusCode: 302,
+              url: directUrl,
+              headers: {
+                ...baseHeaders,
+                Location: directUrl,
+              },
+              file,
+            };
+          }
+        }
+
+        // B. HEAD request fast path
+        if (options?.isHead) {
+          this.recordReadSuccess(candidate.provider);
+          if (parsedRange) {
+            return {
+              kind: 'stream',
+              statusCode: 206,
+              headers: {
+                ...baseHeaders,
+                'Content-Range': `bytes ${parsedRange.start}-${parsedRange.end}/${totalBytes}`,
+                'Content-Length': String(parsedRange.chunkSize),
+              },
+              stream: Readable.from([]),
+              file,
+              size: parsedRange.chunkSize,
+            };
+          }
+          return {
+            kind: 'stream',
+            statusCode: 200,
+            headers: {
+              ...baseHeaders,
+              'Content-Length': String(totalBytes),
+            },
+            stream: Readable.from([]),
+            file,
+            size: totalBytes,
+          };
+        }
+
+        // C. Byte Range streaming
+        if (parsedRange) {
+          const { stream } = await driver.downloadStream(providerRef, {
+            range: { start: parsedRange.start, end: parsedRange.end },
+            signal: options?.signal,
+          });
+
+          this.recordReadSuccess(candidate.provider);
+          return {
+            kind: 'stream',
+            statusCode: 206,
+            headers: {
+              ...baseHeaders,
+              'Content-Range': `bytes ${parsedRange.start}-${parsedRange.end}/${totalBytes}`,
+              'Content-Length': String(parsedRange.chunkSize),
+            },
+            stream,
+            file,
+            size: parsedRange.chunkSize,
+          };
+        }
+
+        // D. Full 200 delivery streaming
+        const { stream } = await driver.downloadStream(providerRef, {
+          signal: options?.signal,
+        });
+
+        this.recordReadSuccess(candidate.provider);
+        return {
+          kind: 'stream',
+          statusCode: 200,
+          headers: {
+            ...baseHeaders,
+            'Content-Length': String(totalBytes),
+          },
+          stream,
+          file,
+          size: totalBytes,
+        };
+      } catch (err: unknown) {
+        lastError = err;
+        const nextCandidate = candidates[i + 1];
+        if (nextCandidate) {
+          this.metrics.fallbacks++;
+          this.logger.warn(
+            `Primary/candidate replica "${candidate.provider}" failed to open for file ${fileId} (${String(
+              err instanceof Error ? err.message : err,
+            )}). Falling back to candidate "${nextCandidate.provider}"...`,
+          );
+          continue;
+        }
+        break;
+      }
+    }
+
+    throw new StorageUnavailableError(
+      `All storage replicas failed to serve file '${fileId}': ${String(
+        lastError instanceof Error ? lastError.message : lastError,
+      )}`,
+    );
+  }
+
+  private recordReadSuccess(provider: ProviderName): void {
+    this.metrics.readsByProvider[provider] =
+      (this.metrics.readsByProvider[provider] ?? 0) + 1;
   }
 }
