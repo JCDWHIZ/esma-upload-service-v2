@@ -81,6 +81,58 @@ function sanitizeFilename(name: string): string {
   return name.replace(/["\r\n\\]/g, '_');
 }
 
+export function parseRangeHeader(
+  rangeHeader: string | undefined | null,
+  totalBytes: number,
+): { start: number; end: number; contentLength: number } | null {
+  if (!rangeHeader || !rangeHeader.startsWith('bytes=')) {
+    return null;
+  }
+  const rangeSpec = rangeHeader.slice('bytes='.length).trim();
+  if (!rangeSpec || rangeSpec.includes(',')) {
+    return null;
+  }
+  const match = /^(\d*)-(\d*)$/.exec(rangeSpec);
+  if (!match) {
+    return null;
+  }
+  const rawStart = match[1];
+  const rawEnd = match[2];
+  let start: number;
+  let end: number;
+
+  if (rawStart === '' && rawEnd !== '') {
+    const suffix = parseInt(rawEnd, 10);
+    start = Math.max(0, totalBytes - suffix);
+    end = totalBytes - 1;
+  } else if (rawStart !== '' && rawEnd === '') {
+    start = parseInt(rawStart, 10);
+    end = totalBytes - 1;
+  } else if (rawStart !== '' && rawEnd !== '') {
+    start = parseInt(rawStart, 10);
+    end = parseInt(rawEnd, 10);
+  } else {
+    return null;
+  }
+
+  if (
+    start < 0 ||
+    start >= totalBytes ||
+    end < start ||
+    isNaN(start) ||
+    isNaN(end)
+  ) {
+    return null;
+  }
+
+  end = Math.min(end, totalBytes - 1);
+  return {
+    start,
+    end,
+    contentLength: end - start + 1,
+  };
+}
+
 @Injectable()
 export class FileReadService {
   private readonly logger = new Logger(FileReadService.name);

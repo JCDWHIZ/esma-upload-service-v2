@@ -81,6 +81,15 @@ export default defineConfig({
           globals: true,
         },
       },
+      {
+        test: {
+          name: 'security',
+          include: ['tests/security/**/*.spec.ts'],
+          testTimeout: 30000,
+          environment: 'node',
+          globals: true,
+        },
+      },
     ],
   },
 });

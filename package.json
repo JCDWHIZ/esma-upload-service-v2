@@ -58,7 +58,8 @@
     "file:hard-delete:prod": "node dist/src/scripts/hard-delete-cli.js",
     "perf:fixtures": "ts-node tests/perf/generate-fixtures.ts",
     "test:perf": "vitest run --project perf",
-    "test:chaos": "vitest run --project chaos"
+    "test:chaos": "vitest run --project chaos",
+    "test:security": "vitest run --project security"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",
