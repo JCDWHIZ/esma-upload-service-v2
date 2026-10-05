@@ -48,7 +48,7 @@
 # 1. Executive Summary & Business Purpose
 
 ### What is the ESMA Upload Service?
-The **ESMA Upload Service (v2 / Generic Upload Service - GUS)** is the centralized, mission-critical digital asset backbone for the entire educational, administrative, and enterprise ecosystem (serving ESMA SIS, LMS, Communications, and Retail OS). 
+The **ESMA Upload Service (v2 / Generic Upload Service - GUS)** is the centralized, mission-critical digital asset backbone for the entire educational, administrative, and enterprise ecosystem (serving ESMA SIS, LMS, Communications). 
 
 Whenever a teacher uploads an assignment, a student submits homework, an administrator uploads a school logo, or the system generates automated report cards and invoices, **this service is responsible for receiving, validating, virus-scanning, persisting, replicating, and delivering those files.**
 
