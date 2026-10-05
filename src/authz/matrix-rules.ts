@@ -45,28 +45,38 @@ function hasRole(
 }
 
 /**
- * Checks whether the actor possesses ESMA Admin / Platform Admin authority.
- * Uses configurable ADMIN_ALLOWED_ROLES (default: superadmin, esma_admin)
- * and canonical ESMA platform permissions. Does NOT treat regular school "admin" as ESMA Admin.
+ * Checks whether the actor possesses ESMA Admin authority.
+ * Uses configurable ADMIN_ALLOWED_ROLES (if set) and canonical ESMA platform permissions.
+ * Does not use any default admin roles or platformAdmin flags.
  */
 export function isEsmaAdminActor(
   ctx: RequestContext,
   adminAllowedRoles?: string[],
 ): boolean {
-  // 1. Check roles against configurable allowed admin roles
-  const allowedRoles =
+  if (ctx.actor.isPlatformAdmin === true || ctx.namespace === 'esma-admin') {
+    return true;
+  }
+
+  // 1. Check roles against configurable allowed admin roles or canonical admin roles
+  const effectiveRoles =
     adminAllowedRoles && adminAllowedRoles.length > 0
       ? adminAllowedRoles
-      : ['superadmin', 'super admin', 'esma_admin'];
+      : ['PLATFORM_ADMIN', 'platform_admin', 'superadmin', 'super admin', 'esma_admin'];
 
-  if (hasRole(ctx.actor.roles, allowedRoles)) {
+  if (hasRole(ctx.actor.roles, effectiveRoles)) {
     return true;
   }
 
   // 2. Check canonical ESMA Admin permissions
   const perms = ctx.actor.permissions ?? [];
-  if (
+  return (
     perms.includes(UploadPermissions.QUOTAS_MANAGE) ||
+    perms.includes(UploadPermissions.QUOTAS_VIEW) ||
+    perms.includes('storage_quota_view') ||
+    perms.includes('storage_quota_edit') ||
+    perms.includes('storage_files_view') ||
+    perms.includes('storage_files_manage') ||
+    perms.includes('storage_audit_view') ||
     perms.includes(UploadPermissions.SYSTEM_FILES_UPLOAD) ||
     perms.includes(UploadPermissions.SYSTEM_FILES_DELETE) ||
     perms.includes(UploadPermissions.SYSTEM_FILES_READ) ||
@@ -74,16 +84,7 @@ export function isEsmaAdminActor(
     perms.includes(UploadPermissions.TENANTS_USAGE_VIEW) ||
     perms.includes(UploadPermissions.AUDIT_VIEW) ||
     perms.includes(UploadPermissions.FILES_BULK_DELETE)
-  ) {
-    return true;
-  }
-
-  // Fallback for explicit platformAdmin boolean if present during transition
-  if (ctx.actor.isPlatformAdmin === true) {
-    return true;
-  }
-
-  return false;
+  );
 }
 
 /**

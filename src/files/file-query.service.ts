@@ -148,6 +148,8 @@ export class FileQueryService {
   }
 
   private toFileSummary(file: FileRecord, baseUrl: string): FileSummary {
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+    const prefix = cleanBaseUrl.endsWith('/uploads') ? '' : '/uploads';
     return {
       fileId: file.id,
       namespace: file.namespace,
@@ -162,7 +164,7 @@ export class FileQueryService {
       status: file.status,
       primaryProvider: file.primaryProvider,
       tags: file.tags,
-      canonicalUrl: `${baseUrl}/api/v1/files/${file.id}`,
+      canonicalUrl: `${cleanBaseUrl}${prefix}/api/v1/files/${file.id}`,
       createdAt: file.createdAt.toISOString(),
       updatedAt: file.updatedAt.toISOString(),
     };

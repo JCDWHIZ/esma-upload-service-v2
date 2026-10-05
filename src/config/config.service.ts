@@ -269,6 +269,9 @@ export class AppConfigService {
   }
 
   // --- Workers ---
+  get embeddedWorker(): boolean {
+    return this.config.EMBEDDED_WORKER;
+  }
   get workerRoles(): string {
     return this.config.WORKER_ROLES;
   }

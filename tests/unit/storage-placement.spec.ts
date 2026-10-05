@@ -110,7 +110,7 @@ describe('StoragePlacementService Unit & Property Tests (P4-01)', () => {
       });
 
       expect(plan.primaryCandidates).toEqual(['seaweedfs', 'local']);
-      expect(plan.secondaries).toEqual(['cloudinary']);
+      expect(plan.secondaries).toEqual(['cloudinary', 'local']);
     });
 
     it('bypasses primary if primary is unhealthy and falls back to failover', () => {
@@ -176,7 +176,7 @@ describe('StoragePlacementService Unit & Property Tests (P4-01)', () => {
   });
 
   describe('Secondary Replication Target Filtering', () => {
-    it('excludes primary candidates from secondaries', () => {
+    it('excludes primary candidates from secondaries except local', () => {
       const plan = placementService.plan(mockCtx, createBasePolicy(), {
         size: 1024 * 1024,
         visibility: 'public',
@@ -185,7 +185,7 @@ describe('StoragePlacementService Unit & Property Tests (P4-01)', () => {
       expect(plan.primaryCandidates).toContain('seaweedfs');
       expect(plan.primaryCandidates).toContain('local');
       expect(plan.secondaries).not.toContain('seaweedfs');
-      expect(plan.secondaries).not.toContain('local');
+      expect(plan.secondaries).toContain('local');
     });
 
     it('excludes secondaries exceeding maxObjectBytes', () => {
@@ -198,7 +198,7 @@ describe('StoragePlacementService Unit & Property Tests (P4-01)', () => {
       expect(plan.secondaries).not.toContain('cloudinary');
     });
 
-    it('expands auto replicas to configured healthy drivers minus primary candidates', () => {
+    it('expands auto replicas to configured healthy drivers minus primary candidates (except local)', () => {
       const policyAuto = createBasePolicy({
         storage: {
           replicas: 'auto',
@@ -210,7 +210,7 @@ describe('StoragePlacementService Unit & Property Tests (P4-01)', () => {
         visibility: 'public',
       });
 
-      expect(plan.secondaries).toEqual(['cloudinary']);
+      expect(plan.secondaries).toEqual(['local', 'cloudinary']);
     });
   });
 

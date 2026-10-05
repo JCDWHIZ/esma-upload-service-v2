@@ -1,3 +1,9 @@
+try {
+  process.loadEnvFile();
+} catch {
+  // Ignore error if .env file is not present
+}
+
 import * as http from 'node:http';
 import { NestFactory } from '@nestjs/core';
 import { WorkerModule } from './workers/worker.module.js';

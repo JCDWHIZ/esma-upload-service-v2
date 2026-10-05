@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../db/database.service.js';
 import { StorageRegistry } from '../storage/registry.js';
 import { OutboxWriter } from '../events/outbox-writer.js';
+import { UsageRepository } from '../db/repositories/usage.repository.js';
 import { createEnvelope } from '../events/envelope.js';
 import { EVENT_TYPES } from '../events/catalog.js';
 
@@ -27,6 +28,7 @@ export class HardDeleteService {
     private readonly db: DatabaseService,
     private readonly storageRegistry: StorageRegistry,
     private readonly outboxWriter: OutboxWriter,
+    private readonly usageRepo: UsageRepository,
   ) {}
 
   async hardDeleteFile(options: HardDeleteOptions): Promise<HardDeleteResult> {
@@ -48,7 +50,7 @@ export class HardDeleteService {
 
     const file = await database
       .selectFrom('files')
-      .select(['id', 'tenant_id', 'namespace', 'status'])
+      .select(['id', 'tenant_id', 'namespace', 'status', 'size_bytes'])
       .where('id', '=', fileId)
       .executeTakeFirst();
 
@@ -123,6 +125,17 @@ export class HardDeleteService {
       });
 
       await this.outboxWriter.enqueue(trx, envelope);
+
+      // Release quota if the file was not already soft-deleted
+      if (file.status !== 'DELETED' && file.status !== 'DELETING') {
+        await this.usageRepo.release(
+          file.namespace,
+          file.tenant_id,
+          BigInt(file.size_bytes ?? 0),
+          1,
+          trx,
+        );
+      }
 
       // Delete replicas
       await trx

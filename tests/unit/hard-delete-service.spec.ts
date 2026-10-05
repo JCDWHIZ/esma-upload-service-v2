@@ -47,6 +47,7 @@ describe('HardDeleteService [P6-07]', () => {
                   tenant_id: 't-100',
                   namespace: 'esma-tenant',
                   status: 'ACTIVE',
+                  size_bytes: '1024',
                 };
               }
               return undefined;
@@ -84,10 +85,15 @@ describe('HardDeleteService [P6-07]', () => {
       getDb: () => mockDb,
     } as any;
 
+    const mockUsageRepo = {
+      release: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
     hardDeleteService = new HardDeleteService(
       mockDbService,
       mockStorageRegistry,
       mockOutboxWriter,
+      mockUsageRepo,
     );
   });
 

@@ -170,7 +170,7 @@ All requests arrive at `/api/v1/files/*` and are resolved into a `RequestContext
 | `/api/v1/files/*` (User token) | `OidcContextResolver` | `token.organizationId ? "esma-tenant" : "esma-admin"` | `token.organizationId ?? "system"` | `token.branches[0]?.id` (or query filter within user's branch grants) | OIDC Bearer JWT (RS256 via Identity Service JWKS) |
 | `/api/v1/files/*` (API key) | `ApiKeyContextResolver` | bound to credential | bound to credential | optional `x-sub-tenant-id` | API key `gus_<prefix>_<secret>` |
 
-**Rule (F-25, ADR-12):** Credentials strictly bind the caller to their allowed `tenantId` and `subTenantId`. A caller with an Identity token for School A (`organizationId = SCH_A`) cannot view or modify assets belonging to School B. Platform admins (`token.platformAdmin = true`) or SuperAdmins (`access.organization.roles` contains `SUPER ADMIN`) operate at `system` scope.
+**Rule (F-25, ADR-12):** Credentials strictly bind the caller to their allowed `tenantId` and `subTenantId`. A caller with an Identity token for School A (`organizationId = SCH_A`) cannot view or modify assets belonging to School B. Callers are elevated to `system` scope only when they possess a role listed in `ADMIN_ALLOWED_ROLES` **or** one of the canonical admin permissions in `access.global.permissions` (e.g. `STORAGE_QUOTA_VIEW`, `TENANTS_USAGE_VIEW`) — evaluated by `isEsmaAdminActor()` in `src/authz/matrix-rules.ts`. There is no `platformAdmin` boolean shortcut.
 
 ### 3.3 Storage key scheme
 
@@ -236,7 +236,7 @@ export interface UploadPolicy {
 | Delete file | Allow if `file.tenant_id` equals token school | Allow only if `file.sub_tenant_id` equals token branch | 401 |
 | Read file (`tenant` visibility) | Same school | Same school | Signed URL only |
 
-`esma-admin`: every route requires a valid JWT whose role is in `ADMIN_ALLOWED_ROLES` (default `superadmin`).
+`esma-admin`: every route requires a valid JWT whose `access.global.roles` contains a role in `ADMIN_ALLOWED_ROLES` (default `PLATFORM_ADMIN`) **or** whose `access.global.permissions` contains an explicit admin capability such as `STORAGE_QUOTA_VIEW`, `STORAGE_QUOTA_EDIT`, `STORAGE_FILES_VIEW`, `STORAGE_FILES_MANAGE`, `STORAGE_AUDIT_VIEW`, `TENANTS_USAGE_VIEW`, etc.
 
 Generic: scopes `files:write`, `files:read`, `files:delete`, `files:admin`. Tenant access is the intersection of the key's tenant list and the requested tenant.
 
@@ -933,7 +933,7 @@ INSTANCE_COUNT_HINT=1
 JWT_SECRET=                         # generate: openssl rand -base64 48 (never commit)
 JWT_ALGORITHMS=HS256
 JWT_CLOCK_TOLERANCE_SECONDS=5
-ADMIN_ALLOWED_ROLES=superadmin
+ADMIN_ALLOWED_ROLES=PLATFORM_ADMIN
 ADMIN_AUTH_MODE=enforce             # off | report | enforce (report only for one release, P1-09)
 SIGNED_URL_SECRET=                  # different from JWT_SECRET
 SIGNED_URL_MAX_TTL_SECONDS=900

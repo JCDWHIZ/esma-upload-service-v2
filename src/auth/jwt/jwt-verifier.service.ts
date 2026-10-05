@@ -308,6 +308,13 @@ export class JwtVerifierService {
     const rolesArray =
       (payload['roles'] as string[] | undefined) ?? (role ? [role] : []);
 
+    const accessClaims = payload['access'] as TokenAccessClaims | undefined;
+    const globalPerms = accessClaims?.global?.permissions;
+    const permissions =
+      Array.isArray(globalPerms) && globalPerms.length > 0
+        ? globalPerms
+        : (payload['permissions'] as string[] | undefined);
+
     return {
       sub,
       userId,
@@ -318,9 +325,10 @@ export class JwtVerifierService {
         Array<{ id: string } | string> | undefined,
       role,
       roles: rolesArray,
-      permissions: payload['permissions'] as string[] | undefined,
+      groups: payload['groups'] as string[] | undefined,
+      permissions,
       email: payload['email'] as string | undefined,
-      access: payload['access'] as TokenAccessClaims | undefined,
+      access: accessClaims,
       platformAdmin: payload['platformAdmin'] as boolean | undefined,
       ...payload,
     };

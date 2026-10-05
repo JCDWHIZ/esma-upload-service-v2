@@ -124,7 +124,7 @@ Each has a default the task list assumes. Answer these early. Q1 and Q2 block th
 
 | # | Question | Assumed default |
 | :--- | :--- | :--- |
-| Q1 | What are the SuperAdmin JWT claims (issuer, role claim name and value, same secret as school tokens)? | Same HS256 secret, claim `role` equal to `superadmin`. Configurable through `ADMIN_ALLOWED_ROLES`. |
+| Q1 | What are the SuperAdmin JWT claims (issuer, role claim name and value, same secret as school tokens)? | RS256-signed via JWKS. Admin role lives in `access.global.roles` (e.g. `PLATFORM_ADMIN`). Admin capabilities live in `access.global.permissions`. No `platformAdmin` boolean. Configurable through `ADMIN_ALLOWED_ROLES=PLATFORM_ADMIN`. |
 | Q2 | Does the SuperAdmin dashboard already send `Authorization: Bearer` to `/api/admin/upload/*`? | Unknown. Roll out with `ADMIN_AUTH_MODE=report` for one release, then enforce. |
 | Q3 | Do other ESMA services store Cloudinary `secure_url` strings in their own databases? | Yes. Existing Cloudinary assets stay where they are, so those URLs keep working. |
 | Q4 | Roughly how many assets exist in Cloudinary today? | Under 100k. The backfill script is resumable regardless. |

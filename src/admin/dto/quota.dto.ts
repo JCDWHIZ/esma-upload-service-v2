@@ -11,19 +11,22 @@ export type QuotaPatchBody = z.infer<typeof quotaPatchBodySchema>;
 
 export class QuotaPatchBodyDto {
   @ApiPropertyOptional({
-    description: 'Target namespace (defaults to "default")',
+    description: 'Target namespace (defaults to "generic")',
+    example: 'generic',
   })
   namespace?: string;
 
   @ApiPropertyOptional({
     description: 'Maximum allowable storage bytes (null for unlimited)',
     nullable: true,
+    example: 104857600,
   })
   maxBytes?: number | null;
 
   @ApiPropertyOptional({
     description: 'Maximum allowable file count (null for unlimited)',
     nullable: true,
+    example: 1000,
   })
   maxFiles?: number | null;
 }

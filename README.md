@@ -249,17 +249,45 @@ Returns the current multi-replica health, antivirus verdict, derivative URLs (th
 
 ### 4. Delete File (`DELETE /api/v1/files/:fileId`)
 
-Soft-deletes the file, creates a tombstone, and dispatches asynchronous deletion events across all storage backends.
+Soft-deletes the file, marks status as `DELETED`, and dispatches asynchronous `file.deleted` outbox events. The physical blobs remain accessible until the retention purge window expires.
 
-### Legacy Facades (Backwards Compatibility)
+### 5. Permanently Purge / Hard Delete (`DELETE /api/v1/files/:fileId/permanent`)
 
-The service exposes drop-in compatibility facades for older Express-era consumers:
-- `POST /api/tenant/upload/image`
-- `POST /api/tenant/upload/document`
-- `GET  /api/tenant/upload/list`
-- `POST /api/admin/upload`
+Immediately and irreversibly purges the physical file across all storage drivers (`seaweedfs`, `cloudinary`, `local`), deletes database records (`files`, `file_replicas`), enqueues a `file.erased` outbox event, and immediately releases tenant storage quota.
 
-Legacy responses map internal records to the legacy contract format (`{ success: true, file: { public_id, secure_url } }`).
+### 6. Force Cross-Storage Replication (`POST /api/v1/files/:fileId/replicate`)
+
+Enqueues asynchronous replication jobs to ensure the file is synchronized to secondary providers (e.g. `cloudinary` or `seaweedfs`).
+```json
+{
+  "targetProviders": ["cloudinary", "seaweedfs"]
+}
+```
+
+### 7. Search, Filter & List Files (`GET /api/v1/files`)
+
+Search and paginate files with rich filtering options:
+- `status`: `ACTIVE`, `DELETED`, `DELETING`, `PENDING_UPLOAD`, `QUARANTINED`
+- `folder`: subfolder path
+- `visibility`: `public`, `internal`, `tenant`, `restricted`
+- `tag`: tag filter
+- `search`: filename search
+- `mimetype`: MIME filter
+- `cursor` & `limit`: Keyset pagination
+
+### 8. Admin Storage Quota Governance
+
+Platform admins can query, update, and reconcile storage quotas:
+- `GET /api/v1/admin/tenants/:tenantId/quota?namespace=generic`
+- `PATCH /api/v1/admin/tenants/:tenantId/quota`:
+  ```json
+  {
+    "namespace": "generic",
+    "maxBytes": 107374182400,
+    "maxFiles": 5000
+  }
+  ```
+- `POST /api/v1/admin/tenants/:tenantId/reconcile?namespace=generic`
 
 ---
 
@@ -267,14 +295,20 @@ Legacy responses map internal records to the legacy contract format (`{ success:
 
 The service includes production-grade CLI tools for day-to-day operations and incident response:
 
+### Hard Delete CLI
+```bash
+# Permanently purge a file and all its replicas across storage backends
+pnpm run file:hard-delete -- --fileId "01J9A8B7C6D5E4F3G2H1J0K9L8" --reason "GDPR Right to be Forgotten"
+```
+
 ### API Key Management
 
 ```bash
 # Create an API key scoped to a specific tenant
 pnpm run apikey:create -- --name "accounting-service" --tenant "school-42" --role "tenant-service"
 
-# Create a SuperAdmin key with universal cross-tenant access
-pnpm run apikey:create -- --name "ops-backoffice" --any-tenant --role "admin"
+# Create a Platform Admin key with universal cross-tenant access
+pnpm run apikey:create -- --name "ops-backoffice" --any-tenant --role "PLATFORM_ADMIN"
 
 # List all active keys (masked secrets)
 pnpm run apikey:list
@@ -288,50 +322,55 @@ pnpm run apikey:revoke -- --prefix "eus2_7f9a"
 ```bash
 # Inspect dead-letter messages and failure reasons
 pnpm run dlq:stats
+pnpm run dlq:list -- --status OPEN
 
 # Redrive dead-letter messages back to the active queue
 pnpm run dlq:redrive -- --max 100 --topic "files.replicate"
+
+# Discard a poisoned event
+pnpm run dlq:discard -- --id "dlq_uuid"
 ```
 
-### Storage Reconciler & Migration
+### Storage Reconciler & Promotion
 
 ```bash
 # Audit storage replicas and detect desynchronized states
-pnpm run storage:reconcile -- --fix
+pnpm run reconcile:orphans -- --dryRun true
 
 # Promote a secondary storage driver to primary with zero downtime
-pnpm run storage:promote -- --target seaweedfs --verify-replicas
+pnpm run storage:promote -- --fileId "01J9A8B7C6..." --provider seaweedfs
 ```
 
 ---
 
 ## 6. Testing Strategy & Test Tiers
 
-The project adheres to a strict multi-tier testing pyramid:
+The project adheres to a strict multi-tier testing pyramid using both **Vitest** (for multi-tier unit, integration, and security suites) and **Jest** (for guard and end-to-end specifications):
 
 | Tier | Script | Focus |
 | :--- | :--- | :--- |
 | **Typecheck** | `pnpm run typecheck` | Strict TypeScript validation (`tsc --noEmit`) |
 | **Unit** | `pnpm run test:unit` | Pure logic, auth matrix, hashers, parsers, and config schemas |
 | **Integration** | `pnpm run test:integration` | Real PostgreSQL, Redis, and storage driver interactions |
-| **Contracts** | `pnpm run test:driver`<br>`pnpm run test:broker` | Behavioral verification of `IStorageDriver` and `IMessageBroker` |
+| **Contracts** | `pnpm run test:contract` | Behavioral verification of `IStorageDriver` and `IMessageBroker` |
 | **Security** | `pnpm run test:security` | 100% route auth audits, abuse payloads, path traversal, leak tests |
 | **Performance**| `pnpm run test:perf` | Automated throughput benchmarks, staging overhead profiling, k6 suites |
 | **Chaos** | `pnpm run test:chaos` | Process crash recovery, broker disconnects, lock leaks, desync drills |
+| **Jest Guards**| `npx jest test/auth-guard.spec.ts` | Guard, token claims, and permission resolution tests |
 | **Full Suite** | `pnpm run test:all` | Executes unit, contract, integration, and security suites |
 
 ```bash
+# Run typechecking
+pnpm run typecheck
+
 # Execute unit tests
 pnpm run test:unit
 
+# Execute Jest guard and platform admin tests
+npx jest test/auth-guard.spec.ts test/global-permissions-and-platform-admin.spec.ts
+
 # Execute security verification suite (31 attack vector tests)
 pnpm run test:security
-
-# Execute chaos resilience tests (7 chaos scenarios)
-pnpm run test:chaos
-
-# Execute automated performance profiling
-pnpm run test:perf
 ```
 
 ---

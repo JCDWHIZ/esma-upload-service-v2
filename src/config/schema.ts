@@ -64,7 +64,7 @@ export const rawConfigSchema = z.object({
   JWT_ALGORITHMS: z.string().default('HS256'),
   JWT_KEYS: z.string().optional(),
   JWT_CLOCK_TOLERANCE_SECONDS: intCoerce(5).default(5),
-  ADMIN_ALLOWED_ROLES: z.string().default('superadmin'),
+  ADMIN_ALLOWED_ROLES: z.string().default('PLATFORM_ADMIN'),
   ADMIN_AUTH_MODE: z.enum(['off', 'report', 'enforce']).default('enforce'),
   SIGNED_URL_SECRET: z
     .string()
@@ -142,6 +142,7 @@ export const rawConfigSchema = z.object({
   PULSAR_NAMESPACE: z.string().default('uploads'),
 
   // --- Workers ---
+  EMBEDDED_WORKER: booleanCoerce.default(false),
   WORKER_ROLES: z.string().default('relay,replication,processing,sweeper,dlq'),
   WORKER_HEALTH_PORT: intCoerce(8081).default(8081),
   REPLICATION_MAX_ATTEMPTS: intCoerce(6).default(6),

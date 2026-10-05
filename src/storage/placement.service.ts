@@ -105,21 +105,30 @@ export class StoragePlacementService {
     }
 
     // ── 3. Determine Secondary Candidates ────────────────────────────────────
+    const isSecondaryAllowed = (d: ProviderName): boolean => {
+      if (d === 'local') {
+        // 'local' is the only provider accepted to act as both primary failover and replica.
+        // It is only excluded if it is the primary candidate itself.
+        return primaryCandidates[0] !== 'local';
+      }
+      return !primaryCandidates.includes(d);
+    };
+
     let initialSecondaries: ProviderName[] = [];
     if (policy.storage?.replicas) {
       if (policy.storage.replicas === 'auto') {
         const all: ProviderName[] = ['local', 'cloudinary', 'seaweedfs'];
         initialSecondaries = all.filter(
-          (d) => this.registry.has(d) && !primaryCandidates.includes(d),
+          (d) => this.registry.has(d) && isSecondaryAllowed(d),
         );
       } else {
         initialSecondaries = policy.storage.replicas.filter(
-          (d) => !primaryCandidates.includes(d),
+          (d) => isSecondaryAllowed(d),
         );
       }
     } else {
       initialSecondaries = topology.secondaries.filter(
-        (d) => !primaryCandidates.includes(d),
+        (d) => isSecondaryAllowed(d),
       );
     }
 

@@ -34,8 +34,8 @@ export class AuthorizationService {
   ): AuthzDecision {
     const adminRolesConfig = this.configService.get().ADMIN_ALLOWED_ROLES;
     const adminAllowedRoles = adminRolesConfig
-      ? adminRolesConfig.split(',').map((r) => r.trim())
-      : ['superadmin', 'super admin', 'admin'];
+      ? adminRolesConfig.split(',').map((r) => r.trim()).filter((r) => r.length > 0)
+      : [];
 
     return authorize(ctx, action, resource, adminAllowedRoles);
   }
@@ -46,8 +46,8 @@ export class AuthorizationService {
   canAccessTenant(context: RequestContext, targetTenantId: string): boolean {
     const adminRolesConfig = this.configService.get().ADMIN_ALLOWED_ROLES;
     const adminAllowedRoles = adminRolesConfig
-      ? adminRolesConfig.split(',').map((r) => r.trim())
-      : ['superadmin', 'super admin', 'admin'];
+      ? adminRolesConfig.split(',').map((r) => r.trim()).filter((r) => r.length > 0)
+      : [];
 
     if (isEsmaAdminActor(context, adminAllowedRoles)) {
       return true;

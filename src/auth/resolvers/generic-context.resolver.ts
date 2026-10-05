@@ -14,6 +14,11 @@ import {
 import { assertSafeSegment } from '../../core/storage-key.service.js';
 import { getCorrelationId } from '../../observability/correlation-context.js';
 import { resolveOrGenerateCorrelationId } from '../../observability/correlation-id.interceptor.js';
+import {
+  normalizePermissions,
+  UploadPermissions,
+  type UploadPermission,
+} from '../../authz/permissions.js';
 import { ApiClient } from '../../core/types.js';
 
 @Injectable()
@@ -45,22 +50,74 @@ export class GenericContextResolver implements ContextResolver {
           );
         }
 
+        const token = rawToken as Record<string, any>;
+
         // Handle JWT token authentication in generic context
         const namespace =
           typeof req.headers?.['x-namespace'] === 'string' &&
           req.headers['x-namespace'].trim().length > 0
             ? req.headers['x-namespace'].trim()
-            : ((rawToken.namespace as string | undefined) ?? 'generic');
+            : ((token.namespace as string | undefined) ?? 'generic');
         assertSafeSegment(namespace, 'namespace');
 
         const tokenTenantId: string | undefined =
-          typeof rawToken.organizationId === 'string'
-            ? rawToken.organizationId
-            : typeof rawToken.schoolId === 'string'
-              ? rawToken.schoolId
-              : typeof rawToken.tenantId === 'string'
-                ? rawToken.tenantId
+          typeof token.organizationId === 'string'
+            ? token.organizationId
+            : typeof token.schoolId === 'string'
+              ? token.schoolId
+              : typeof token.tenantId === 'string'
+                ? token.tenantId
                 : undefined;
+
+        const rawTokenRoles = [
+          ...(Array.isArray(token.roles)
+            ? token.roles
+            : token.role
+              ? [token.role]
+              : []),
+          ...(Array.isArray(token.groups)
+            ? (token.groups as string[])
+            : []),
+          ...(Array.isArray(token.access?.global?.roles)
+            ? token.access.global.roles
+            : []),
+          ...(Array.isArray(token.access?.organization?.roles)
+            ? token.access.organization.roles
+            : []),
+        ].filter(
+          (r): r is string => typeof r === 'string' && r.trim().length > 0,
+        );
+
+        const globalPerms = Array.isArray(token.access?.global?.permissions)
+          ? token.access.global.permissions
+          : [];
+        const orgPerms = Array.isArray(
+          token.access?.organization?.permissions,
+        )
+          ? token.access.organization.permissions
+          : [];
+        const directPerms = Array.isArray(token.permissions)
+          ? token.permissions
+          : [];
+        const rawPerms =
+          globalPerms.length > 0 ? globalPerms : [...orgPerms, ...directPerms];
+        const permissions = normalizePermissions(rawPerms);
+
+        const isPlatformAdmin = permissions.some((p) =>
+          [
+            UploadPermissions.QUOTAS_MANAGE,
+            UploadPermissions.QUOTAS_VIEW,
+            'storage_quota_view',
+            'storage_quota_edit',
+            UploadPermissions.SYSTEM_FILES_UPLOAD,
+            UploadPermissions.SYSTEM_FILES_DELETE,
+            UploadPermissions.SYSTEM_FILES_READ,
+            UploadPermissions.SYSTEM_FILES_LIST,
+            UploadPermissions.TENANTS_USAGE_VIEW,
+            UploadPermissions.AUDIT_VIEW,
+            UploadPermissions.FILES_BULK_DELETE,
+          ].includes(p as UploadPermission),
+        );
 
         const rawHeaderTenant = req.headers?.['x-tenant-id'];
         let tenantId: string;
@@ -70,7 +127,7 @@ export class GenericContextResolver implements ContextResolver {
           rawHeaderTenant.trim().length > 0
         ) {
           const headerTenant = rawHeaderTenant.trim();
-          if (tokenTenantId && !rawToken.platformAdmin) {
+          if (tokenTenantId && !isPlatformAdmin) {
             if (headerTenant !== tokenTenantId) {
               throw new TenantMismatchError(
                 `Header x-tenant-id (${headerTenant}) does not match token tenant ID (${tokenTenantId})`,
@@ -81,7 +138,7 @@ export class GenericContextResolver implements ContextResolver {
           tenantId = headerTenant;
         } else if (tokenTenantId) {
           tenantId = tokenTenantId;
-        } else if (rawToken.platformAdmin) {
+        } else if (isPlatformAdmin) {
           tenantId = 'system';
         } else {
           throw new ValidationError(
@@ -131,18 +188,12 @@ export class GenericContextResolver implements ContextResolver {
                   ? rawToken.userId
                   : 'anonymous',
             type: 'user',
-            roles: Array.isArray(rawToken.roles)
-              ? rawToken.roles
-              : rawToken.role
-                ? [rawToken.role]
-                : [],
-            permissions: Array.isArray(rawToken.permissions)
-              ? rawToken.permissions
-              : [],
+            roles: rawTokenRoles,
+            permissions,
             scopes: Array.isArray(rawToken.scopes)
               ? (rawToken.scopes as string[])
               : [],
-            isPlatformAdmin: Boolean(rawToken.platformAdmin),
+            isPlatformAdmin,
           },
           correlationId,
           ipAddress,

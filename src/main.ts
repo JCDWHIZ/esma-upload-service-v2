@@ -1,3 +1,9 @@
+try {
+  process.loadEnvFile();
+} catch {
+  // .env file not found or already loaded into process.env
+}
+
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
@@ -46,7 +52,8 @@ async function bootstrap() {
           pathOnly === '/metrics' ||
           pathOnly.startsWith('/metrics?') ||
           pathOnly === '/docs' ||
-          pathOnly.startsWith('/docs/'))
+          pathOnly.startsWith('/docs/') ||
+          pathOnly.startsWith('/api'))
       ) {
         req.url = `/${basePath}${req.url}`;
       }

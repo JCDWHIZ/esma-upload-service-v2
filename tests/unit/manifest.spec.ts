@@ -107,7 +107,7 @@ describe('Manifest Mapper and Schema Verification (ARCH §9.2)', () => {
     expect(manifest.message).toBe('File uploaded successfully.');
     expect(manifest.data.fileId).toBe(mockFile.id);
     expect(manifest.data.canonicalUrl).toBe(
-      `https://api.upload.example.com/api/v1/files/${mockFile.id}`,
+      `https://api.upload.example.com/uploads/api/v1/files/${mockFile.id}`,
     );
     expect(manifest.data.publicUrl).toBeNull();
     expect(manifest.data.size).toBe(1048576);

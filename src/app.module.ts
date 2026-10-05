@@ -9,6 +9,7 @@ import { AuthorizationModule } from './authz/authorization.module.js';
 import { IngestModule } from './ingest/ingest.module.js';
 import { FilesModule } from './files/files.module.js';
 import { AdminModule } from './admin/admin.module.js';
+import { WorkerModule } from './workers/worker.module.js';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AdminModule } from './admin/admin.module.js';
     IngestModule,
     FilesModule,
     AdminModule,
+    ...(process.env.EMBEDDED_WORKER === 'true' ? [WorkerModule] : []),
   ],
 })
 export class AppModule {}

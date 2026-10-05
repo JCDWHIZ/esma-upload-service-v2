@@ -33,20 +33,20 @@ services:
       retries: 5
     restart: unless-stopped
 
-  clamav:
-    image: clamav/clamav:stable
-    container_name: gus-clamav-dev
-    ports:
-      - "3310:3310"
-    volumes:
-      - gus_clamav_data:/var/lib/clamav
-    healthcheck:
-      test: ["CMD", "clamdscan", "--ping", "10"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: unless-stopped
+  # clamav:
+  #   image: clamav/clamav:stable
+  #   container_name: gus-clamav-dev
+  #   ports:
+  #     - "3310:3310"
+  #   volumes:
+  #     - gus_clamav_data:/var/lib/clamav
+  #   healthcheck:
+  #     test: ["CMD", "clamdscan", "--ping", "10"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
+  #   restart: unless-stopped
 
 volumes:
   gus_redis_data:

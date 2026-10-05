@@ -37,6 +37,7 @@ import { UploadService, type UploadOptions } from './upload.service.js';
 import { FileReadService, type FileReadAuth } from './file-read.service.js';
 import { SignedUrlService } from './signed-url.service.js';
 import { DeleteService } from './delete.service.js';
+import { HardDeleteService } from './hard-delete.service.js';
 import { FileQueryService } from './file-query.service.js';
 import { PresignedUploadService } from './presigned-upload.service.js';
 import { IdempotencyService } from './idempotency.service.js';
@@ -56,9 +57,12 @@ import {
   SignedUrlResponseDto,
   BulkDeleteRequestDto,
   BulkDeleteResponseDto,
+  HardDeleteResponseDto,
   FileManifestResponseDto,
   ProblemDetailsDto,
   ManifestDataDto,
+  TriggerReplicationDto,
+  triggerReplicationSchema,
   fileIdParamSchema,
   fileListQuerySchema,
   fileReadQuerySchema,
@@ -130,6 +134,8 @@ function getRequestContext(
   FileManifestResponseDto,
   FileListQueryDto,
   FileReadQueryDto,
+  TriggerReplicationDto,
+  HardDeleteResponseDto,
 )
 @Controller('api/v1/files')
 @UseGuards(AuthGuard, ContextGuard, AuthorizationGuard)
@@ -143,6 +149,7 @@ export class FilesController {
     private readonly fileReadService: FileReadService,
     private readonly signedUrlService: SignedUrlService,
     private readonly deleteService: DeleteService,
+    private readonly hardDeleteService: HardDeleteService,
     private readonly fileQueryService: FileQueryService,
     private readonly presignedUploadService: PresignedUploadService,
     private readonly fileRepo: FileRepository,
@@ -233,10 +240,10 @@ export class FilesController {
       subTenantId?: string;
       atomic?: boolean;
     },
-    @Headers('idempotency-key') idempotencyKey?: string,
     @Req() req?: AuthenticatedHttpRequest,
     @Res() res?: Response,
   ) {
+    const idempotencyKey = req?.headers['idempotency-key'] as string | undefined;
     const ctx = getRequestContext(req, 'req-upload');
     const policy = this.policyRegistry.get(ctx.namespace);
 
@@ -529,6 +536,7 @@ export class FilesController {
       subTenantId?: string;
       mimetype?: string;
       tag?: string;
+      status?: 'ACTIVE' | 'DELETED' | 'DELETING' | 'PENDING_UPLOAD' | 'QUARANTINED';
       createdFrom?: string;
       createdTo?: string;
       cursor?: string;
@@ -545,13 +553,13 @@ export class FilesController {
           subTenantId: query.subTenantId,
           mimetype: query.mimetype,
           tag: query.tag,
+          status: query.status,
         },
         query.cursor,
         query.limit ?? 20,
       )
       .then((res) => ({
         files: res.items,
-        items: res.items,
         total: res.total,
         count: res.items.length,
         nextCursor: res.nextCursor,
@@ -840,6 +848,70 @@ export class FilesController {
     await this.deleteService.delete(ctx, param.fileId);
   }
 
+  @Delete(':fileId/permanent')
+  @HttpCode(HttpStatus.OK)
+  @RequireAction('delete')
+  @ApiOperation({
+    summary: 'Permanently purge a file and all replicas (hard delete)',
+    description:
+      'Immediately purges physical storage objects across all drivers, deletes DB records, enqueues file.erased audit event, and frees quota.',
+  })
+  @ApiParam({ name: 'fileId', description: 'UUIDv7 identifier of the file' })
+  @ApiResponse({
+    status: 200,
+    description: 'File and replicas permanently erased',
+    type: HardDeleteResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'File not found or cross-tenant',
+    type: ProblemDetailsDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden access to file',
+    type: ProblemDetailsDto,
+  })
+  async hardDeleteFile(
+    @Param(new ZodValidationPipe(fileIdParamSchema)) param: { fileId: string },
+    @Req() req?: AuthenticatedHttpRequest,
+  ): Promise<HardDeleteResponseDto> {
+    const ctx = getRequestContext(req, 'req-hard-delete');
+    const file = await this.fileRepo.findById(param.fileId);
+    if (!file) {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    if (!this.authzService.canAccessTenant(ctx, file.tenantId)) {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    const decision = this.authzService.authorize(ctx, 'delete', {
+      namespace: file.namespace,
+      tenantId: file.tenantId,
+      subTenantId: file.subTenantId,
+      uploadedBy: file.uploadedBy,
+      visibility: file.visibility,
+    });
+    if (!decision.allowed) {
+      throw new ForbiddenError(decision.reason);
+    }
+
+    const result = await this.hardDeleteService.hardDeleteFile({
+      fileId: param.fileId,
+      operator: ctx.actor.id,
+      reason: 'Permanent delete requested via API',
+    });
+
+    return {
+      success: true,
+      message: 'File and all replicas permanently deleted',
+      fileId: result.fileId,
+      replicasDeleted: result.replicasDeleted,
+      dbRecordsDeleted: result.dbRecordsDeleted,
+    };
+  }
+
   // ── 8. Bulk Delete ──────────────────────────────────────────────────────────
 
   @Post('bulk-delete')
@@ -893,6 +965,7 @@ export class FilesController {
       'Enqueues file.replicate outbox events for specified target providers or missing secondary replicas.',
   })
   @ApiParam({ name: 'fileId', description: 'UUIDv7 identifier of the file' })
+  @ApiBody({ type: TriggerReplicationDto, required: false })
   @ApiResponse({
     status: 202,
     description: 'Replication jobs enqueued successfully',
@@ -904,7 +977,8 @@ export class FilesController {
   })
   async triggerReplication(
     @Param(new ZodValidationPipe(fileIdParamSchema)) param: { fileId: string },
-    @Body() body?: { targetProvider?: string; targetProviders?: string[] },
+    @Body(new ZodValidationPipe(triggerReplicationSchema))
+    body?: TriggerReplicationDto,
     @Req() req?: AuthenticatedHttpRequest,
   ) {
     const file = await this.fileRepo.findById(param.fileId);
