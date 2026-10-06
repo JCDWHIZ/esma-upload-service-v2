@@ -13,7 +13,6 @@ import { resolveOrGenerateCorrelationId } from '../../observability/correlation-
 import {
   normalizePermissions,
   UploadPermissions,
-  type UploadPermission,
 } from '../../authz/permissions.js';
 
 @Injectable()
@@ -44,7 +43,9 @@ export class EsmaAdminContextResolver implements ContextResolver {
           ? [token.role.trim()]
           : [];
       const groupRoles = Array.isArray(token.groups)
-        ? token.groups
+        ? (token.groups as unknown[]).filter(
+            (r): r is string => typeof r === 'string',
+          )
         : [];
       const roles = Array.from(
         new Set([...orgRoles, ...globalRoles, ...directRoles, ...groupRoles]),
@@ -60,9 +61,7 @@ export class EsmaAdminContextResolver implements ContextResolver {
         ? token.permissions
         : [];
       const rawPerms =
-        globalPerms.length > 0
-          ? globalPerms
-          : [...orgPerms, ...directPerms];
+        globalPerms.length > 0 ? globalPerms : [...orgPerms, ...directPerms];
       const permissions = normalizePermissions(rawPerms);
 
       // Actor ID: deterministic fallback
@@ -102,7 +101,7 @@ export class EsmaAdminContextResolver implements ContextResolver {
           UploadPermissions.TENANTS_USAGE_VIEW,
           UploadPermissions.AUDIT_VIEW,
           UploadPermissions.FILES_BULK_DELETE,
-        ].includes(p as UploadPermission),
+        ].includes(p),
       );
 
       const context: RequestContext = {

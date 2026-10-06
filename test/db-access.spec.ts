@@ -156,7 +156,7 @@ describe('PostgreSQL Access Layer & Migration Runner (P1-04)', () => {
         DATABASE_URL: testCtx.connectionString,
       });
       const service = new DatabaseService(config);
-      service.onModuleInit();
+      await service.onModuleInit();
 
       const pingResult = await service.ping();
       expect(pingResult).toBe(true);
@@ -172,7 +172,7 @@ describe('PostgreSQL Access Layer & Migration Runner (P1-04)', () => {
           'postgres://invalid_user:invalid_pass@127.0.0.1:54329/nonexistent',
       });
       const service = new DatabaseService(config);
-      service.onModuleInit();
+      await service.onModuleInit();
 
       const pingResult = await service.ping();
       expect(pingResult).toBe(false);

@@ -325,7 +325,7 @@ export class JwtVerifierService {
         Array<{ id: string } | string> | undefined,
       role,
       roles: rolesArray,
-      groups: payload['groups'] as string[] | undefined,
+      groups: payload['groups'],
       permissions,
       email: payload['email'] as string | undefined,
       access: accessClaims,

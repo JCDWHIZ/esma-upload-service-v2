@@ -12,7 +12,10 @@ import type { RequestContext } from '../../src/core/request-context.js';
 import { OutboxWriter } from '../../src/events/outbox-writer.js';
 import type { OutboxRepository } from '../../src/db/repositories/outbox.repository.js';
 import { EVENT_TYPES } from '../../src/events/catalog.js';
-import { createEnvelope, type EventEnvelope } from '../../src/events/envelope.js';
+import {
+  createEnvelope,
+  type EventEnvelope,
+} from '../../src/events/envelope.js';
 
 describe('Chaos & Resilience Test Suite (P6-08 / ARCH §12)', () => {
   const mockCtx: RequestContext = {

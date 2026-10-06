@@ -88,7 +88,10 @@ export class AuthorizationGuard implements CanActivate {
     // 3. Admin allowed roles from configuration
     const adminRolesConfig = this.configService.get().ADMIN_ALLOWED_ROLES;
     const adminAllowedRoles = adminRolesConfig
-      ? adminRolesConfig.split(',').map((r) => r.trim()).filter((r) => r.length > 0)
+      ? adminRolesConfig
+          .split(',')
+          .map((r) => r.trim())
+          .filter((r) => r.length > 0)
       : [];
 
     // 4. Anti-Enumeration Security Check (ARCH §4.2, F-42):

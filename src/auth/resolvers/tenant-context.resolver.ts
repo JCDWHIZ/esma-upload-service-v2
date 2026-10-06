@@ -17,7 +17,6 @@ import { resolveOrGenerateCorrelationId } from '../../observability/correlation-
 import {
   UploadPermissions,
   normalizePermissions,
-  type UploadPermission,
 } from '../../authz/permissions.js';
 
 @Injectable()
@@ -100,7 +99,9 @@ export class EsmaTenantContextResolver implements ContextResolver {
           ? [token.role.trim()]
           : [];
       const groupRoles = Array.isArray(token.groups)
-        ? token.groups
+        ? (token.groups as unknown[]).filter(
+            (r): r is string => typeof r === 'string',
+          )
         : [];
       const roles = Array.from(
         new Set(
@@ -124,9 +125,7 @@ export class EsmaTenantContextResolver implements ContextResolver {
         ? token.permissions
         : [];
       const rawPerms =
-        globalPerms.length > 0
-          ? globalPerms
-          : [...orgPerms, ...directPerms];
+        globalPerms.length > 0 ? globalPerms : [...orgPerms, ...directPerms];
       const permissions = normalizePermissions(rawPerms);
 
       const isSchoolAdmin =
@@ -146,7 +145,7 @@ export class EsmaTenantContextResolver implements ContextResolver {
           UploadPermissions.TENANTS_USAGE_VIEW,
           UploadPermissions.AUDIT_VIEW,
           UploadPermissions.FILES_BULK_DELETE,
-        ].includes(p as UploadPermission),
+        ].includes(p),
       );
 
       // Attributes parsing

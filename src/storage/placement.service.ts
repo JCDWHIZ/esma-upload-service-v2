@@ -122,13 +122,13 @@ export class StoragePlacementService {
           (d) => this.registry.has(d) && isSecondaryAllowed(d),
         );
       } else {
-        initialSecondaries = policy.storage.replicas.filter(
-          (d) => isSecondaryAllowed(d),
+        initialSecondaries = policy.storage.replicas.filter((d) =>
+          isSecondaryAllowed(d),
         );
       }
     } else {
-      initialSecondaries = topology.secondaries.filter(
-        (d) => isSecondaryAllowed(d),
+      initialSecondaries = topology.secondaries.filter((d) =>
+        isSecondaryAllowed(d),
       );
     }
 

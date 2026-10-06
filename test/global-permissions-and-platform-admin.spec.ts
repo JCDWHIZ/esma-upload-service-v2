@@ -17,7 +17,9 @@ describe('Global Permissions and Platform Admin without token.platformAdmin clai
     });
 
     it('normalizes upload.quoatas.manage and quotas edit variants', () => {
-      expect(normalizePermission('upload.quoatas.manage')).toBe('quotas_manage');
+      expect(normalizePermission('upload.quoatas.manage')).toBe(
+        'quotas_manage',
+      );
       expect(normalizePermission('upload.quotas.manage')).toBe('quotas_manage');
       expect(normalizePermission('upload.quoatas.edit')).toBe('quotas_manage');
       expect(normalizePermission('upload.quotas.edit')).toBe('quotas_manage');
@@ -29,7 +31,9 @@ describe('Global Permissions and Platform Admin without token.platformAdmin clai
       expect(normalizePermission('upload.files.view')).toBe('files_read');
       expect(normalizePermission('upload.files.list')).toBe('files_list');
       expect(normalizePermission('upload.files.delete')).toBe('files_delete');
-      expect(normalizePermission('upload.branches.manage')).toBe('branches_manage');
+      expect(normalizePermission('upload.branches.manage')).toBe(
+        'branches_manage',
+      );
     });
 
     it('includes canonical permission along with alias in normalizePermissions', () => {

@@ -28,10 +28,7 @@ import { ProblemJsonErrorFilter } from '../common/filters/problem-json-error.fil
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { UsageRepository } from '../db/repositories/usage.repository.js';
 import { TenantUsageReconciler } from './tenant-usage-reconciler.service.js';
-import {
-  quotaPatchBodySchema,
-  QuotaPatchBodyDto,
-} from './dto/quota.dto.js';
+import { quotaPatchBodySchema, QuotaPatchBodyDto } from './dto/quota.dto.js';
 
 @ApiTags('admin-quota')
 @ApiBearerAuth()

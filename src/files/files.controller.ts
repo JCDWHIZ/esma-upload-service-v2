@@ -243,7 +243,8 @@ export class FilesController {
     @Req() req?: AuthenticatedHttpRequest,
     @Res() res?: Response,
   ) {
-    const idempotencyKey = req?.headers['idempotency-key'] as string | undefined;
+    const idempotencyKey = req?.headers['idempotency-key'] as
+      string | undefined;
     const ctx = getRequestContext(req, 'req-upload');
     const policy = this.policyRegistry.get(ctx.namespace);
 
@@ -536,7 +537,8 @@ export class FilesController {
       subTenantId?: string;
       mimetype?: string;
       tag?: string;
-      status?: 'ACTIVE' | 'DELETED' | 'DELETING' | 'PENDING_UPLOAD' | 'QUARANTINED';
+      status?:
+        'ACTIVE' | 'DELETED' | 'DELETING' | 'PENDING_UPLOAD' | 'QUARANTINED';
       createdFrom?: string;
       createdTo?: string;
       cursor?: string;
@@ -993,12 +995,12 @@ export class FilesController {
 
     let targets: Provider[] = [];
     if (body?.targetProvider) {
-      targets.push(body.targetProvider as Provider);
+      targets.push(body.targetProvider);
     } else if (
       Array.isArray(body?.targetProviders) &&
       body.targetProviders.length > 0
     ) {
-      targets = body.targetProviders as Provider[];
+      targets = body.targetProviders;
     } else {
       const replicas = await this.replicaRepo.listByFile(param.fileId);
       const missing = replicas.filter((r) => r.status !== 'AVAILABLE');

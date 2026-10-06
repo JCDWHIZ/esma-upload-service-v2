@@ -15,7 +15,6 @@ import {
 import { AuthenticatedHttpRequest } from '../context.js';
 import {
   UploadPermissions,
-  UploadPermission,
   normalizePermissions,
 } from '../../authz/permissions.js';
 
@@ -138,7 +137,8 @@ export class AuthGuard implements CanActivate {
           configuredAdminRoles.length > 0 &&
           (rolesList?.some((r) =>
             configuredAdminRoles.includes(r.trim().toLowerCase()),
-          ) ?? false);
+          ) ??
+            false);
 
         const hasAdminRole =
           checkRoles(claims.roles) ||
@@ -166,7 +166,7 @@ export class AuthGuard implements CanActivate {
             UploadPermissions.TENANTS_USAGE_VIEW,
             UploadPermissions.AUDIT_VIEW,
             UploadPermissions.FILES_BULK_DELETE,
-          ].includes(p as UploadPermission),
+          ].includes(p),
         );
 
         if (!hasAdminRole && !hasAdminPermission) {

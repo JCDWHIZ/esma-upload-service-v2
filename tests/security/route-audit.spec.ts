@@ -37,8 +37,9 @@ describe('Automated Route Security Audit (P6-09 / F-41 Mechanical Prevention)', 
     const controllerName = controllerClass.name;
     const classGuards =
       (Reflect.getMetadata('__guards__', controllerClass) as unknown[]) || [];
-    const classIsPublic =
-      Boolean(reflector.get<boolean>(IS_PUBLIC_KEY, controllerClass));
+    const classIsPublic = Boolean(
+      reflector.get<boolean>(IS_PUBLIC_KEY, controllerClass),
+    );
     const classHasAuthGuard = classGuards.some(
       (g) =>
         g === AuthGuard || (typeof g === 'function' && g.name === 'AuthGuard'),
@@ -52,11 +53,12 @@ describe('Automated Route Security Audit (P6-09 / F-41 Mechanical Prevention)', 
     const routes: RouteAuditEntry[] = [];
 
     for (const methodName of methodNames) {
-      const method = prototype[methodName] as Function;
+      const method = prototype[methodName] as (...args: unknown[]) => unknown;
       const methodGuards =
         (Reflect.getMetadata('__guards__', method) as unknown[]) || [];
-      const methodIsPublic =
-        Boolean(reflector.get<boolean>(IS_PUBLIC_KEY, method));
+      const methodIsPublic = Boolean(
+        reflector.get<boolean>(IS_PUBLIC_KEY, method),
+      );
       const isPublic = Boolean(classIsPublic || methodIsPublic);
 
       const methodHasAuthGuard = methodGuards.some(

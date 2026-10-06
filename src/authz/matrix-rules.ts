@@ -61,7 +61,13 @@ export function isEsmaAdminActor(
   const effectiveRoles =
     adminAllowedRoles && adminAllowedRoles.length > 0
       ? adminAllowedRoles
-      : ['PLATFORM_ADMIN', 'platform_admin', 'superadmin', 'super admin', 'esma_admin'];
+      : [
+          'PLATFORM_ADMIN',
+          'platform_admin',
+          'superadmin',
+          'super admin',
+          'esma_admin',
+        ];
 
   if (hasRole(ctx.actor.roles, effectiveRoles)) {
     return true;

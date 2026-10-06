@@ -3,6 +3,7 @@ import {
   AuthenticatedHttpRequest,
   ContextResolver,
   RequestContext,
+  VerifiedTokenClaims,
   freezeContext,
   parseAttributes,
 } from '../context.js';
@@ -17,7 +18,6 @@ import { resolveOrGenerateCorrelationId } from '../../observability/correlation-
 import {
   normalizePermissions,
   UploadPermissions,
-  type UploadPermission,
 } from '../../authz/permissions.js';
 import { ApiClient } from '../../core/types.js';
 
@@ -50,7 +50,7 @@ export class GenericContextResolver implements ContextResolver {
           );
         }
 
-        const token = rawToken as Record<string, any>;
+        const token = rawToken as VerifiedTokenClaims;
 
         // Handle JWT token authentication in generic context
         const namespace =
@@ -72,11 +72,13 @@ export class GenericContextResolver implements ContextResolver {
         const rawTokenRoles = [
           ...(Array.isArray(token.roles)
             ? token.roles
-            : token.role
+            : typeof token.role === 'string'
               ? [token.role]
               : []),
           ...(Array.isArray(token.groups)
-            ? (token.groups as string[])
+            ? (token.groups as unknown[]).filter(
+                (g): g is string => typeof g === 'string',
+              )
             : []),
           ...(Array.isArray(token.access?.global?.roles)
             ? token.access.global.roles
@@ -91,9 +93,7 @@ export class GenericContextResolver implements ContextResolver {
         const globalPerms = Array.isArray(token.access?.global?.permissions)
           ? token.access.global.permissions
           : [];
-        const orgPerms = Array.isArray(
-          token.access?.organization?.permissions,
-        )
+        const orgPerms = Array.isArray(token.access?.organization?.permissions)
           ? token.access.organization.permissions
           : [];
         const directPerms = Array.isArray(token.permissions)
@@ -116,7 +116,7 @@ export class GenericContextResolver implements ContextResolver {
             UploadPermissions.TENANTS_USAGE_VIEW,
             UploadPermissions.AUDIT_VIEW,
             UploadPermissions.FILES_BULK_DELETE,
-          ].includes(p as UploadPermission),
+          ].includes(p),
         );
 
         const rawHeaderTenant = req.headers?.['x-tenant-id'];
@@ -156,10 +156,10 @@ export class GenericContextResolver implements ContextResolver {
           subTenantId = rawSubTenant.trim();
           assertSafeSegment(subTenantId, 'subTenantId');
         } else if (
-          typeof rawToken.branchId === 'string' &&
-          rawToken.branchId.trim().length > 0
+          typeof token.branchId === 'string' &&
+          token.branchId.trim().length > 0
         ) {
-          subTenantId = rawToken.branchId.trim();
+          subTenantId = token.branchId.trim();
         }
 
         const rawAttributes =
@@ -182,16 +182,18 @@ export class GenericContextResolver implements ContextResolver {
           subTenantId,
           actor: {
             id:
-              typeof rawToken.sub === 'string'
-                ? rawToken.sub
-                : typeof rawToken.userId === 'string'
-                  ? rawToken.userId
+              typeof token.sub === 'string'
+                ? token.sub
+                : typeof token.userId === 'string'
+                  ? token.userId
                   : 'anonymous',
             type: 'user',
             roles: rawTokenRoles,
             permissions,
-            scopes: Array.isArray(rawToken.scopes)
-              ? (rawToken.scopes as string[])
+            scopes: Array.isArray(token.scopes)
+              ? (token.scopes as unknown[]).filter(
+                  (s): s is string => typeof s === 'string',
+                )
               : [],
             isPlatformAdmin,
           },

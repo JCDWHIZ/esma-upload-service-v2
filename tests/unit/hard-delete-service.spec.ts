@@ -4,6 +4,7 @@ import { HardDeleteService } from '../../src/files/hard-delete.service.js';
 import type { DatabaseService } from '../../src/db/database.service.js';
 import type { StorageRegistry } from '../../src/storage/registry.js';
 import type { OutboxWriter } from '../../src/events/outbox-writer.js';
+import type { UsageRepository } from '../../src/db/repositories/usage.repository.js';
 import { NotFoundException } from '@nestjs/common';
 
 describe('HardDeleteService [P6-07]', () => {
@@ -87,7 +88,7 @@ describe('HardDeleteService [P6-07]', () => {
 
     const mockUsageRepo = {
       release: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as UsageRepository;
 
     hardDeleteService = new HardDeleteService(
       mockDbService,
