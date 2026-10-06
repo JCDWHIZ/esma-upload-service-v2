@@ -9,7 +9,17 @@ const SUSPICIOUS_PATTERNS = [
   { name: 'AWS/S3 Access Secret', regex: /(?:aws_secret_access_key|SEAWEEDFS_SECRET_KEY)\s*=\s*['"][a-zA-Z0-9/+=]{30,}['"]/i },
 ];
 
-const IGNORED_DIRS = new Set(['node_modules', 'dist', '.git', 'coverage']);
+const IGNORED_DIRS = new Set([
+  'node_modules',
+  'dist',
+  'build',
+  '.git',
+  '.pnpm-store',
+  'coverage',
+  '.nyc_output',
+  '.idea',
+  '.vscode',
+]);
 const IGNORED_FILES = new Set(['.env.example', 'package-lock.json', 'pnpm-lock.yaml']);
 
 export function scanFile(filePath: string): Array<{ line: number; rule: string; snippet: string }> {
@@ -43,7 +53,7 @@ export function scanDirectory(dir: string): Array<{ file: string; line: number; 
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        if (!IGNORED_DIRS.has(entry.name)) {
+        if (!IGNORED_DIRS.has(entry.name) && !entry.name.startsWith('.pnpm')) {
           walk(path.join(currentDir, entry.name));
         }
       } else if (entry.isFile()) {
