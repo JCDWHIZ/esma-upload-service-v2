@@ -8,9 +8,14 @@ WORKDIR /app
 # Enable corepack so pnpm is available without a separate install step.
 RUN corepack enable
 
+# Tune network resilience for pnpm fetches inside Docker / QEMU
+ENV NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MAINTIMEOUT=60000 \
+    NPM_CONFIG_NETWORK_CONCURRENCY=8
+
 # Install all dependencies (including devDependencies for the build).
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* ./
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
 
 # Copy source and compile TypeScript.
 COPY tsconfig*.json ./
@@ -30,9 +35,14 @@ ENV NODE_ENV=production
 # Enable corepack for pnpm at runtime.
 RUN corepack enable
 
+# Tune network resilience for runtime install
+ENV NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MAINTIMEOUT=60000 \
+    NPM_CONFIG_NETWORK_CONCURRENCY=8
+
 # Install production-only dependencies.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* ./
-RUN pnpm install --frozen-lockfile --prod && pnpm store prune
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile --prod && pnpm store prune
 
 # Copy compiled output from the build stage.
 COPY --from=build /app/dist ./dist
