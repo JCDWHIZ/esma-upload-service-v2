@@ -2,6 +2,7 @@
 # Stage 1: Build
 # ─────────────────────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS build
+ARG TARGETARCH
 
 WORKDIR /app
 
@@ -15,7 +16,7 @@ ENV NPM_CONFIG_FETCH_RETRIES=5 \
 
 # Install all dependencies (including devDependencies for the build).
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* ./
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-${TARGETARCH},target=/root/.local/share/pnpm/store,sharing=locked pnpm install --frozen-lockfile
 
 # Copy source and compile TypeScript.
 COPY tsconfig*.json ./
@@ -27,6 +28,7 @@ RUN pnpm run build
 # Stage 2: Runtime
 # ─────────────────────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS runtime
+ARG TARGETARCH
 
 WORKDIR /app
 
@@ -42,7 +44,7 @@ ENV NPM_CONFIG_FETCH_RETRIES=5 \
 
 # Install production-only dependencies.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* ./
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile --prod && pnpm store prune
+RUN --mount=type=cache,id=pnpm-${TARGETARCH},target=/root/.local/share/pnpm/store,sharing=locked pnpm install --frozen-lockfile --prod
 
 # Copy compiled output from the build stage.
 COPY --from=build /app/dist ./dist
