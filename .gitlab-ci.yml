@@ -88,7 +88,7 @@ security:
     - typecheck
   script:
     - pnpm run secret:scan
-    - pnpm audit --omit=dev --audit-level=high
+    - pnpm audit --prod --audit-level=high
 
 # ── 4. Multi-Arch Build Stage ───────────────────────────────────────────────
 build-multiarch:
