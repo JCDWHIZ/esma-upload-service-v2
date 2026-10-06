@@ -13,6 +13,10 @@ import {
   CredentialType,
 } from '../decorators/accept.decorator.js';
 import { AuthenticatedHttpRequest } from '../context.js';
+import {
+  UploadPermissions,
+  normalizePermissions,
+} from '../../authz/permissions.js';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -122,20 +126,50 @@ export class AuthGuard implements CanActivate {
         !accepted.includes('school-jwt') &&
         !accepted.includes('bearer-jwt')
       ) {
-        const adminAllowedRoles = this.configService
-          .get()
-          .ADMIN_ALLOWED_ROLES.split(',')
-          .map((r) => r.trim().toLowerCase());
+        const configuredAdminRoles = (
+          this.configService.get().ADMIN_ALLOWED_ROLES ?? ''
+        )
+          .split(',')
+          .map((r) => r.trim().toLowerCase())
+          .filter((r) => r.length > 0);
+
+        const checkRoles = (rolesList?: string[]) =>
+          configuredAdminRoles.length > 0 &&
+          (rolesList?.some((r) =>
+            configuredAdminRoles.includes(r.trim().toLowerCase()),
+          ) ??
+            false);
 
         const hasAdminRole =
-          claims.roles?.some((r) =>
-            adminAllowedRoles.includes(r.toLowerCase()),
-          ) ||
-          claims.access?.organization?.roles?.some((r) =>
-            adminAllowedRoles.includes(r.toLowerCase()),
-          );
+          checkRoles(claims.roles) ||
+          checkRoles(claims.access?.organization?.roles) ||
+          checkRoles(claims.access?.global?.roles) ||
+          checkRoles(Array.isArray(claims.groups) ? claims.groups : undefined);
 
-        if (!claims.platformAdmin && !hasAdminRole) {
+        const rawPerms = Array.isArray(claims.access?.global?.permissions)
+          ? claims.access.global.permissions
+          : Array.isArray(claims.permissions)
+            ? claims.permissions
+            : [];
+        const normalizedPerms = normalizePermissions(rawPerms);
+
+        const hasAdminPermission = normalizedPerms.some((p) =>
+          [
+            UploadPermissions.QUOTAS_MANAGE,
+            UploadPermissions.QUOTAS_VIEW,
+            'storage_quota_view',
+            'storage_quota_edit',
+            UploadPermissions.SYSTEM_FILES_UPLOAD,
+            UploadPermissions.SYSTEM_FILES_DELETE,
+            UploadPermissions.SYSTEM_FILES_READ,
+            UploadPermissions.SYSTEM_FILES_LIST,
+            UploadPermissions.TENANTS_USAGE_VIEW,
+            UploadPermissions.AUDIT_VIEW,
+            UploadPermissions.FILES_BULK_DELETE,
+          ].includes(p),
+        );
+
+        if (!hasAdminRole && !hasAdminPermission) {
           throw new ForbiddenError(
             'Administrator privileges required for this endpoint',
           );

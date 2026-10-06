@@ -1,11 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { StorageUnavailableError, QuotaExceededError } from '../../src/core/errors/app-error.js';
+import {
+  StorageUnavailableError,
+  QuotaExceededError,
+  AppError,
+} from '../../src/core/errors/app-error.js';
 import { DatabaseQuotaGate } from '../../src/files/quota-gate.service.js';
+import type { UsageRepository } from '../../src/db/repositories/usage.repository.js';
 import type { RequestContext } from '../../src/core/request-context.js';
 import { OutboxWriter } from '../../src/events/outbox-writer.js';
+import type { OutboxRepository } from '../../src/db/repositories/outbox.repository.js';
 import { EVENT_TYPES } from '../../src/events/catalog.js';
+import {
+  createEnvelope,
+  type EventEnvelope,
+} from '../../src/events/envelope.js';
 
 describe('Chaos & Resilience Test Suite (P6-08 / ARCH §12)', () => {
   const mockCtx: RequestContext = {
@@ -30,7 +40,8 @@ describe('Chaos & Resilience Test Suite (P6-08 / ARCH §12)', () => {
         workerId: 'worker-dead-pid-999',
       };
 
-      const isLeaseExpired = Date.now() - replicaState.lockedAt.getTime() > leaseDurationMs;
+      const isLeaseExpired =
+        Date.now() - replicaState.lockedAt.getTime() > leaseDurationMs;
       expect(isLeaseExpired).toBe(true);
 
       // Sweeper reclaims lease
@@ -49,19 +60,20 @@ describe('Chaos & Resilience Test Suite (P6-08 / ARCH §12)', () => {
       const mockOutboxRepo = {
         enqueue: vi.fn().mockResolvedValue({ id: 'outbox-buffered-1' }),
       };
-      const outboxWriter = new OutboxWriter(mockOutboxRepo as any);
+      const outboxWriter = new OutboxWriter(
+        mockOutboxRepo as unknown as OutboxRepository,
+      );
 
       // During a broker outage, outbox writer enqueues to postgres table in same DB transaction
-      const envelope = {
+      const envelope: EventEnvelope<unknown> = createEnvelope({
         eventId: '0198f3a2-7c1e-7b40-9d2a-5e6f1a8c0001',
         eventType: EVENT_TYPES.FILE_UPLOADED,
         timestamp: new Date().toISOString(),
         partitionKey: 'file-chaos-123',
-        traceContext: {},
         payload: { fileId: 'file-chaos-123', bytes: 1048576 },
-      };
+      });
 
-      await outboxWriter.enqueue(null, envelope as any);
+      await outboxWriter.enqueue(null, envelope);
 
       expect(mockOutboxRepo.enqueue).toHaveBeenCalledTimes(1);
       // Zero messages lost; outbox relay picks them up upon broker restoration
@@ -71,19 +83,26 @@ describe('Chaos & Resilience Test Suite (P6-08 / ARCH §12)', () => {
   describe('Scenario 3: Primary Storage Outage & Availability Tracking', () => {
     it('throws StorageUnavailableError and rejects upload fast without data loss', async () => {
       const failingDriver = {
-        write: vi.fn().mockRejectedValue(new Error('SeaweedFS Master connection refused (503)')),
+        write: vi
+          .fn()
+          .mockRejectedValue(
+            new Error('SeaweedFS Master connection refused (503)'),
+          ),
         name: 'seaweedfs',
       };
 
-      let caughtError: any;
+      let caughtError: AppError | undefined;
       try {
         await failingDriver.write();
-      } catch (err: any) {
-        caughtError = new StorageUnavailableError(`Provider ${failingDriver.name} is offline: ${err.message}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        caughtError = new StorageUnavailableError(
+          `Provider ${failingDriver.name} is offline: ${msg}`,
+        );
       }
 
       expect(caughtError).toBeInstanceOf(StorageUnavailableError);
-      expect(caughtError.message).toContain('seaweedfs is offline');
+      expect(caughtError?.message).toContain('seaweedfs is offline');
     });
   });
 
@@ -94,10 +113,14 @@ describe('Chaos & Resilience Test Suite (P6-08 / ARCH §12)', () => {
         release: vi.fn().mockResolvedValue(undefined),
       };
 
-      const quotaGate = new DatabaseQuotaGate(mockUsageRepo as any);
+      const quotaGate = new DatabaseQuotaGate(
+        mockUsageRepo as unknown as UsageRepository,
+      );
 
       // Redis is completely bypassed/unreachable; Postgres provides atomic tryReserve
-      await expect(quotaGate.reserve(mockCtx, 1024 * 1024)).resolves.not.toThrow();
+      await expect(
+        quotaGate.reserve(mockCtx, 1024 * 1024),
+      ).resolves.not.toThrow();
       expect(mockUsageRepo.tryReserve).toHaveBeenCalledWith(
         'esma-tenant',
         'tenant-chaos',
@@ -111,23 +134,31 @@ describe('Chaos & Resilience Test Suite (P6-08 / ARCH §12)', () => {
         tryReserve: vi.fn().mockResolvedValue(false),
       };
 
-      const quotaGate = new DatabaseQuotaGate(mockUsageRepo as any);
-      await expect(quotaGate.reserve(mockCtx, 1024 * 1024)).rejects.toThrow(QuotaExceededError);
+      const quotaGate = new DatabaseQuotaGate(
+        mockUsageRepo as unknown as UsageRepository,
+      );
+      await expect(quotaGate.reserve(mockCtx, 1024 * 1024)).rejects.toThrow(
+        QuotaExceededError,
+      );
     });
   });
 
   describe('Scenario 5: Database Transient Disconnect & Recovery', () => {
     it('handles transient connection blip and recovers upon pool ping', async () => {
       let isDbUp = false;
-      const pingDb = async () => {
+      const pingDb = () => {
         if (!isDbUp) {
-          throw new Error('Connection terminated unexpectedly');
+          return Promise.reject(
+            new Error('Connection terminated unexpectedly'),
+          );
         }
-        return { status: 'healthy' };
+        return Promise.resolve({ status: 'healthy' });
       };
 
       // Initial fail
-      await expect(pingDb()).rejects.toThrow('Connection terminated unexpectedly');
+      await expect(pingDb()).rejects.toThrow(
+        'Connection terminated unexpectedly',
+      );
 
       // Reconnected
       isDbUp = true;
@@ -138,7 +169,9 @@ describe('Chaos & Resilience Test Suite (P6-08 / ARCH §12)', () => {
 
   describe('Scenario 6: Staging Disk Full (ENOSPC) & Staging Directory Cleanup', () => {
     it('ensures temporary files are cleaned up even when write throws ENOSPC', () => {
-      const testTmpFile = path.resolve('tests/perf/fixtures/chaos-tmp-file.tmp');
+      const testTmpFile = path.resolve(
+        'tests/perf/fixtures/chaos-tmp-file.tmp',
+      );
       fs.writeFileSync(testTmpFile, Buffer.alloc(1024));
       expect(fs.existsSync(testTmpFile)).toBe(true);
 

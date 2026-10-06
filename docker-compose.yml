@@ -87,7 +87,7 @@ services:
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "node", "-e", "const http = require('http'); const port = process.env.PORT || 7030; http.get('http://localhost:' + port + '/health/live', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      test: ["CMD", "node", "-e", "const http = require('http'); const port = process.env.PORT || 7030; http.get('http://localhost:' + port + '/uploads/health/live', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 10s
       timeout: 5s
       start_period: 10s

@@ -7,7 +7,7 @@ rule_files:
 
 scrape_configs:
   - job_name: "esma-upload-api"
-    metrics_path: "/metrics"
+    metrics_path: "/uploads/metrics"
     static_configs:
       - targets: ["api:7030"]
 

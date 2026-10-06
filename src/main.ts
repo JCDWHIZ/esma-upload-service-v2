@@ -1,3 +1,9 @@
+try {
+  process.loadEnvFile();
+} catch {
+  // .env file not found or already loaded into process.env
+}
+
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
@@ -29,10 +35,36 @@ async function bootstrap() {
   const logger = app.get(StructuredLogger);
   app.useLogger(logger);
 
+  // ── Base Path / Global Prefix ───────────────────────────────────────────────
+  const rawBasePath = config.basePath ?? '/uploads';
+  const basePath = rawBasePath.replace(/^\/+|\/+$/g, '');
+  if (basePath) {
+    app.setGlobalPrefix(basePath);
+    logger.log(`Application base path configured at /${basePath}`);
+
+    // Internal compatibility rewrite: allow probes/clients hitting /health/*,
+    // /metrics, or /docs directly to resolve to /${basePath}/* seamlessly.
+    app.use((req: Request, _res: Response, next: NextFunction) => {
+      const pathOnly = (req.url || '/').split('?')[0];
+      if (
+        !pathOnly.startsWith(`/${basePath}`) &&
+        (pathOnly.startsWith('/health') ||
+          pathOnly === '/metrics' ||
+          pathOnly.startsWith('/metrics?') ||
+          pathOnly === '/docs' ||
+          pathOnly.startsWith('/docs/') ||
+          pathOnly.startsWith('/api'))
+      ) {
+        req.url = `/${basePath}${req.url}`;
+      }
+      next();
+    });
+  }
+
   // ── Helmet ──────────────────────────────────────────────────────────────────
-  // Apply strict defaults everywhere.  The Swagger UI (/docs) needs inline
+  // Apply strict defaults everywhere. The Swagger UI needs inline
   // scripts and CDN assets from cdn.jsdelivr.net, so we relax CSP only for
-  // that path via a second, route-scoped middleware.
+  // that path via a route-scoped middleware.
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -48,21 +80,24 @@ async function bootstrap() {
     }),
   );
 
-  // Relax CSP only on the Swagger docs route so the rest of the app keeps the
-  // strict policy.
-  app.use('/docs', (req: Request, res: Response, next: NextFunction) => {
-    helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
-          styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
-          imgSrc: ["'self'", 'data:', 'cdn.jsdelivr.net'],
-          objectSrc: ["'none'"],
+  // Relax CSP only on the Swagger docs route (both prefixed and un-prefixed)
+  const docsUrlPattern = basePath ? `/${basePath}/docs` : '/docs';
+  app.use(
+    [docsUrlPattern, '/docs'],
+    (req: Request, res: Response, next: NextFunction) => {
+      helmet({
+        contentSecurityPolicy: {
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
+            styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
+            imgSrc: ["'self'", 'data:', 'cdn.jsdelivr.net'],
+            objectSrc: ["'none'"],
+          },
         },
-      },
-    })(req, res, next);
-  });
+      })(req, res, next);
+    },
+  );
 
   // ── Trust proxy ─────────────────────────────────────────────────────────────
   app.set('trust proxy', config.trustProxy);
@@ -125,8 +160,9 @@ async function bootstrap() {
       .addApiKey({ type: 'apiKey', name: 'X-API-Key', in: 'header' }, 'api-key')
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup('docs', app, document);
-    logger.log('Swagger UI available at /docs');
+    const swaggerPath = basePath ? `${basePath}/docs` : 'docs';
+    SwaggerModule.setup(swaggerPath, app, document);
+    logger.log(`Swagger UI available at /${swaggerPath}`);
   }
 
   // ── Start HTTP server ─────────────────────────────────────────────────────

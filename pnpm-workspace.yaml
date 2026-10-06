@@ -1,0 +1,13 @@
+overrides:
+  multer: ^2.4.0
+
+onlyBuiltDependencies:
+  - '@confluentinc/kafka-javascript'
+  - '@parcel/watcher'
+  - '@scarf/scarf'
+  - '@swc/core'
+  - cpu-features
+  - protobufjs
+  - sharp
+  - ssh2
+  - unrs-resolver

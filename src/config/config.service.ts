@@ -76,6 +76,9 @@ export class AppConfigService {
   get appBaseUrl(): string {
     return this.config.APP_BASE_URL;
   }
+  get basePath(): string {
+    return this.config.BASE_PATH;
+  }
   get logLevel(): string {
     return this.config.LOG_LEVEL;
   }
@@ -266,6 +269,9 @@ export class AppConfigService {
   }
 
   // --- Workers ---
+  get embeddedWorker(): boolean {
+    return this.config.EMBEDDED_WORKER;
+  }
   get workerRoles(): string {
     return this.config.WORKER_ROLES;
   }
@@ -400,13 +406,5 @@ export class AppConfigService {
   }
   get defaultFailedAuthLimitPerMin(): number {
     return this.config.DEFAULT_FAILED_AUTH_LIMIT_PER_MIN;
-  }
-
-  // --- Rollout Flags ---
-  get legacyEngine(): 'legacy' | 'core' {
-    return this.config.LEGACY_ENGINE;
-  }
-  get legacyDefaultVisibility(): 'public' | 'private' {
-    return this.config.LEGACY_DEFAULT_VISIBILITY;
   }
 }

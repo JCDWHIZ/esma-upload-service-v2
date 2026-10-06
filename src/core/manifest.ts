@@ -50,7 +50,8 @@ export function toManifest(
   options?: ToManifestOptions,
 ): UploadManifestResponse {
   const cleanBaseUrl = appBaseUrl.replace(/\/+$/, '');
-  const canonicalUrl = `${cleanBaseUrl}/api/v1/files/${file.id}`;
+  const prefix = cleanBaseUrl.endsWith('/uploads') ? '' : '/uploads';
+  const canonicalUrl = `${cleanBaseUrl}${prefix}/api/v1/files/${file.id}`;
 
   // publicUrl is set only for public files once a CDN replica is AVAILABLE (ARCH §9.2)
   let publicUrl: string | null = null;

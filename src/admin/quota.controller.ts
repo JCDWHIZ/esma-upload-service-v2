@@ -16,6 +16,8 @@ import {
   ApiBearerAuth,
   ApiSecurity,
   ApiParam,
+  ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/guards/auth.guard.js';
 import { ContextGuard } from '../auth/guards/context.guard.js';
@@ -26,10 +28,7 @@ import { ProblemJsonErrorFilter } from '../common/filters/problem-json-error.fil
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { UsageRepository } from '../db/repositories/usage.repository.js';
 import { TenantUsageReconciler } from './tenant-usage-reconciler.service.js';
-import {
-  quotaPatchBodySchema,
-  type QuotaPatchBodyDto,
-} from './dto/quota.dto.js';
+import { quotaPatchBodySchema, QuotaPatchBodyDto } from './dto/quota.dto.js';
 
 @ApiTags('admin-quota')
 @ApiBearerAuth()
@@ -48,10 +47,16 @@ export class QuotaController {
   @Get('quota')
   @ApiOperation({ summary: 'Get quota and current storage usage for a tenant' })
   @ApiParam({ name: 'tenantId', description: 'Tenant UUID or identifier' })
+  @ApiQuery({
+    name: 'namespace',
+    required: false,
+    description: 'Target namespace (defaults to "generic")',
+    example: 'generic',
+  })
   @ApiResponse({ status: 200, description: 'Tenant storage usage and quota' })
   async getQuota(
     @Param('tenantId') tenantId: string,
-    @Query('namespace') namespace = 'default',
+    @Query('namespace') namespace = 'generic',
   ) {
     const usage = await this.usageRepo.get(namespace, tenantId);
     return {
@@ -74,12 +79,13 @@ export class QuotaController {
   @Patch('quota')
   @ApiOperation({ summary: 'Update storage quota for a tenant' })
   @ApiParam({ name: 'tenantId', description: 'Tenant UUID or identifier' })
+  @ApiBody({ type: QuotaPatchBodyDto, required: true })
   @ApiResponse({ status: 200, description: 'Updated tenant quota record' })
   async setQuota(
     @Param('tenantId') tenantId: string,
     @Body(new ZodValidationPipe(quotaPatchBodySchema)) body: QuotaPatchBodyDto,
   ) {
-    const namespace = body.namespace ?? 'default';
+    const namespace = body.namespace ?? 'generic';
     const updated = await this.usageRepo.setQuota(
       namespace,
       tenantId,
@@ -106,10 +112,16 @@ export class QuotaController {
     summary: 'Trigger storage usage drift reconciliation for a tenant',
   })
   @ApiParam({ name: 'tenantId', description: 'Tenant UUID or identifier' })
+  @ApiQuery({
+    name: 'namespace',
+    required: false,
+    description: 'Target namespace (defaults to "generic")',
+    example: 'generic',
+  })
   @ApiResponse({ status: 200, description: 'Reconciliation results' })
   async reconcile(
     @Param('tenantId') tenantId: string,
-    @Query('namespace') namespace = 'default',
+    @Query('namespace') namespace = 'generic',
   ) {
     const res = await this.reconciler.reconcileTenant(namespace, tenantId);
     return {

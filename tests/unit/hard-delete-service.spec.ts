@@ -1,9 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { HardDeleteService } from '../../src/files/hard-delete.service.js';
 import type { DatabaseService } from '../../src/db/database.service.js';
 import type { StorageRegistry } from '../../src/storage/registry.js';
 import type { OutboxWriter } from '../../src/events/outbox-writer.js';
+import type { UsageRepository } from '../../src/db/repositories/usage.repository.js';
 import { NotFoundException } from '@nestjs/common';
 
 describe('HardDeleteService [P6-07]', () => {
@@ -47,6 +48,7 @@ describe('HardDeleteService [P6-07]', () => {
                   tenant_id: 't-100',
                   namespace: 'esma-tenant',
                   status: 'ACTIVE',
+                  size_bytes: '1024',
                 };
               }
               return undefined;
@@ -67,7 +69,7 @@ describe('HardDeleteService [P6-07]', () => {
         }),
       }),
       transaction: () => ({
-        execute: async (callback: any) => {
+        execute: async (callback: (trx: unknown) => Promise<unknown>) => {
           const trx = {
             deleteFrom: () => ({
               where: () => ({
@@ -84,10 +86,15 @@ describe('HardDeleteService [P6-07]', () => {
       getDb: () => mockDb,
     } as any;
 
+    const mockUsageRepo = {
+      release: vi.fn().mockResolvedValue(undefined),
+    } as unknown as UsageRepository;
+
     hardDeleteService = new HardDeleteService(
       mockDbService,
       mockStorageRegistry,
       mockOutboxWriter,
+      mockUsageRepo,
     );
   });
 

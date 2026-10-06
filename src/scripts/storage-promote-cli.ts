@@ -1,6 +1,10 @@
+/* eslint-disable no-console */
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module.js';
-import { StoragePromoteService, StoragePromoteOptions } from '../storage/storage-promote.service.js';
+import {
+  StoragePromoteService,
+  StoragePromoteOptions,
+} from '../storage/storage-promote.service.js';
 import type { Provider } from '../core/types.js';
 
 export function parsePromoteArgs(argv: string[]): StoragePromoteOptions {

@@ -130,8 +130,29 @@ export function resolveInside(root: string, relative: string): string {
     throw new ValidationError('Path contains forbidden null byte character');
   }
 
+  // Reject Windows drive letters (e.g. C:\...) or UNC paths (\\...)
+  if (/^[a-zA-Z]:/i.test(relative) || /^[/\\\\]{2}/.test(relative)) {
+    throw new ValidationError(
+      'Path traversal detected: absolute or drive-qualified path',
+      {
+        detail: 'Storage keys cannot contain drive letters or UNC paths',
+      },
+    );
+  }
+
+  // Reject absolute paths starting with / or \
+  if (relative.startsWith('/') || relative.startsWith('\\')) {
+    throw new ValidationError('Path traversal detected: absolute path key', {
+      detail: 'Storage keys cannot be absolute paths',
+    });
+  }
+
   const resolvedRoot = path.resolve(root);
-  const resolvedTarget = path.resolve(resolvedRoot, relative);
+
+  // Normalize backslashes to forward slashes for cross-platform traversal check
+  const normalizedRel = relative.replace(/\\/g, '/');
+
+  const resolvedTarget = path.resolve(resolvedRoot, normalizedRel);
 
   const rel = path.relative(resolvedRoot, resolvedTarget);
 
@@ -145,10 +166,11 @@ export function resolveInside(root: string, relative: string): string {
     );
   }
 
-  // Windows safety check: ensure target begins with root + separator or matches root
+  // Windows & POSIX safety check: ensure target begins with root + separator or matches root
   if (
     resolvedTarget !== resolvedRoot &&
-    !resolvedTarget.startsWith(resolvedRoot + path.sep)
+    !resolvedTarget.startsWith(resolvedRoot + path.sep) &&
+    !resolvedTarget.startsWith(resolvedRoot + '/')
   ) {
     throw new ValidationError('Path traversal detected: root boundary escaped');
   }

@@ -13,13 +13,21 @@ export const FIXTURE_SIZES = {
  * with repeatable content padded to reach targetSize.
  */
 export function createPdfBuffer(targetSize: number): Buffer {
-  const header = Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n3 0 obj\n<< /Length ', 'ascii');
+  const header = Buffer.from(
+    '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n3 0 obj\n<< /Length ',
+    'ascii',
+  );
   const trailer = Buffer.from(' >>\nstream\n', 'ascii');
-  const footer = Buffer.from('\nendstream\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n200\n%%EOF\n', 'ascii');
+  const footer = Buffer.from(
+    '\nendstream\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n200\n%%EOF\n',
+    'ascii',
+  );
 
   const overhead = header.length + trailer.length + footer.length + 10;
   if (targetSize < overhead) {
-    throw new Error(`Target size ${targetSize} too small for valid PDF payload`);
+    throw new Error(
+      `Target size ${targetSize} too small for valid PDF payload`,
+    );
   }
 
   const streamLen = targetSize - overhead;
@@ -65,7 +73,11 @@ export function generatePerfFixtures(outDir?: string): {
   return files;
 }
 
-if (process.argv[1] && (process.argv[1].endsWith('generate-fixtures.ts') || process.argv[1].endsWith('generate-fixtures.js'))) {
+if (
+  process.argv[1] &&
+  (process.argv[1].endsWith('generate-fixtures.ts') ||
+    process.argv[1].endsWith('generate-fixtures.js'))
+) {
   const dir = path.resolve('tests/perf/fixtures');
   const generated = generatePerfFixtures(dir);
   // eslint-disable-next-line no-console
@@ -73,6 +85,8 @@ if (process.argv[1] && (process.argv[1].endsWith('generate-fixtures.ts') || proc
   for (const [key, filePath] of Object.entries(generated)) {
     const stat = fs.statSync(filePath);
     // eslint-disable-next-line no-console
-    console.log(`  - ${key}: ${path.basename(filePath)} (${(stat.size / 1024 / 1024).toFixed(2)} MiB / ${stat.size} bytes)`);
+    console.log(
+      `  - ${key}: ${path.basename(filePath)} (${(stat.size / 1024 / 1024).toFixed(2)} MiB / ${stat.size} bytes)`,
+    );
   }
 }

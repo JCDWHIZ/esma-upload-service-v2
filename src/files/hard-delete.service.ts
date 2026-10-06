@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../db/database.service.js';
 import { StorageRegistry } from '../storage/registry.js';
 import { OutboxWriter } from '../events/outbox-writer.js';
+import { UsageRepository } from '../db/repositories/usage.repository.js';
 import { createEnvelope } from '../events/envelope.js';
 import { EVENT_TYPES } from '../events/catalog.js';
 
@@ -27,6 +28,7 @@ export class HardDeleteService {
     private readonly db: DatabaseService,
     private readonly storageRegistry: StorageRegistry,
     private readonly outboxWriter: OutboxWriter,
+    private readonly usageRepo: UsageRepository,
   ) {}
 
   async hardDeleteFile(options: HardDeleteOptions): Promise<HardDeleteResult> {
@@ -48,7 +50,7 @@ export class HardDeleteService {
 
     const file = await database
       .selectFrom('files')
-      .select(['id', 'tenant_id', 'namespace', 'status'])
+      .select(['id', 'tenant_id', 'namespace', 'status', 'size_bytes'])
       .where('id', '=', fileId)
       .executeTakeFirst();
 
@@ -66,8 +68,8 @@ export class HardDeleteService {
 
     // 1. Purge objects across all physical storage providers
     for (const replica of replicas) {
-      if (this.storageRegistry.has(replica.provider as any)) {
-        const driver = this.storageRegistry.get(replica.provider as any);
+      if (this.storageRegistry.has(replica.provider)) {
+        const driver = this.storageRegistry.get(replica.provider);
         if (dryRun) {
           this.logger.log(
             `[DRY-RUN] Would delete physical storage key "${replica.provider_key}" on provider "${replica.provider}"`,
@@ -76,7 +78,7 @@ export class HardDeleteService {
         } else {
           try {
             await driver.delete({
-              provider: replica.provider as any,
+              provider: replica.provider,
               key: replica.provider_key,
             });
             replicasDeletedCount++;
@@ -123,6 +125,17 @@ export class HardDeleteService {
       });
 
       await this.outboxWriter.enqueue(trx, envelope);
+
+      // Release quota if the file was not already soft-deleted
+      if (file.status !== 'DELETED' && file.status !== 'DELETING') {
+        await this.usageRepo.release(
+          file.namespace,
+          file.tenant_id,
+          BigInt(file.size_bytes ?? 0),
+          1,
+          trx,
+        );
+      }
 
       // Delete replicas
       await trx

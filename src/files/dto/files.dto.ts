@@ -336,6 +336,9 @@ export const fileListQuerySchema = z.object({
   subTenantId: z.string().trim().optional(),
   mimetype: z.string().trim().optional(),
   tag: z.string().trim().optional(),
+  status: z
+    .enum(['ACTIVE', 'DELETED', 'DELETING', 'PENDING_UPLOAD', 'QUARANTINED'])
+    .optional(),
   createdFrom: z.string().trim().optional(),
   createdTo: z.string().trim().optional(),
   cursor: z.string().trim().optional(),
@@ -375,6 +378,13 @@ export class FileListQueryDto {
     example: 'financial',
   })
   tag?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter files by lifecycle status (defaults to ACTIVE)',
+    enum: ['ACTIVE', 'DELETED', 'DELETING', 'PENDING_UPLOAD', 'QUARANTINED'],
+    example: 'ACTIVE',
+  })
+  status?: 'ACTIVE' | 'DELETED' | 'DELETING' | 'PENDING_UPLOAD' | 'QUARANTINED';
 
   @ApiPropertyOptional({
     description: 'Filter files created after ISO timestamp',
@@ -561,4 +571,53 @@ export class BulkDeleteResponseDto {
 
   @ApiProperty({ type: [BulkDeleteResultItemDto] })
   results!: BulkDeleteResultItemDto[];
+}
+
+// ============================================================================
+// 9. Trigger Replication DTO (POST /api/v1/files/:fileId/replicate)
+// ============================================================================
+
+export const triggerReplicationSchema = z.object({
+  targetProvider: z.enum(['local', 'cloudinary', 'seaweedfs']).optional(),
+  targetProviders: z
+    .array(z.enum(['local', 'cloudinary', 'seaweedfs']))
+    .optional(),
+});
+
+export class TriggerReplicationDto {
+  @ApiPropertyOptional({
+    description: 'Specific target provider to replicate to',
+    enum: ['local', 'cloudinary', 'seaweedfs'],
+    example: 'cloudinary',
+  })
+  targetProvider?: 'local' | 'cloudinary' | 'seaweedfs';
+
+  @ApiPropertyOptional({
+    description: 'Multiple target providers to replicate to',
+    enum: ['local', 'cloudinary', 'seaweedfs'],
+    isArray: true,
+    example: ['cloudinary', 'seaweedfs'],
+  })
+  targetProviders?: ('local' | 'cloudinary' | 'seaweedfs')[];
+}
+
+// ============================================================================
+// 10. Hard Delete Response DTO (DELETE /api/v1/files/:fileId/permanent)
+// ============================================================================
+
+export class HardDeleteResponseDto {
+  @ApiProperty({ example: true })
+  success!: boolean;
+
+  @ApiProperty({ example: 'File and all replicas permanently deleted' })
+  message!: string;
+
+  @ApiProperty({ example: '0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b90' })
+  fileId!: string;
+
+  @ApiProperty({ example: 2 })
+  replicasDeleted!: number;
+
+  @ApiProperty({ example: true })
+  dbRecordsDeleted!: boolean;
 }

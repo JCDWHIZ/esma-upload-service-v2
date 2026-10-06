@@ -188,7 +188,7 @@ describe('FileQueryService [P2-08]', () => {
         status: 'ACTIVE',
         primaryProvider: 'local',
         tags: ['exam', 'math'],
-        canonicalUrl: `https://upload.esma.example/api/v1/files/${file.id}`,
+        canonicalUrl: `https://upload.esma.example/uploads/api/v1/files/${file.id}`,
         createdAt: '2026-09-28T10:00:00.000Z',
         updatedAt: '2026-09-28T10:00:00.000Z',
       });
@@ -222,7 +222,7 @@ describe('FileQueryService [P2-08]', () => {
       expect(res.data.filename).toBe('math_exam.pdf');
       expect(res.data.size).toBe(20480);
       expect(res.data.canonicalUrl).toBe(
-        `https://upload.esma.example/api/v1/files/${file.id}`,
+        `https://upload.esma.example/uploads/api/v1/files/${file.id}`,
       );
       expect(res.data.replicas.local).toEqual({
         status: 'AVAILABLE',

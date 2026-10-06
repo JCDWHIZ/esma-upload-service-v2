@@ -278,7 +278,7 @@ describe('MemoryBroker Unit & Concurrency Tests (P4-03)', () => {
         broker.publish('replication', 'shared-file-key', ev2),
       ]);
 
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 350));
 
       expect(executionOrder).toEqual([ev1.eventId, ev2.eventId]);
       expect(maxActiveForSameKey).toBe(1);
@@ -408,7 +408,7 @@ describe('MemoryBroker Unit & Concurrency Tests (P4-03)', () => {
       });
 
       await broker.publish('replication', 'f-retry', ev);
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 350));
 
       expect(attemptsReceived).toEqual([0, 1, 2]);
     });

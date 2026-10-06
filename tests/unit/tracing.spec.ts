@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { generateTraceparent, parseTraceparent } from '../../src/observability/tracing.js';
+import {
+  generateTraceparent,
+  parseTraceparent,
+} from '../../src/observability/tracing.js';
 
 describe('Tracing W3C propagation (P6-04)', () => {
   it('generates valid W3C traceparent format', () => {
@@ -21,6 +24,10 @@ describe('Tracing W3C propagation (P6-04)', () => {
   it('returns null for invalid traceparent strings', () => {
     expect(parseTraceparent(undefined)).toBeNull();
     expect(parseTraceparent('invalid-traceparent')).toBeNull();
-    expect(parseTraceparent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01')).toBeNull();
+    expect(
+      parseTraceparent(
+        '01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+      ),
+    ).toBeNull();
   });
 });

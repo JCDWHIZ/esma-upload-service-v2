@@ -9,7 +9,7 @@ WORKDIR /app
 RUN corepack enable
 
 # Install all dependencies (including devDependencies for the build).
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* ./
 RUN pnpm install --frozen-lockfile
 
 # Copy source and compile TypeScript.
@@ -31,7 +31,7 @@ ENV NODE_ENV=production
 RUN corepack enable
 
 # Install production-only dependencies.
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* ./
 RUN pnpm install --frozen-lockfile --prod && pnpm store prune
 
 # Copy compiled output from the build stage.
@@ -47,13 +47,13 @@ USER node
 # The API listens on PORT (default 7030 in config).
 EXPOSE 7030
 
-# Liveness probe: a fast node one-liner hitting /health/live.
+# Liveness probe: a fast node one-liner hitting /uploads/health/live.
 # --start-period gives the app time to boot before the first check.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "\
     const http = require('http'); \
     const port = process.env.PORT || 7030; \
-    http.get('http://localhost:' + port + '/health/live', (r) => { \
+    http.get('http://localhost:' + port + '/uploads/health/live', (r) => { \
       process.exit(r.statusCode === 200 ? 0 : 1); \
     }).on('error', () => process.exit(1)); \
   "

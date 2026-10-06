@@ -1,6 +1,10 @@
+/* eslint-disable no-console */
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module.js';
-import { HardDeleteService, HardDeleteOptions } from '../files/hard-delete.service.js';
+import {
+  HardDeleteService,
+  HardDeleteOptions,
+} from '../files/hard-delete.service.js';
 
 export function parseHardDeleteArgs(argv: string[]): HardDeleteOptions {
   const args = argv.slice(2);

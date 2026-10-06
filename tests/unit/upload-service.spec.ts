@@ -275,7 +275,7 @@ describe('UploadService (single-driver mode) [P2-06]', () => {
       );
       expect(parseResult.success).toBe(true);
       expect(outcome.manifest.data.canonicalUrl).toBe(
-        `https://upload.esma.example/api/v1/files/${outcome.fileId}`,
+        `https://upload.esma.example/uploads/api/v1/files/${outcome.fileId}`,
       );
       expect(outcome.manifest.data.replicas.local.status).toBe('AVAILABLE');
       expect(outcome.manifest.data.replicationStatus).toBe('NOT_REQUIRED');

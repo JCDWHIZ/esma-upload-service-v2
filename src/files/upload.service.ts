@@ -164,7 +164,7 @@ export class UploadService {
         if (this.metricsService) {
           this.metricsService.uploadFailuresTotal.inc({
             namespace: ctx.namespace,
-            code: (appErr as any).code || 'UPLOAD_FAILED',
+            code: appErr.code || 'UPLOAD_FAILED',
           });
         }
 
@@ -231,7 +231,10 @@ export class UploadService {
 
     // Check duplicate content hash per tenant (P6-03)
     try {
-      const existingDuplicates = await this.fileRepo.countBySha256(ctx.tenantId, file.sha256);
+      const existingDuplicates = await this.fileRepo.countBySha256(
+        ctx.tenantId,
+        file.sha256,
+      );
       if (existingDuplicates > 0 && this.metricsService) {
         this.metricsService.duplicateHashTotal.inc({
           tenant_id: ctx.tenantId,

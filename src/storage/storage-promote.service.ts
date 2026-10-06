@@ -78,10 +78,7 @@ export class StoragePromoteService {
         query = query.where('id', '>', lastId);
       }
 
-      const files = await query
-        .orderBy('id', 'asc')
-        .limit(batchSize)
-        .execute();
+      const files = await query.orderBy('id', 'asc').limit(batchSize).execute();
 
       if (files.length === 0) {
         hasMore = false;
@@ -105,9 +102,7 @@ export class StoragePromoteService {
             .where('file_id', '=', file.id)
             .execute();
 
-          const targetReplica = replicas.find(
-            (r) => r.provider === toProvider,
-          );
+          const targetReplica = replicas.find((r) => r.provider === toProvider);
 
           if (!targetReplica || targetReplica.status !== 'AVAILABLE') {
             result.skippedNotAvailable++;

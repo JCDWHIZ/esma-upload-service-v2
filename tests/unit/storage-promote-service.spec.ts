@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StoragePromoteService } from '../../src/storage/storage-promote.service.js';
 import type { DatabaseService } from '../../src/db/database.service.js';
@@ -77,9 +77,13 @@ describe('StoragePromoteService [P6-07]', () => {
               execute: async () => {
                 let res = filesStore.filter((f) => f.status === 'ACTIVE');
                 if (wherePrimaryOp === '=') {
-                  res = res.filter((f) => f.primary_provider === wherePrimaryVal);
+                  res = res.filter(
+                    (f) => f.primary_provider === wherePrimaryVal,
+                  );
                 } else if (wherePrimaryOp === '!=') {
-                  res = res.filter((f) => f.primary_provider !== wherePrimaryVal);
+                  res = res.filter(
+                    (f) => f.primary_provider !== wherePrimaryVal,
+                  );
                 }
                 if (afterId !== null) {
                   const currentAfterId = afterId;
@@ -104,7 +108,7 @@ describe('StoragePromoteService [P6-07]', () => {
         return {};
       },
       transaction: () => ({
-        execute: async (callback: any) => {
+        execute: async (callback: (trx: unknown) => Promise<unknown>) => {
           const trx = {
             updateTable: (table: string) => ({
               set: (data: any) => ({
@@ -118,7 +122,9 @@ describe('StoragePromoteService [P6-07]', () => {
                         const rep = replicasStore.find(
                           (r) =>
                             r.file_id === val1 &&
-                            (val2 ? r.role === val2 || r.provider === val2 : true),
+                            (val2
+                              ? r.role === val2 || r.provider === val2
+                              : true),
                         );
                         if (rep) rep.role = data.role;
                       }

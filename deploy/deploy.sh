@@ -12,7 +12,7 @@ TAG_FILE=".previous_deploy_tag"
 echo "=========================================================================="
 echo " Starting ESMA Upload Service Deployment"
 echo " Target Image Tag: ${TAG}"
-echo " Health Endpoint:   ${API_URL}/health/ready"
+echo " Health Endpoint:   ${API_URL}/uploads/health/ready"
 echo "=========================================================================="
 
 # 1. Record current image tag for rollback capability
@@ -54,7 +54,7 @@ fi
 echo "[3/4] Step 3: Verifying deployment health and running operational smoke test..."
 READY=0
 for i in $(seq 1 30); do
-  STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${API_URL}/health/ready" || echo "000")
+  STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${API_URL}/uploads/health/ready" || echo "000")
   if [ "${STATUS_CODE}" -eq 200 ]; then
     echo "Health probe PASSED (HTTP 200) after ${i}s"
     READY=1

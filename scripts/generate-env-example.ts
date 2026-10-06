@@ -27,6 +27,11 @@ const sections: EnvSection[] = [
         comment: 'current service port (v1 docs said 5000; see F-01)',
       },
       { key: 'APP_BASE_URL', placeholder: 'http://localhost:7030' },
+      {
+        key: 'BASE_PATH',
+        placeholder: '/uploads',
+        comment: 'application base path / global route prefix',
+      },
       { key: 'LOG_LEVEL', placeholder: 'info' },
       {
         key: 'TRUST_PROXY',
@@ -190,17 +195,6 @@ const sections: EnvSection[] = [
       { key: 'TOMBSTONE_RETENTION_DAYS', placeholder: '30' },
       { key: 'CLAMAV_HOST', placeholder: '' },
       { key: 'CLAMAV_PORT', placeholder: '3310' },
-    ],
-  },
-  {
-    title: 'Rollout flags (removed in P6-10)',
-    vars: [
-      {
-        key: 'LEGACY_ENGINE',
-        placeholder: 'legacy',
-        comment: 'legacy | core',
-      },
-      { key: 'LEGACY_DEFAULT_VISIBILITY', placeholder: 'public' },
     ],
   },
 ];

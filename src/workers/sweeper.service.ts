@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnApplicationShutdown, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnApplicationShutdown,
+  Optional,
+} from '@nestjs/common';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { sql } from 'kysely';
@@ -441,8 +446,7 @@ export class SweeperService implements OnApplicationShutdown {
             policy.tombstoneRetentionDays > 0
           ) {
             const nsCutoff = new Date(
-              Date.now() -
-                policy.tombstoneRetentionDays * 24 * 60 * 60 * 1000,
+              Date.now() - policy.tombstoneRetentionDays * 24 * 60 * 60 * 1000,
             );
 
             if (dryRun) {

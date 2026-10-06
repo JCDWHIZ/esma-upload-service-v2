@@ -206,5 +206,55 @@ describe('AuthGuard (P1-09)', () => {
       const allowed = await guard.canActivate(context);
       expect(allowed).toBe(true);
     });
+
+    it('allows token with access.global.roles PLATFORM_ADMIN and no platformAdmin field', async () => {
+      reflector.getAllAndOverride
+        .mockReturnValueOnce(false) // isPublic
+        .mockReturnValueOnce(['admin-jwt']); // accepted
+
+      jwtVerifier.verifyToken.mockResolvedValueOnce({
+        sub: 'admin-platform',
+        access: {
+          global: {
+            roles: ['PLATFORM_ADMIN'],
+            permissions: [],
+          },
+          organization: {
+            roles: ['BURSAR'],
+            permissions: [],
+          },
+        },
+      });
+
+      const { context } = createMockContext({
+        authorization: 'Bearer platform.admin.jwt',
+      });
+
+      const allowed = await guard.canActivate(context);
+      expect(allowed).toBe(true);
+    });
+
+    it('allows token with access.global.permissions upload.quoatas.view and no platformAdmin field', async () => {
+      reflector.getAllAndOverride
+        .mockReturnValueOnce(false) // isPublic
+        .mockReturnValueOnce(['admin-jwt']); // accepted
+
+      jwtVerifier.verifyToken.mockResolvedValueOnce({
+        sub: 'admin-quota-viewer',
+        access: {
+          global: {
+            roles: ['MEMBER'],
+            permissions: ['upload.quoatas.view'],
+          },
+        },
+      });
+
+      const { context } = createMockContext({
+        authorization: 'Bearer quota.viewer.jwt',
+      });
+
+      const allowed = await guard.canActivate(context);
+      expect(allowed).toBe(true);
+    });
   });
 });

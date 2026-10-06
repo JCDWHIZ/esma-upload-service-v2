@@ -22,8 +22,6 @@ export class MetricsInterceptor implements NestInterceptor {
     const req = http.getRequest<Request>();
     const res = http.getResponse<Response>();
 
-    const start = Date.now();
-
     return next.handle().pipe(
       tap({
         next: () => {
@@ -39,7 +37,10 @@ export class MetricsInterceptor implements NestInterceptor {
   private record(req: Request, res: Response): void {
     try {
       const method = req.method ?? 'GET';
-      const route = req.route?.path ? String(req.route.path) : (req.path ?? 'unknown');
+      const reqRoute = req.route as { path?: string | RegExp } | undefined;
+      const route = reqRoute?.path
+        ? String(reqRoute.path)
+        : (req.path ?? 'unknown');
       const statusCode = String(res.statusCode ?? 200);
 
       this.metricsService.httpRequestsTotal.inc({

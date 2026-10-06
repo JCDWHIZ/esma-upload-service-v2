@@ -233,7 +233,7 @@ There is no Phase 0. The legacy app (`esma-upload-service`) is frozen and is nev
 | P6-07 | Retention, purge, backup and disaster recovery | L | High | P4-10, P6-05 | DONE |
 | P6-08 | Performance and resilience testing | L | Medium | P6-04, P6-05 | DONE |
 | P6-09 | Security review and verification | L | High | P6-01, P6-02, P5-07 | DONE |
-| P6-10 | Remove the legacy engine, finalize documentation | M | Medium | P3-05, P6-09 | TODO |
+| P6-10 | Remove the legacy engine, finalize documentation | M | Medium | P3-05, P6-09 | DONE |
 
 ---
 
@@ -1717,9 +1717,9 @@ Rules: no test depends on wall-clock sleeps (inject clocks). No test uses real t
 - [ ] DLQ visible and redrivable. EICAR quarantined.
 
 **M4 Production (end of Phase 6)**
-- [ ] Dashboards and alerts live. Load test report accepted.
-- [ ] Backup restore drill and storage promote drill done.
-- [ ] Security review closed. Legacy engine removed. README verified by a new engineer.
+- [x] Dashboards and alerts live. Load test report accepted.
+- [x] Backup restore drill and storage promote drill done.
+- [x] Security review closed. Legacy engine removed. README verified by a new engineer.
 
 ---
 

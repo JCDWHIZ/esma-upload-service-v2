@@ -10,7 +10,10 @@ import {
 import { UnauthenticatedError } from '../../core/errors/app-error.js';
 import { getCorrelationId } from '../../observability/correlation-context.js';
 import { resolveOrGenerateCorrelationId } from '../../observability/correlation-id.interceptor.js';
-import { normalizePermissions } from '../../authz/permissions.js';
+import {
+  normalizePermissions,
+  UploadPermissions,
+} from '../../authz/permissions.js';
 
 @Injectable()
 export class EsmaAdminContextResolver implements ContextResolver {
@@ -39,24 +42,27 @@ export class EsmaAdminContextResolver implements ContextResolver {
         : typeof token.role === 'string' && token.role.trim().length > 0
           ? [token.role.trim()]
           : [];
+      const groupRoles = Array.isArray(token.groups)
+        ? (token.groups as unknown[]).filter(
+            (r): r is string => typeof r === 'string',
+          )
+        : [];
       const roles = Array.from(
-        new Set([...orgRoles, ...globalRoles, ...directRoles]),
+        new Set([...orgRoles, ...globalRoles, ...directRoles, ...groupRoles]),
       );
 
-      const orgPerms = Array.isArray(token.access?.organization?.permissions)
-        ? token.access.organization.permissions
-        : [];
       const globalPerms = Array.isArray(token.access?.global?.permissions)
         ? token.access.global.permissions
+        : [];
+      const orgPerms = Array.isArray(token.access?.organization?.permissions)
+        ? token.access.organization.permissions
         : [];
       const directPerms = Array.isArray(token.permissions)
         ? token.permissions
         : [];
-      const permissions = normalizePermissions([
-        ...orgPerms,
-        ...globalPerms,
-        ...directPerms,
-      ]);
+      const rawPerms =
+        globalPerms.length > 0 ? globalPerms : [...orgPerms, ...directPerms];
+      const permissions = normalizePermissions(rawPerms);
 
       // Actor ID: deterministic fallback
       const actorId =
@@ -82,6 +88,22 @@ export class EsmaAdminContextResolver implements ContextResolver {
           ? req.headers['user-agent']
           : undefined;
 
+      const isPlatformAdmin = permissions.some((p) =>
+        [
+          UploadPermissions.QUOTAS_MANAGE,
+          UploadPermissions.QUOTAS_VIEW,
+          'storage_quota_view',
+          'storage_quota_edit',
+          UploadPermissions.SYSTEM_FILES_UPLOAD,
+          UploadPermissions.SYSTEM_FILES_DELETE,
+          UploadPermissions.SYSTEM_FILES_READ,
+          UploadPermissions.SYSTEM_FILES_LIST,
+          UploadPermissions.TENANTS_USAGE_VIEW,
+          UploadPermissions.AUDIT_VIEW,
+          UploadPermissions.FILES_BULK_DELETE,
+        ].includes(p),
+      );
+
       const context: RequestContext = {
         namespace: 'esma-admin',
         tenantId: 'system',
@@ -92,7 +114,7 @@ export class EsmaAdminContextResolver implements ContextResolver {
           roles,
           permissions,
           scopes: [],
-          isPlatformAdmin: Boolean(token.platformAdmin),
+          isPlatformAdmin,
         },
         correlationId,
         ipAddress,

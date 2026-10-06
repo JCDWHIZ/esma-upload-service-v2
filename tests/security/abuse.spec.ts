@@ -1,20 +1,31 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { detectFileType, sniffMagicBytes, assertMimeCompatibility } from '../../src/ingest/sniff.js';
+import {
+  sniffMagicBytes,
+  assertMimeCompatibility,
+} from '../../src/ingest/sniff.js';
 import { sanitizeFilename } from '../../src/ingest/sanitize.js';
 import { SignedUrlService } from '../../src/files/signed-url.service.js';
-import { MimeMismatchError, ValidationError } from '../../src/core/errors/app-error.js';
+import { MimeMismatchError } from '../../src/core/errors/app-error.js';
 import { parseRangeHeader } from '../../src/files/file-read.service.js';
 import { TEST_JWT_SECRET, signToken, tokens } from '../helpers/tokens.js';
 import { JwtVerifierService } from '../../src/auth/jwt/jwt-verifier.service.js';
 import { ApiKeyAuthenticatorService } from '../../src/auth/apikey/apikey-authenticator.service.js';
+import type { AppConfigService } from '../../src/config/config.service.js';
+import type { ApiClientRepository } from '../../src/db/repositories/api-client.repository.js';
 
 describe('Security Abuse & Malicious Vector Suite (P6-09)', () => {
   // ── 1. Polyglot & Executable Spoofing ───────────────────────────────────────
   describe('Polyglot & Malicious Binary Detection', () => {
     it('detects Windows PE executable hidden under .pdf filename (MZ header)', () => {
       // 4D 5A = MZ
-      const peExecutableBuffer = Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
-      const detected = sniffMagicBytes(peExecutableBuffer, 'application/pdf', 'invoice.pdf');
+      const peExecutableBuffer = Buffer.from([
+        0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00,
+      ]);
+      const detected = sniffMagicBytes(
+        peExecutableBuffer,
+        'application/pdf',
+        'invoice.pdf',
+      );
 
       expect(detected).not.toBeNull();
       expect(detected?.mime).toBe('application/x-msdownload');
@@ -22,13 +33,19 @@ describe('Security Abuse & Malicious Vector Suite (P6-09)', () => {
 
       // Assert mismatch throws MimeMismatchError
       expect(() => {
-        assertMimeCompatibility(detected!.mime, 'application/pdf', 'invoice.pdf');
+        assertMimeCompatibility(
+          detected!.mime,
+          'application/pdf',
+          'invoice.pdf',
+        );
       }).toThrow(MimeMismatchError);
     });
 
     it('detects Linux ELF binary disguised as .png image', () => {
       // 7F 45 4C 46 = 0x7f 'ELF'
-      const elfBuffer = Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00]);
+      const elfBuffer = Buffer.from([
+        0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00,
+      ]);
       const detected = sniffMagicBytes(elfBuffer, 'image/png', 'photo.png');
 
       expect(detected).not.toBeNull();
@@ -42,7 +59,11 @@ describe('Security Abuse & Malicious Vector Suite (P6-09)', () => {
 
     it('detects shell script starting with #!/bin/sh', () => {
       const scriptBuffer = Buffer.from('#!/bin/sh\nrm -rf /', 'ascii');
-      const detected = sniffMagicBytes(scriptBuffer, 'text/plain', 'script.txt');
+      const detected = sniffMagicBytes(
+        scriptBuffer,
+        'text/plain',
+        'script.txt',
+      );
 
       expect(detected).not.toBeNull();
       expect(detected?.mime).toBe('application/x-sh');
@@ -73,7 +94,9 @@ describe('Security Abuse & Malicious Vector Suite (P6-09)', () => {
 
     it('neutralizes POSIX and Windows directory traversal attacks', () => {
       expect(sanitizeFilename('../../../../etc/passwd')).toBe('passwd');
-      expect(sanitizeFilename('..\\..\\windows\\system32\\cmd.exe')).toBe('cmd.exe');
+      expect(sanitizeFilename('..\\..\\windows\\system32\\cmd.exe')).toBe(
+        'cmd.exe',
+      );
       expect(sanitizeFilename('///secret/passwords.txt')).toBe('passwords.txt');
       expect(sanitizeFilename('....//....//config.json')).toBe('config.json');
     });
@@ -139,7 +162,7 @@ describe('Security Abuse & Malicious Vector Suite (P6-09)', () => {
     let signedUrlService: SignedUrlService;
     const mockConfig = {
       signedUrlSecret: 'enterprise-test-secret-at-least-32-chars-long-12345!',
-    } as any;
+    } as unknown as AppConfigService;
 
     beforeEach(() => {
       signedUrlService = new SignedUrlService(mockConfig);
@@ -162,10 +185,13 @@ describe('Security Abuse & Malicious Vector Suite (P6-09)', () => {
     });
 
     it('rejects tampered signature hash', () => {
-      const signed = signedUrlService.sign('file-123', { expiresInSeconds: 60 });
+      const signed = signedUrlService.sign('file-123', {
+        expiresInSeconds: 60,
+      });
 
       // Change one character in HMAC signature
-      const tamperedSig = signed.sig.slice(0, -1) + (signed.sig.endsWith('a') ? 'b' : 'a');
+      const tamperedSig =
+        signed.sig.slice(0, -1) + (signed.sig.endsWith('a') ? 'b' : 'a');
 
       const verified = signedUrlService.verify('file-123', {
         exp: signed.exp,
@@ -190,7 +216,9 @@ describe('Security Abuse & Malicious Vector Suite (P6-09)', () => {
     });
 
     it('rejects signature reuse for a different fileId', () => {
-      const signedFileA = signedUrlService.sign('file-A', { expiresInSeconds: 60 });
+      const signedFileA = signedUrlService.sign('file-A', {
+        expiresInSeconds: 60,
+      });
 
       // Attacker tries to use file-A's signature to download private file-B
       const verified = signedUrlService.verify('file-B', {
@@ -214,7 +242,7 @@ describe('Security Abuse & Malicious Vector Suite (P6-09)', () => {
         IDENTITY_ISSUER: 'https://auth.esma.test',
         JWT_CLOCK_TOLERANCE_SECONDS: 5,
       }),
-    } as any;
+    } as unknown as AppConfigService;
 
     beforeEach(() => {
       jwtVerifier = new JwtVerifierService(mockConfig);
@@ -222,8 +250,12 @@ describe('Security Abuse & Malicious Vector Suite (P6-09)', () => {
 
     it('rejects JWT signed with "none" algorithm', async () => {
       // Header: {"alg":"none","typ":"JWT"}
-      const noneHeader = Buffer.from('{"alg":"none","typ":"JWT"}').toString('base64url');
-      const payload = Buffer.from('{"sub":"attacker","role":"admin"}').toString('base64url');
+      const noneHeader = Buffer.from('{"alg":"none","typ":"JWT"}').toString(
+        'base64url',
+      );
+      const payload = Buffer.from('{"sub":"attacker","role":"admin"}').toString(
+        'base64url',
+      );
       const noneToken = `${noneHeader}.${payload}.`;
 
       await expect(jwtVerifier.verifyToken(noneToken)).rejects.toThrow();
@@ -232,7 +264,9 @@ describe('Security Abuse & Malicious Vector Suite (P6-09)', () => {
     it('rejects JWT signed with an untrusted / foreign secret', async () => {
       const forgedToken = await signToken(
         { userId: 'usr-attacker', role: 'admin' },
-        { secret: 'wrong-secret-key-that-should-never-be-accepted-by-service!' },
+        {
+          secret: 'wrong-secret-key-that-should-never-be-accepted-by-service!',
+        },
       );
 
       await expect(jwtVerifier.verifyToken(forgedToken)).rejects.toThrow();
@@ -248,7 +282,9 @@ describe('Security Abuse & Malicious Vector Suite (P6-09)', () => {
   describe('API Key Format & Lockout Defense', () => {
     it('fast-rejects malformed API keys before database lookup', async () => {
       const mockRepo = { findByPrefixAndHash: vi.fn() };
-      const service = new ApiKeyAuthenticatorService(mockRepo as any);
+      const service = new ApiKeyAuthenticatorService(
+        mockRepo as unknown as ApiClientRepository,
+      );
 
       // Malformed keys: missing prefix, bad characters, SQL injection string
       const invalidKeys = [

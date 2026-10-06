@@ -1,8 +1,13 @@
 # ESMA Upload Service: Current Architecture & Implementation Deep-Dive
 
+> [!WARNING]
+> **HISTORICAL ARCHIVE (DECOMMISSIONED V1 EXPRESS SERVICE)**
+> This document records the historical as-is architecture of the legacy Express v1 implementation (`esma-upload-service/`). The legacy service has been **decommissioned and frozen**.
+> The active production system is **ESMA Upload Service v2** (`esma-upload-service-v2/`), built on NestJS 10. For current architecture, refer to [`docs/ARCHITECTURE_AND_ROADMAP.md`](./ARCHITECTURE_AND_ROADMAP.md) and [`esma-upload-service-v2/README.md`](../README.md).
+
 ## 1. Executive Summary
 
-This document provides a comprehensive, exhaustive technical reference of the **current state (as-is)** of the **ESMA Upload Service** codebase. It covers the current architecture, runtime configuration, directory layout, multi-tenancy model, file ingestion pipeline, Cloudinary integration, API route specifications, and code-level limitations and bugs.
+This document provides a comprehensive, exhaustive technical reference of the **historical state (as-is)** of the original Express v1 **ESMA Upload Service** codebase. It covers the legacy architecture, runtime configuration, directory layout, multi-tenancy model, file ingestion pipeline, Cloudinary integration, API route specifications, and code-level limitations and bugs as identified during the initial architectural review.
 
 ---
 

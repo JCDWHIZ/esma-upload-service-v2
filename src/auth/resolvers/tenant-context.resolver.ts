@@ -98,9 +98,14 @@ export class EsmaTenantContextResolver implements ContextResolver {
         : typeof token.role === 'string' && token.role.trim().length > 0
           ? [token.role.trim()]
           : [];
+      const groupRoles = Array.isArray(token.groups)
+        ? (token.groups as unknown[]).filter(
+            (r): r is string => typeof r === 'string',
+          )
+        : [];
       const roles = Array.from(
         new Set(
-          [...orgRoles, ...globalRoles, ...directRoles]
+          [...orgRoles, ...globalRoles, ...directRoles, ...groupRoles]
             .filter(
               (r): r is string => typeof r === 'string' && r.trim().length > 0,
             )
@@ -108,25 +113,40 @@ export class EsmaTenantContextResolver implements ContextResolver {
         ),
       );
 
-      // Permissions normalization (canonical lowercase snake_case)
-      const orgPerms = Array.isArray(token.access?.organization?.permissions)
-        ? token.access.organization.permissions
-        : [];
+      // Permissions normalization: search access.global.permissions for endpoint permissions.
+      // Falls back to org/direct permissions only when global permissions are not provided.
       const globalPerms = Array.isArray(token.access?.global?.permissions)
         ? token.access.global.permissions
+        : [];
+      const orgPerms = Array.isArray(token.access?.organization?.permissions)
+        ? token.access.organization.permissions
         : [];
       const directPerms = Array.isArray(token.permissions)
         ? token.permissions
         : [];
-      const permissions = normalizePermissions([
-        ...orgPerms,
-        ...globalPerms,
-        ...directPerms,
-      ]);
+      const rawPerms =
+        globalPerms.length > 0 ? globalPerms : [...orgPerms, ...directPerms];
+      const permissions = normalizePermissions(rawPerms);
 
       const isSchoolAdmin =
         permissions.includes(UploadPermissions.BRANCHES_MANAGE) ||
         permissions.includes(UploadPermissions.QUOTAS_VIEW);
+
+      const isPlatformAdmin = permissions.some((p) =>
+        [
+          UploadPermissions.QUOTAS_MANAGE,
+          UploadPermissions.QUOTAS_VIEW,
+          'storage_quota_view',
+          'storage_quota_edit',
+          UploadPermissions.SYSTEM_FILES_UPLOAD,
+          UploadPermissions.SYSTEM_FILES_DELETE,
+          UploadPermissions.SYSTEM_FILES_READ,
+          UploadPermissions.SYSTEM_FILES_LIST,
+          UploadPermissions.TENANTS_USAGE_VIEW,
+          UploadPermissions.AUDIT_VIEW,
+          UploadPermissions.FILES_BULK_DELETE,
+        ].includes(p),
+      );
 
       // Attributes parsing
       const rawAttributes =
@@ -154,7 +174,7 @@ export class EsmaTenantContextResolver implements ContextResolver {
           roles,
           permissions,
           scopes: [],
-          isPlatformAdmin: Boolean(token.platformAdmin),
+          isPlatformAdmin,
           branchGrants: uniqueBranchGrants,
           isSchoolAdmin,
         },
