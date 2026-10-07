@@ -38,6 +38,9 @@ importers:
       cloudinary:
         specifier: ^2.11.0
         version: 2.11.0
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
       file-type:
         specifier: ^22.1.1
         version: 22.1.1

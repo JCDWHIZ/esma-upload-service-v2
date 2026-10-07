@@ -134,12 +134,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/server-setup/esma
-            chmod +x restart && dos2unix restart
+
+            dos2unix restart
+            chmod +x ./restart
+
             ./restart esma-upload-service
+            echo "✅ deployment completed successfully"
