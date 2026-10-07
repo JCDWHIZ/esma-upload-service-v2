@@ -89,8 +89,8 @@ DEPLOY_TAG=${PREV_TAG} ./deploy/deploy.sh ${PREV_TAG}
 ## 5. CI/CD Pipeline Configuration
 
 ### Secret Variables Required in CI/CD (GitLab / GitHub Actions)
-- `DOCKER_USERNAME`: Registry username
-- `DOCKER_PASSWORD`: Registry access token / password
+- `INTERNAL_REGISTRY_USER`: Gitea registry username (for `gitea.infra.elsoft.ng`)
+- `INTERNAL_REGISTRY_TOKEN`: Gitea registry access token / password
 - `SSH_HOST`: Staging / Production server IP or hostname
 - `SSH_USER`: Deployment SSH user account (e.g. `esma`)
 - `SSH_PRIVATE_KEY`: Authorized SSH private key

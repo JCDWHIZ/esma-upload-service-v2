@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 1: Build
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:22-bookworm-slim AS build
+FROM node:24 AS build
 ARG TARGETARCH
 
 WORKDIR /app
@@ -27,7 +27,7 @@ RUN pnpm run build
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: Runtime
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:22-bookworm-slim AS runtime
+FROM node:24 AS runtime
 ARG TARGETARCH
 
 WORKDIR /app

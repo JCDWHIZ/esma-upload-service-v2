@@ -7,10 +7,10 @@ stages:
   - deploy-production
 
 variables:
-  DOCKER_REGISTRY: "docker.io"
-  IMAGE_NAME: "esma-upload-service-v2"
-  DOCKER_IMAGE: ${DOCKER_USERNAME}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}
-  DOCKER_IMAGE_LATEST: ${DOCKER_USERNAME}/${IMAGE_NAME}:latest
+  DOCKER_REGISTRY: "gitea.infra.elsoft.ng"
+  IMAGE_NAME: "esma/esma-upload-service-v2"
+  DOCKER_IMAGE: ${DOCKER_REGISTRY}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}
+  DOCKER_IMAGE_LATEST: ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest
 
 default:
   image: node:22-bookworm
@@ -110,8 +110,8 @@ build-multiarch:
     - docker run --privileged --rm tonistiigi/binfmt --install all
     - docker buildx create --use
   script:
-    - echo "Logging in to Docker Registry..."
-    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - echo "Logging in to Gitea Package Registry..."
+    - echo "$INTERNAL_REGISTRY_TOKEN" | docker login gitea.infra.elsoft.ng -u "$INTERNAL_REGISTRY_USER" --password-stdin
     - echo "Building and pushing multi-arch Docker image (amd64, arm64)..."
     - |
       docker buildx build \
