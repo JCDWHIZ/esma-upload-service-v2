@@ -22,11 +22,14 @@ import { DeadLetterService } from './dead-letter.service.js';
     DeadLetterService,
     {
       provide: MemoryBroker,
-      useFactory: () => {
+      useFactory: (config: AppConfigService) => {
         const broker = new MemoryBroker();
-        void broker.initialize();
+        if (config.eventBroker === 'memory') {
+          void broker.initialize();
+        }
         return broker;
       },
+      inject: [AppConfigService],
     },
     {
       provide: MESSAGE_BROKER,
