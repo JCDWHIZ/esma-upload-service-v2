@@ -20,8 +20,6 @@ import {
   ForbiddenError,
   NotFoundError,
   UnauthenticatedError,
-  FileNotReadyError,
-  FileQuarantinedError,
   FileInfectedError,
   ScanUnavailableError,
   ScanPendingError,
@@ -375,7 +373,7 @@ export class FileReadService {
             const rawConfigMap =
               this.configService?.raw?.SERVICE_CLIENT_NAMESPACES;
             if (rawConfigMap) {
-              allowedMap = JSON.parse(rawConfigMap);
+              allowedMap = JSON.parse(rawConfigMap) as Record<string, string[]>;
             }
           } catch {
             // fallback
@@ -405,7 +403,12 @@ export class FileReadService {
             userPerms.includes('files_admin');
           const isSchoolAdmin = isSchoolAdminActor(ctx);
 
-          if (!isPlatformAdmin && !isUploader && !hasReadAnyPerm && !isSchoolAdmin) {
+          if (
+            !isPlatformAdmin &&
+            !isUploader &&
+            !hasReadAnyPerm &&
+            !isSchoolAdmin
+          ) {
             throw new ForbiddenError(
               'Private files are only accessible to the uploader or users with files.file.read.any permission',
             );

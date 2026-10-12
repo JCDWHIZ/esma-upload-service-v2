@@ -166,9 +166,9 @@ export class OutboxRelay {
       try {
         const envelope = row.envelope as unknown as EventEnvelope<unknown>;
         const topicRaw = row.topic;
-        const topic: LogicalTopic = (isLogicalTopic(topicRaw)
-          ? topicRaw
-          : 'audit') as LogicalTopic;
+        const topic: LogicalTopic = (
+          isLogicalTopic(topicRaw) ? topicRaw : 'audit'
+        ) as LogicalTopic;
 
         await this.broker!.publish(topic, row.partitionKey, envelope);
 

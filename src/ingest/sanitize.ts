@@ -88,11 +88,17 @@ export async function sanitizeSvgFile(filePath: string): Promise<void> {
   let sanitized = content;
 
   // 1. Strip <script>...</script>
-  sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  sanitized = sanitized.replace(
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+    '',
+  );
   sanitized = sanitized.replace(/<script\b[^>]*\/>/gi, '');
 
   // 2. Strip <foreignObject>...</foreignObject>
-  sanitized = sanitized.replace(/<foreignObject\b[^<]*(?:(?!<\/foreignObject>)<[^<]*)*<\/foreignObject>/gi, '');
+  sanitized = sanitized.replace(
+    /<foreignObject\b[^<]*(?:(?!<\/foreignObject>)<[^<]*)*<\/foreignObject>/gi,
+    '',
+  );
   sanitized = sanitized.replace(/<foreignObject\b[^>]*\/>/gi, '');
 
   // 3. Strip inline event handlers: on\w+="...", on\w+='...'
@@ -106,7 +112,10 @@ export async function sanitizeSvgFile(filePath: string): Promise<void> {
   );
 
   // 5. Strip @import in <style>
-  sanitized = sanitized.replace(/@import\s+(?:url\([^)]+\)|['"][^'"]+['"])/gi, '');
+  sanitized = sanitized.replace(
+    /@import\s+(?:url\([^)]+\)|['"][^'"]+['"])/gi,
+    '',
+  );
 
   await fs.promises.writeFile(filePath, sanitized, 'utf8');
 }

@@ -13,13 +13,14 @@ import {
   NotFoundError,
   ScanUnavailableError,
   ValidationError,
-  NamespaceNotAllowedError,
-  TooManyPendingUploadsError,
 } from '../../src/core/errors/app-error.js';
 import { FileRecord } from '../../src/core/types.js';
 import { FileQueryService } from '../../src/files/file-query.service.js';
 import { AuthorizationService } from '../../src/authz/authorization.service.js';
 import { DeleteService } from '../../src/files/delete.service.js';
+import type { StorageRegistry } from '../../src/storage/registry.js';
+import type { UsageRepository } from '../../src/db/repositories/usage.repository.js';
+import type { OutboxRepository } from '../../src/db/repositories/outbox.repository.js';
 
 describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow', () => {
   let claimService: ClaimService;
@@ -99,11 +100,19 @@ describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow'
   beforeEach(() => {
     mockFileRepo = {
       findById: vi.fn(),
-      updateStatus: vi.fn().mockImplementation((id, version, updates) => {
-        return Promise.resolve(createMockFile({ ...updates, id, version: version + 1 }));
-      }),
+      updateStatus: vi
+        .fn()
+        .mockImplementation(
+          (id: string, version: number, updates: Partial<FileRecord>) => {
+            return Promise.resolve(
+              createMockFile({ ...updates, id, version: version + 1 }),
+            );
+          },
+        ),
       findByOwner: vi.fn().mockResolvedValue([]),
-      countUnclaimedForUser: vi.fn().mockResolvedValue({ count: 0, totalBytes: 0 }),
+      countUnclaimedForUser: vi
+        .fn()
+        .mockResolvedValue({ count: 0, totalBytes: 0 }),
       findExpiredUnclaimed: vi.fn().mockResolvedValue([]),
     };
 
@@ -141,19 +150,27 @@ describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow'
   describe('UR-30: Claim Service Contract', () => {
     it('rejects claim attempts made by user principals with 403 Forbidden', async () => {
       await expect(
-        claimService.claim(userContext, '0198f3a2-7c1e-7b40-9d2a-5e6f1a8c0001', {
-          ownerType: 'SUPPORT_TICKET',
-          ownerId: 'ticket-123',
-        }),
+        claimService.claim(
+          userContext,
+          '0198f3a2-7c1e-7b40-9d2a-5e6f1a8c0001',
+          {
+            ownerType: 'SUPPORT_TICKET',
+            ownerId: 'ticket-123',
+          },
+        ),
       ).rejects.toThrow(ForbiddenError);
     });
 
     it('rejects claim when ownerType or ownerId is missing with ValidationError', async () => {
       await expect(
-        claimService.claim(serviceContext, '0198f3a2-7c1e-7b40-9d2a-5e6f1a8c0001', {
-          ownerType: '',
-          ownerId: 'ticket-123',
-        }),
+        claimService.claim(
+          serviceContext,
+          '0198f3a2-7c1e-7b40-9d2a-5e6f1a8c0001',
+          {
+            ownerType: '',
+            ownerId: 'ticket-123',
+          },
+        ),
       ).rejects.toThrow(ValidationError);
     });
 
@@ -168,9 +185,9 @@ describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow'
       ).rejects.toThrow(NotFoundError);
 
       // File of another tenant
-      mockFileRepo.findById = vi.fn().mockResolvedValue(
-        createMockFile({ tenantId: 'other-school' }),
-      );
+      mockFileRepo.findById = vi
+        .fn()
+        .mockResolvedValue(createMockFile({ tenantId: 'other-school' }));
 
       await expect(
         claimService.claim(serviceContext, 'f-other', {
@@ -181,9 +198,9 @@ describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow'
     });
 
     it('rejects claiming infected files with 422 FileInfectedError', async () => {
-      mockFileRepo.findById = vi.fn().mockResolvedValue(
-        createMockFile({ scanStatus: 'INFECTED' }),
-      );
+      mockFileRepo.findById = vi
+        .fn()
+        .mockResolvedValue(createMockFile({ scanStatus: 'INFECTED' }));
 
       await expect(
         claimService.claim(serviceContext, 'f-infected', {
@@ -194,9 +211,9 @@ describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow'
     });
 
     it('rejects claiming files where virus scan failed with 503 ScanUnavailableError', async () => {
-      mockFileRepo.findById = vi.fn().mockResolvedValue(
-        createMockFile({ scanStatus: 'ERROR' }),
-      );
+      mockFileRepo.findById = vi
+        .fn()
+        .mockResolvedValue(createMockFile({ scanStatus: 'ERROR' }));
 
       await expect(
         claimService.claim(serviceContext, 'f-error', {
@@ -236,7 +253,7 @@ describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow'
             ownerType: 'SUPPORT_TICKET',
             ownerId: 'ticket-999',
             kind: 'attachment',
-          }),
+          }) as unknown as Record<string, unknown>,
         }),
       );
     });
@@ -253,11 +270,15 @@ describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow'
       });
       mockFileRepo.findById = vi.fn().mockResolvedValue(alreadyClaimedFile);
 
-      const res = await claimService.claim(serviceContext, alreadyClaimedFile.id, {
-        ownerType: 'SUPPORT_TICKET',
-        ownerId: 'ticket-100',
-        kind: 'attachment',
-      });
+      const res = await claimService.claim(
+        serviceContext,
+        alreadyClaimedFile.id,
+        {
+          ownerType: 'SUPPORT_TICKET',
+          ownerId: 'ticket-100',
+          kind: 'attachment',
+        },
+      );
 
       expect(res.data.claimed).toBe(true);
       // updateStatus should not be re-called when already matching
@@ -290,7 +311,9 @@ describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow'
     let authzService: AuthorizationService;
 
     beforeEach(() => {
-      authzService = new AuthorizationService(mockConfigService as AppConfigService);
+      authzService = new AuthorizationService(
+        mockConfigService as AppConfigService,
+      );
       fileQueryService = new FileQueryService(
         mockFileRepo as FileRepository,
         mockReplicaRepo as ReplicaRepository,
@@ -308,7 +331,10 @@ describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow'
       mockFileRepo.findById = vi.fn().mockResolvedValue(unclaimedFile);
 
       // Caller has no read permissions
-      const res = await fileQueryService.getMetadata(userContext, unclaimedFile.id);
+      const res = await fileQueryService.getMetadata(
+        userContext,
+        unclaimedFile.id,
+      );
       expect(res.data.fileId).toBe(unclaimedFile.id);
       expect(res.data.scanStatus).toBe('PENDING');
       expect(res.data.claimed).toBe(false);
@@ -341,29 +367,35 @@ describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow'
       });
       mockFileRepo.findById = vi.fn().mockResolvedValue(unclaimedFile);
 
-      const res = await fileQueryService.getMetadata(serviceContext, unclaimedFile.id);
+      const res = await fileQueryService.getMetadata(
+        serviceContext,
+        unclaimedFile.id,
+      );
       expect(res.data.fileId).toBe(unclaimedFile.id);
     });
   });
 
   describe('UR-06: Owner Attributes Bulk Delete', () => {
     let deleteService: DeleteService;
+    let deleteSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
-      const authzService = new AuthorizationService(mockConfigService as AppConfigService);
+      const authzService = new AuthorizationService(
+        mockConfigService as unknown as AppConfigService,
+      );
       deleteService = new DeleteService(
-        {} as any,
+        {} as unknown as StorageRegistry,
         authzService,
-        mockConfigService as AppConfigService,
-        mockDbService as DatabaseService,
-        mockFileRepo as FileRepository,
-        mockReplicaRepo as ReplicaRepository,
-        {} as any,
-        {} as any,
-        mockOutboxWriter as OutboxWriter,
+        mockConfigService as unknown as AppConfigService,
+        mockDbService as unknown as DatabaseService,
+        mockFileRepo as unknown as FileRepository,
+        mockReplicaRepo as unknown as ReplicaRepository,
+        {} as unknown as UsageRepository,
+        {} as unknown as OutboxRepository,
+        mockOutboxWriter as unknown as OutboxWriter,
       );
       // Stub delete single
-      vi.spyOn(deleteService, 'delete').mockResolvedValue();
+      deleteSpy = vi.spyOn(deleteService, 'delete').mockResolvedValue();
     });
 
     it('rejects deleteByOwner when ownerType or ownerId is missing with ValidationError', async () => {
@@ -396,7 +428,7 @@ describe('UR-06, UR-29 & UR-30: Owner Attributes, Direct Upload, and Claim Flow'
         'support-attachments',
         1000,
       );
-      expect(deleteService.delete).toHaveBeenCalledTimes(2);
+      expect(deleteSpy).toHaveBeenCalledTimes(2);
     });
   });
 });

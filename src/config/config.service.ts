@@ -111,7 +111,10 @@ export class AppConfigService {
   }
   get userNamespacePermissions(): Record<string, string> {
     try {
-      return JSON.parse(this.config.USER_NAMESPACE_PERMISSIONS);
+      return JSON.parse(this.config.USER_NAMESPACE_PERMISSIONS) as Record<
+        string,
+        string
+      >;
     } catch {
       return {};
     }

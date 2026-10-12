@@ -197,4 +197,3 @@ export interface Database {
   dead_letters: DeadLettersTable;
   idempotency_keys: IdempotencyKeysTable;
 }
-

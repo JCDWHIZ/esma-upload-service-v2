@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type MockInstance,
+} from 'vitest';
 import { Readable } from 'node:stream';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UploadService } from '../../src/files/upload.service.js';
@@ -32,8 +40,8 @@ describe('UploadService Integration (NestJS Module & FakeStorageDriver)', () => 
   let fileRepo: FileRepository;
   let replicaRepo: ReplicaRepository;
   let usageRepo: UsageRepository;
-  let hardDeleteSpy: ReturnType<typeof vi.spyOn>;
-  let releaseSpy: ReturnType<typeof vi.spyOn>;
+  let hardDeleteSpy: MockInstance;
+  let releaseSpy: MockInstance;
 
   const mockCtx: RequestContext = {
     namespace: 'esma-tenant',

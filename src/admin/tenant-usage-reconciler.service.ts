@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { sql } from 'kysely';
 import { DatabaseService } from '../db/database.service.js';
 import { OutboxRepository } from '../db/repositories/outbox.repository.js';
-import { v7 as uuidv7 } from 'uuid';
 
 export interface UsageReportResult {
   organizationsProcessed: number;
@@ -31,9 +30,9 @@ export class TenantUsageReconciler {
     }
 
     const now = targetDate ?? new Date();
-    const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
-    const periodStart = new Date(Date.UTC(yesterday.getUTCFullYear(), yesterday.getUTCMonth(), yesterday.getUTCDate(), 0, 0, 0)).toISOString();
-    const periodEnd = new Date(Date.UTC(yesterday.getUTCFullYear(), yesterday.getUTCMonth(), yesterday.getUTCDate(), 23, 59, 59)).toISOString();
+    const yesterday = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1),
+    );
 
     const activeStats = await sql<{
       tenant_id: string;
@@ -74,7 +73,10 @@ export class TenantUsageReconciler {
         0n,
       );
 
-      if (totalRecordedBytes !== actualBytes || totalRecordedFiles !== actualFiles) {
+      if (
+        totalRecordedBytes !== actualBytes ||
+        totalRecordedFiles !== actualFiles
+      ) {
         driftsDetected++;
         this.logger.warn(
           `Usage drift detected for org ${orgId}: actual bytes=${actualBytes} (recorded=${totalRecordedBytes}), actual files=${actualFiles} (recorded=${totalRecordedFiles}). Reconciling.`,

@@ -52,7 +52,12 @@ export class FileRepository extends BaseRepository {
         correlation_id: data.correlationId,
         expires_at: data.expiresAt ?? null,
         claimed: data.claimed ?? true,
-        claimed_at: data.claimedAt !== undefined ? data.claimedAt : data.claimed === false ? null : new Date(),
+        claimed_at:
+          data.claimedAt !== undefined
+            ? data.claimedAt
+            : data.claimed === false
+              ? null
+              : new Date(),
         unclaimed_expires_at: data.unclaimedExpiresAt ?? null,
         retain_until: data.retainUntil ?? null,
         held: data.held ?? false,

@@ -6,12 +6,7 @@ export type FileStatus =
   'PENDING_UPLOAD' | 'ACTIVE' | 'QUARANTINED' | 'DELETING' | 'DELETED';
 
 export type ScanStatus =
-  | 'SKIPPED'
-  | 'NOT_REQUIRED'
-  | 'PENDING'
-  | 'CLEAN'
-  | 'INFECTED'
-  | 'ERROR';
+  'SKIPPED' | 'NOT_REQUIRED' | 'PENDING' | 'CLEAN' | 'INFECTED' | 'ERROR';
 
 export type ReplicationStatus =
   'NOT_REQUIRED' | 'QUEUED' | 'IN_PROGRESS' | 'SYNCED' | 'PARTIAL' | 'FAILED';

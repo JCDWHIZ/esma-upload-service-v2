@@ -26,7 +26,7 @@ export class TopicMap {
     this.pulsarNamespace = options.pulsarNamespace ?? 'uploads';
   }
 
-  public toKafka(topic: LogicalTopic | string): string {
+  public toKafka(topic: LogicalTopic | (string & {})): string {
     if (topic.includes('.')) {
       return topic;
     }

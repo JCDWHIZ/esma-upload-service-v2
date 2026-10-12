@@ -25,7 +25,13 @@ import { ClaimService } from './claim.service.js';
 import { AdminModule } from '../admin/admin.module.js';
 
 @Module({
-  imports: [AuthorizationModule, AuthModule, IngestModule, EventsModule, AdminModule],
+  imports: [
+    AuthorizationModule,
+    AuthModule,
+    IngestModule,
+    EventsModule,
+    AdminModule,
+  ],
   controllers: [FilesController],
   providers: [
     FilesService,

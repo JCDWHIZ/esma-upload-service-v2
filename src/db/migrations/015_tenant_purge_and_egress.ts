@@ -27,7 +27,11 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
-  await sql`ALTER TABLE tenant_quota DROP COLUMN IF EXISTS is_purging;`.execute(db);
-  await sql`ALTER TABLE tenant_quota DROP COLUMN IF EXISTS purged_at;`.execute(db);
+  await sql`ALTER TABLE tenant_quota DROP COLUMN IF EXISTS is_purging;`.execute(
+    db,
+  );
+  await sql`ALTER TABLE tenant_quota DROP COLUMN IF EXISTS purged_at;`.execute(
+    db,
+  );
   await sql`DROP TABLE IF EXISTS tenant_daily_egress;`.execute(db);
 }

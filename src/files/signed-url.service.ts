@@ -126,7 +126,9 @@ export class SignedUrlService {
     // Candidate payloads: v2 binds organizationId, v1 fallback for un-scoped tokens
     const candidatePayloads: string[] = [];
     if (organizationId) {
-      candidatePayloads.push(`v2|${fileId}|${expNum}|${disp}|${organizationId}`);
+      candidatePayloads.push(
+        `v2|${fileId}|${expNum}|${disp}|${organizationId}`,
+      );
     }
     candidatePayloads.push(`v1|${fileId}|${expNum}|${disp}`);
 
@@ -153,7 +155,9 @@ export class SignedUrlService {
         const expectedBase64UrlHash = createHash('sha256')
           .update(expectedBase64Url)
           .digest();
-        const expectedHexHash = createHash('sha256').update(expectedHex).digest();
+        const expectedHexHash = createHash('sha256')
+          .update(expectedHex)
+          .digest();
 
         if (
           timingSafeEqual(sigHash, expectedBase64UrlHash) ||

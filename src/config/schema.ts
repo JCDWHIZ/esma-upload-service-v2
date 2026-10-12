@@ -89,7 +89,9 @@ export const rawConfigSchema = z.object({
     .string()
     .default('http://esma-identity-service:7071/identity'),
   // UR-02: per-client namespace allowlist JSON e.g. {"esma-storage-client":["*"]}
-  SERVICE_CLIENT_NAMESPACES: z.string().default('{"esma-storage-client":["*"]}'),
+  SERVICE_CLIENT_NAMESPACES: z
+    .string()
+    .default('{"esma-storage-client":["*"]}'),
 
   // --- Database and cache ---
   // UR-08: AUTO_MIGRATE defaults true outside production, false in production
@@ -496,7 +498,10 @@ export function runCrossFieldGuards(
 
   // UR-01: IDENTITY_JWKS_URI and IDENTITY_ISSUER must be set in production
   if (isProd) {
-    if (!data.IDENTITY_JWKS_URI || String(data.IDENTITY_JWKS_URI).trim() === '') {
+    if (
+      !data.IDENTITY_JWKS_URI ||
+      String(data.IDENTITY_JWKS_URI).trim() === ''
+    ) {
       addIssue(
         'IDENTITY_JWKS_URI',
         'IDENTITY_JWKS_URI is required in production (UR-01)',
@@ -538,8 +543,11 @@ export function runCrossFieldGuards(
     }
 
     // UR-08: DATABASE_URL is required in production (DB_ENABLED is forced true)
-    if (!data.DATABASE_URL || String(data.DATABASE_URL).trim() === '' ||
-        String(data.DATABASE_URL).includes('gus:gus@localhost')) {
+    if (
+      !data.DATABASE_URL ||
+      String(data.DATABASE_URL).trim() === '' ||
+      String(data.DATABASE_URL).includes('gus:gus@localhost')
+    ) {
       addIssue(
         'DATABASE_URL',
         'DATABASE_URL must be set to a real database in production (UR-08)',

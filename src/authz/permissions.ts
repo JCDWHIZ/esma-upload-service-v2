@@ -47,70 +47,225 @@ export type UploadPermission =
 /**
  * Mapping between aliases and canonical permissions.
  */
-const CANONICAL_MAPPINGS: Readonly<Record<string, { canonical: string; legacy: string }>> = Object.freeze({
-  'files.file.upload': { canonical: CanonicalPermissions.FILE_UPLOAD, legacy: UploadPermissions.FILES_UPLOAD },
-  'files_upload': { canonical: CanonicalPermissions.FILE_UPLOAD, legacy: UploadPermissions.FILES_UPLOAD },
-  'upload_files_upload': { canonical: CanonicalPermissions.FILE_UPLOAD, legacy: UploadPermissions.FILES_UPLOAD },
-  'upload_file_upload': { canonical: CanonicalPermissions.FILE_UPLOAD, legacy: UploadPermissions.FILES_UPLOAD },
+const CANONICAL_MAPPINGS: Readonly<
+  Record<string, { canonical: string; legacy: string }>
+> = Object.freeze({
+  'files.file.upload': {
+    canonical: CanonicalPermissions.FILE_UPLOAD,
+    legacy: UploadPermissions.FILES_UPLOAD,
+  },
+  files_upload: {
+    canonical: CanonicalPermissions.FILE_UPLOAD,
+    legacy: UploadPermissions.FILES_UPLOAD,
+  },
+  upload_files_upload: {
+    canonical: CanonicalPermissions.FILE_UPLOAD,
+    legacy: UploadPermissions.FILES_UPLOAD,
+  },
+  upload_file_upload: {
+    canonical: CanonicalPermissions.FILE_UPLOAD,
+    legacy: UploadPermissions.FILES_UPLOAD,
+  },
 
-  'files.file.read': { canonical: CanonicalPermissions.FILE_READ, legacy: UploadPermissions.FILES_READ },
-  'files_read': { canonical: CanonicalPermissions.FILE_READ, legacy: UploadPermissions.FILES_READ },
-  'upload_files_read': { canonical: CanonicalPermissions.FILE_READ, legacy: UploadPermissions.FILES_READ },
-  'upload_file_read': { canonical: CanonicalPermissions.FILE_READ, legacy: UploadPermissions.FILES_READ },
-  'upload_files_view': { canonical: CanonicalPermissions.FILE_READ, legacy: UploadPermissions.FILES_READ },
-  'upload_file_view': { canonical: CanonicalPermissions.FILE_READ, legacy: UploadPermissions.FILES_READ },
+  'files.file.read': {
+    canonical: CanonicalPermissions.FILE_READ,
+    legacy: UploadPermissions.FILES_READ,
+  },
+  files_read: {
+    canonical: CanonicalPermissions.FILE_READ,
+    legacy: UploadPermissions.FILES_READ,
+  },
+  upload_files_read: {
+    canonical: CanonicalPermissions.FILE_READ,
+    legacy: UploadPermissions.FILES_READ,
+  },
+  upload_file_read: {
+    canonical: CanonicalPermissions.FILE_READ,
+    legacy: UploadPermissions.FILES_READ,
+  },
+  upload_files_view: {
+    canonical: CanonicalPermissions.FILE_READ,
+    legacy: UploadPermissions.FILES_READ,
+  },
+  upload_file_view: {
+    canonical: CanonicalPermissions.FILE_READ,
+    legacy: UploadPermissions.FILES_READ,
+  },
 
-  'files.file.read.any': { canonical: CanonicalPermissions.FILE_READ_ANY, legacy: 'files_read_any' },
-  'files_read_any': { canonical: CanonicalPermissions.FILE_READ_ANY, legacy: 'files_read_any' },
+  'files.file.read.any': {
+    canonical: CanonicalPermissions.FILE_READ_ANY,
+    legacy: 'files_read_any',
+  },
+  files_read_any: {
+    canonical: CanonicalPermissions.FILE_READ_ANY,
+    legacy: 'files_read_any',
+  },
 
-  'files.file.list': { canonical: CanonicalPermissions.FILE_LIST, legacy: UploadPermissions.FILES_LIST },
-  'files_list': { canonical: CanonicalPermissions.FILE_LIST, legacy: UploadPermissions.FILES_LIST },
-  'upload_files_list': { canonical: CanonicalPermissions.FILE_LIST, legacy: UploadPermissions.FILES_LIST },
-  'upload_file_list': { canonical: CanonicalPermissions.FILE_LIST, legacy: UploadPermissions.FILES_LIST },
+  'files.file.list': {
+    canonical: CanonicalPermissions.FILE_LIST,
+    legacy: UploadPermissions.FILES_LIST,
+  },
+  files_list: {
+    canonical: CanonicalPermissions.FILE_LIST,
+    legacy: UploadPermissions.FILES_LIST,
+  },
+  upload_files_list: {
+    canonical: CanonicalPermissions.FILE_LIST,
+    legacy: UploadPermissions.FILES_LIST,
+  },
+  upload_file_list: {
+    canonical: CanonicalPermissions.FILE_LIST,
+    legacy: UploadPermissions.FILES_LIST,
+  },
 
-  'files.file.delete': { canonical: CanonicalPermissions.FILE_DELETE, legacy: UploadPermissions.FILES_DELETE },
-  'files_delete': { canonical: CanonicalPermissions.FILE_DELETE, legacy: UploadPermissions.FILES_DELETE },
-  'upload_files_delete': { canonical: CanonicalPermissions.FILE_DELETE, legacy: UploadPermissions.FILES_DELETE },
-  'upload_file_delete': { canonical: CanonicalPermissions.FILE_DELETE, legacy: UploadPermissions.FILES_DELETE },
+  'files.file.delete': {
+    canonical: CanonicalPermissions.FILE_DELETE,
+    legacy: UploadPermissions.FILES_DELETE,
+  },
+  files_delete: {
+    canonical: CanonicalPermissions.FILE_DELETE,
+    legacy: UploadPermissions.FILES_DELETE,
+  },
+  upload_files_delete: {
+    canonical: CanonicalPermissions.FILE_DELETE,
+    legacy: UploadPermissions.FILES_DELETE,
+  },
+  upload_file_delete: {
+    canonical: CanonicalPermissions.FILE_DELETE,
+    legacy: UploadPermissions.FILES_DELETE,
+  },
 
-  'files.file.delete.any': { canonical: CanonicalPermissions.FILE_DELETE_ANY, legacy: 'files_delete_any' },
-  'files_delete_any': { canonical: CanonicalPermissions.FILE_DELETE_ANY, legacy: 'files_delete_any' },
+  'files.file.delete.any': {
+    canonical: CanonicalPermissions.FILE_DELETE_ANY,
+    legacy: 'files_delete_any',
+  },
+  files_delete_any: {
+    canonical: CanonicalPermissions.FILE_DELETE_ANY,
+    legacy: 'files_delete_any',
+  },
 
-  'files.file.admin': { canonical: CanonicalPermissions.FILE_ADMIN, legacy: UploadPermissions.FILES_ADMIN },
-  'files_admin': { canonical: CanonicalPermissions.FILE_ADMIN, legacy: UploadPermissions.FILES_ADMIN },
-  'upload_files_admin': { canonical: CanonicalPermissions.FILE_ADMIN, legacy: UploadPermissions.FILES_ADMIN },
-  'upload_files_manage': { canonical: CanonicalPermissions.FILE_ADMIN, legacy: UploadPermissions.FILES_ADMIN },
-  'upload_file_admin': { canonical: CanonicalPermissions.FILE_ADMIN, legacy: UploadPermissions.FILES_ADMIN },
-  'upload_file_manage': { canonical: CanonicalPermissions.FILE_ADMIN, legacy: UploadPermissions.FILES_ADMIN },
+  'files.file.admin': {
+    canonical: CanonicalPermissions.FILE_ADMIN,
+    legacy: UploadPermissions.FILES_ADMIN,
+  },
+  files_admin: {
+    canonical: CanonicalPermissions.FILE_ADMIN,
+    legacy: UploadPermissions.FILES_ADMIN,
+  },
+  upload_files_admin: {
+    canonical: CanonicalPermissions.FILE_ADMIN,
+    legacy: UploadPermissions.FILES_ADMIN,
+  },
+  upload_files_manage: {
+    canonical: CanonicalPermissions.FILE_ADMIN,
+    legacy: UploadPermissions.FILES_ADMIN,
+  },
+  upload_file_admin: {
+    canonical: CanonicalPermissions.FILE_ADMIN,
+    legacy: UploadPermissions.FILES_ADMIN,
+  },
+  upload_file_manage: {
+    canonical: CanonicalPermissions.FILE_ADMIN,
+    legacy: UploadPermissions.FILES_ADMIN,
+  },
 
-  'files.quota.view': { canonical: CanonicalPermissions.QUOTA_VIEW, legacy: UploadPermissions.QUOTAS_VIEW },
-  'quotas_view': { canonical: CanonicalPermissions.QUOTA_VIEW, legacy: UploadPermissions.QUOTAS_VIEW },
-  'quota_view': { canonical: CanonicalPermissions.QUOTA_VIEW, legacy: UploadPermissions.QUOTAS_VIEW },
-  'upload_quotas_view': { canonical: CanonicalPermissions.QUOTA_VIEW, legacy: UploadPermissions.QUOTAS_VIEW },
-  'upload_quota_view': { canonical: CanonicalPermissions.QUOTA_VIEW, legacy: UploadPermissions.QUOTAS_VIEW },
+  'files.quota.view': {
+    canonical: CanonicalPermissions.QUOTA_VIEW,
+    legacy: UploadPermissions.QUOTAS_VIEW,
+  },
+  quotas_view: {
+    canonical: CanonicalPermissions.QUOTA_VIEW,
+    legacy: UploadPermissions.QUOTAS_VIEW,
+  },
+  quota_view: {
+    canonical: CanonicalPermissions.QUOTA_VIEW,
+    legacy: UploadPermissions.QUOTAS_VIEW,
+  },
+  upload_quotas_view: {
+    canonical: CanonicalPermissions.QUOTA_VIEW,
+    legacy: UploadPermissions.QUOTAS_VIEW,
+  },
+  upload_quota_view: {
+    canonical: CanonicalPermissions.QUOTA_VIEW,
+    legacy: UploadPermissions.QUOTAS_VIEW,
+  },
 
-  'files.quota.manage': { canonical: CanonicalPermissions.QUOTA_MANAGE, legacy: UploadPermissions.QUOTAS_MANAGE },
-  'quotas_manage': { canonical: CanonicalPermissions.QUOTA_MANAGE, legacy: UploadPermissions.QUOTAS_MANAGE },
-  'quota_manage': { canonical: CanonicalPermissions.QUOTA_MANAGE, legacy: UploadPermissions.QUOTAS_MANAGE },
-  'quotas_edit': { canonical: CanonicalPermissions.QUOTA_MANAGE, legacy: UploadPermissions.QUOTAS_MANAGE },
-  'quota_edit': { canonical: CanonicalPermissions.QUOTA_MANAGE, legacy: UploadPermissions.QUOTAS_MANAGE },
-  'upload_quotas_manage': { canonical: CanonicalPermissions.QUOTA_MANAGE, legacy: UploadPermissions.QUOTAS_MANAGE },
-  'upload_quota_manage': { canonical: CanonicalPermissions.QUOTA_MANAGE, legacy: UploadPermissions.QUOTAS_MANAGE },
-  'upload_quotas_edit': { canonical: CanonicalPermissions.QUOTA_MANAGE, legacy: UploadPermissions.QUOTAS_MANAGE },
-  'upload_quota_edit': { canonical: CanonicalPermissions.QUOTA_MANAGE, legacy: UploadPermissions.QUOTAS_MANAGE },
+  'files.quota.manage': {
+    canonical: CanonicalPermissions.QUOTA_MANAGE,
+    legacy: UploadPermissions.QUOTAS_MANAGE,
+  },
+  quotas_manage: {
+    canonical: CanonicalPermissions.QUOTA_MANAGE,
+    legacy: UploadPermissions.QUOTAS_MANAGE,
+  },
+  quota_manage: {
+    canonical: CanonicalPermissions.QUOTA_MANAGE,
+    legacy: UploadPermissions.QUOTAS_MANAGE,
+  },
+  quotas_edit: {
+    canonical: CanonicalPermissions.QUOTA_MANAGE,
+    legacy: UploadPermissions.QUOTAS_MANAGE,
+  },
+  quota_edit: {
+    canonical: CanonicalPermissions.QUOTA_MANAGE,
+    legacy: UploadPermissions.QUOTAS_MANAGE,
+  },
+  upload_quotas_manage: {
+    canonical: CanonicalPermissions.QUOTA_MANAGE,
+    legacy: UploadPermissions.QUOTAS_MANAGE,
+  },
+  upload_quota_manage: {
+    canonical: CanonicalPermissions.QUOTA_MANAGE,
+    legacy: UploadPermissions.QUOTAS_MANAGE,
+  },
+  upload_quotas_edit: {
+    canonical: CanonicalPermissions.QUOTA_MANAGE,
+    legacy: UploadPermissions.QUOTAS_MANAGE,
+  },
+  upload_quota_edit: {
+    canonical: CanonicalPermissions.QUOTA_MANAGE,
+    legacy: UploadPermissions.QUOTAS_MANAGE,
+  },
 
-  'files.audit.view': { canonical: CanonicalPermissions.AUDIT_VIEW, legacy: UploadPermissions.AUDIT_VIEW },
-  'audit_view': { canonical: CanonicalPermissions.AUDIT_VIEW, legacy: UploadPermissions.AUDIT_VIEW },
-  'upload_audit_view': { canonical: CanonicalPermissions.AUDIT_VIEW, legacy: UploadPermissions.AUDIT_VIEW },
+  'files.audit.view': {
+    canonical: CanonicalPermissions.AUDIT_VIEW,
+    legacy: UploadPermissions.AUDIT_VIEW,
+  },
+  audit_view: {
+    canonical: CanonicalPermissions.AUDIT_VIEW,
+    legacy: UploadPermissions.AUDIT_VIEW,
+  },
+  upload_audit_view: {
+    canonical: CanonicalPermissions.AUDIT_VIEW,
+    legacy: UploadPermissions.AUDIT_VIEW,
+  },
 
-  'platform.files.admin': { canonical: CanonicalPermissions.PLATFORM_ADMIN, legacy: 'platform_files_admin' },
-  'platform_files_admin': { canonical: CanonicalPermissions.PLATFORM_ADMIN, legacy: 'platform_files_admin' },
+  'platform.files.admin': {
+    canonical: CanonicalPermissions.PLATFORM_ADMIN,
+    legacy: 'platform_files_admin',
+  },
+  platform_files_admin: {
+    canonical: CanonicalPermissions.PLATFORM_ADMIN,
+    legacy: 'platform_files_admin',
+  },
 
-  'platform.files.dlq.manage': { canonical: CanonicalPermissions.PLATFORM_DLQ_MANAGE, legacy: 'platform_dlq_manage' },
-  'platform_dlq_manage': { canonical: CanonicalPermissions.PLATFORM_DLQ_MANAGE, legacy: 'platform_dlq_manage' },
+  'platform.files.dlq.manage': {
+    canonical: CanonicalPermissions.PLATFORM_DLQ_MANAGE,
+    legacy: 'platform_dlq_manage',
+  },
+  platform_dlq_manage: {
+    canonical: CanonicalPermissions.PLATFORM_DLQ_MANAGE,
+    legacy: 'platform_dlq_manage',
+  },
 
-  'upload_branches_manage': { canonical: 'upload_branches_manage', legacy: UploadPermissions.BRANCHES_MANAGE },
-  'branches_manage': { canonical: 'branches_manage', legacy: UploadPermissions.BRANCHES_MANAGE },
+  upload_branches_manage: {
+    canonical: 'upload_branches_manage',
+    legacy: UploadPermissions.BRANCHES_MANAGE,
+  },
+  branches_manage: {
+    canonical: 'branches_manage',
+    legacy: UploadPermissions.BRANCHES_MANAGE,
+  },
 });
 
 /**
@@ -124,7 +279,9 @@ export function normalizePermission(raw: string): string {
   }
 
   // Handle quoata typo normalization
-  const sanitized = trimmed.replace(/quoat[a]?/g, 'quot').replace(/[:.-]/g, '_');
+  const sanitized = trimmed
+    .replace(/quoat[a]?/g, 'quot')
+    .replace(/[:.-]/g, '_');
   if (sanitized in CANONICAL_MAPPINGS) {
     return CANONICAL_MAPPINGS[sanitized].canonical;
   }
@@ -152,7 +309,8 @@ export function normalizePermissions(rawList: unknown): string[] {
         const canonical = normalizePermission(lower);
         result.add(canonical);
 
-        const mapping = CANONICAL_MAPPINGS[lower] ?? CANONICAL_MAPPINGS[canonical];
+        const mapping =
+          CANONICAL_MAPPINGS[lower] ?? CANONICAL_MAPPINGS[canonical];
         if (mapping) {
           result.add(mapping.canonical);
           result.add(mapping.legacy);

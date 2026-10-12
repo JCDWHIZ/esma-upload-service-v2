@@ -7,7 +7,10 @@ import { StorageRegistry } from '../storage/registry.js';
 import type { StorageTopology } from '../storage/topology.js';
 import type { DriverHealth, ProviderName } from '../storage/types.js';
 import { DatabaseService } from '../db/database.service.js';
-import { MESSAGE_BROKER, type IMessageBroker } from '../events/broker.interface.js';
+import {
+  MESSAGE_BROKER,
+  type IMessageBroker,
+} from '../events/broker.interface.js';
 
 export interface HealthCheck {
   status: 'ok' | 'error';
@@ -44,7 +47,9 @@ export class HealthService {
 
   async ready(): Promise<{ status: 'ok' | 'error'; checks: ReadinessChecks }> {
     const checks = await this.runReadinessChecks();
-    const healthy = Object.values(checks).every((c) => !c || c.status === 'ok');
+    const healthy = (
+      Object.values(checks) as Array<HealthCheck | undefined>
+    ).every((c) => !c || c.status === 'ok');
 
     return {
       status: healthy ? 'ok' : 'error',

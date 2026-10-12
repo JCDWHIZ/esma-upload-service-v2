@@ -558,11 +558,7 @@ export class FilesController {
       mimetype?: string;
       tag?: string;
       status?:
-        | 'ACTIVE'
-        | 'DELETED'
-        | 'DELETING'
-        | 'PENDING_UPLOAD'
-        | 'QUARANTINED';
+        'ACTIVE' | 'DELETED' | 'DELETING' | 'PENDING_UPLOAD' | 'QUARANTINED';
       createdFrom?: string;
       createdTo?: string;
       cursor?: string;

@@ -93,9 +93,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     try {
       const migrator = createMigrator(db);
       const migrations = await migrator.getMigrations();
-      return migrations.some(
-        (m: { executedAt?: unknown }) => !m.executedAt,
-      );
+      return migrations.some((m: { executedAt?: unknown }) => !m.executedAt);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Pending migrations check failed: ${message}`);

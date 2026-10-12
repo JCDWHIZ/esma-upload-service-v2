@@ -34,7 +34,8 @@ export interface TenantExportReceipt {
   failures: Array<{ fileId: string; error: string }>;
 }
 
-export const EXPORT_COMPLETED_TOPIC = 'esma.platform.tenant-export-completed.v1';
+export const EXPORT_COMPLETED_TOPIC =
+  'esma.platform.tenant-export-completed.v1';
 
 @Injectable()
 export class TenantExportService {
@@ -59,12 +60,18 @@ export class TenantExportService {
    * 6. Emits files.tenant.exported.v1 to esma.files.events.v1.
    * 7. Emits completion receipt to esma.platform.tenant-export-completed.v1.
    */
-  async exportTenant(payload: TenantExportRequestPayload): Promise<TenantExportReceipt> {
+  async exportTenant(
+    payload: TenantExportRequestPayload,
+  ): Promise<TenantExportReceipt> {
     const { requestId, organizationId } = payload;
     const completedAt = new Date().toISOString();
 
     // 1. Check owners filter
-    if (payload.owners && payload.owners.length > 0 && !payload.owners.includes('files')) {
+    if (
+      payload.owners &&
+      payload.owners.length > 0 &&
+      !payload.owners.includes('files')
+    ) {
       this.logger.log(
         `Tenant export ${requestId} skipped: 'files' not in owners [${payload.owners.join(', ')}]`,
       );
@@ -135,7 +142,9 @@ export class TenantExportService {
 
       // Fetch file content from primary storage driver
       try {
-        const driver = this.storageRegistry.get(f.primary_provider as ProviderName);
+        const driver = this.storageRegistry.get(
+          f.primary_provider as ProviderName,
+        );
         if (!driver) {
           throw new Error(`Storage driver '${f.primary_provider}' not found`);
         }
@@ -146,7 +155,9 @@ export class TenantExportService {
         });
 
         const chunks: Buffer[] = [];
-        for await (const chunk of readStream) {
+        for await (const chunk of readStream as AsyncIterable<
+          Buffer | Uint8Array | string
+        >) {
           chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
         }
         const fileBuffer = Buffer.concat(chunks);
@@ -177,15 +188,22 @@ export class TenantExportService {
     // 4. Build ZIP bundle Buffer
     const zipBundle = buildZipArchive(zipEntries);
     const bundleFileId = uuidv7();
-    const bundleSha256 = crypto.createHash('sha256').update(zipBundle).digest('hex');
+    const bundleSha256 = crypto
+      .createHash('sha256')
+      .update(zipBundle)
+      .digest('hex');
     const bundleSize = zipBundle.length;
     const bundleStorageKey = `${organizationId}/tenant-exports/${new Date().getUTCFullYear()}/${String(new Date().getUTCMonth() + 1).padStart(2, '0')}/${bundleFileId}.zip`;
     const retainUntil = new Date(Date.now() + 14 * 86400 * 1000); // 14-day retention (UR-19.3)
 
     // Store ZIP in primary storage (seaweedfs or local)
-    const primaryDriver = this.storageRegistry.get('seaweedfs') ?? this.storageRegistry.get('local');
+    const primaryDriver =
+      this.storageRegistry.get('seaweedfs') ??
+      this.storageRegistry.get('local');
     if (!primaryDriver) {
-      throw new Error('No storage driver available to store tenant export bundle');
+      throw new Error(
+        'No storage driver available to store tenant export bundle',
+      );
     }
 
     await primaryDriver.upload({

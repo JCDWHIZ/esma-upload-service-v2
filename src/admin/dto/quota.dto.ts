@@ -47,7 +47,8 @@ export class QuotaPatchBodyDto {
   reason?: string;
 
   @ApiPropertyOptional({
-    description: 'Expiration date/time of the override (ISO 8601, null for persistent)',
+    description:
+      'Expiration date/time of the override (ISO 8601, null for persistent)',
     nullable: true,
     example: '2026-12-31T23:59:59Z',
   })

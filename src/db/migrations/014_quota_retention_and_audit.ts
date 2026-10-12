@@ -56,5 +56,7 @@ export async function down(db: Kysely<unknown>): Promise<void> {
   await sql`ALTER TABLE files DROP COLUMN IF EXISTS held;`.execute(db);
   await sql`ALTER TABLE audit_log DROP COLUMN IF EXISTS trace_id;`.execute(db);
   await sql`ALTER TABLE audit_log DROP COLUMN IF EXISTS act_sub;`.execute(db);
-  await sql`ALTER TABLE audit_log DROP COLUMN IF EXISTS support_grant_id;`.execute(db);
+  await sql`ALTER TABLE audit_log DROP COLUMN IF EXISTS support_grant_id;`.execute(
+    db,
+  );
 }

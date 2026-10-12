@@ -64,10 +64,7 @@ export class DomainEventPublisher {
 
     // Resolve correlationId and traceId
     const correlationId =
-      params.correlationId ??
-      ctx?.correlationId ??
-      getCorrelationId() ??
-      null;
+      params.correlationId ?? ctx?.correlationId ?? getCorrelationId() ?? null;
 
     const traceId = params.traceId ?? null;
 

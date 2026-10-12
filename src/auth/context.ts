@@ -32,6 +32,7 @@ export interface VerifiedTokenClaims {
   platformAdmin?: boolean;
   grant_type?: string;
   scope?: string;
+  scopes?: string[];
   azp?: string;
   sid?: string;
   permissionVersion?: number;

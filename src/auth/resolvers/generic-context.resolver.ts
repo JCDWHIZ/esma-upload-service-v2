@@ -27,9 +27,7 @@ import { AppConfigService } from '../../config/config.service.js';
 
 @Injectable()
 export class GenericContextResolver implements ContextResolver {
-  constructor(
-    @Optional() private readonly configService?: AppConfigService,
-  ) {}
+  constructor(@Optional() private readonly configService?: AppConfigService) {}
 
   resolve(req: AuthenticatedHttpRequest): Promise<RequestContext> {
     try {
@@ -83,7 +81,7 @@ export class GenericContextResolver implements ContextResolver {
 
         // Check service client allowed namespaces (UR-02.5)
         if (isServicePrincipal) {
-          const clientId = (token.azp ?? token.sub ?? 'unknown-service') as string;
+          const clientId = token.azp ?? token.sub ?? 'unknown-service';
           let allowedMap: Record<string, string[]> = {
             'esma-storage-client': ['*'],
           };
@@ -91,7 +89,7 @@ export class GenericContextResolver implements ContextResolver {
             const rawConfigMap =
               this.configService?.raw?.SERVICE_CLIENT_NAMESPACES;
             if (rawConfigMap) {
-              allowedMap = JSON.parse(rawConfigMap);
+              allowedMap = JSON.parse(rawConfigMap) as Record<string, string[]>;
             }
           } catch {
             // fallback
@@ -242,7 +240,7 @@ export class GenericContextResolver implements ContextResolver {
 
         let actor: RequestContextActor;
         if (isServicePrincipal) {
-          const clientId = (token.azp ?? token.sub ?? 'service-client') as string;
+          const clientId = token.azp ?? token.sub ?? 'service-client';
           actor = {
             id: clientId,
             type: 'service',

@@ -296,7 +296,10 @@ export class UploadService {
         this.configService?.unclaimedMaxFilesPerUser ?? 50;
       const maxPendingBytes =
         this.configService?.unclaimedMaxBytesPerUser ?? 524288000;
-      if (count >= maxPendingFiles || totalBytes + file.size > maxPendingBytes) {
+      if (
+        count >= maxPendingFiles ||
+        totalBytes + file.size > maxPendingBytes
+      ) {
         throw new TooManyPendingUploadsError(
           `User pending unclaimed upload quota exceeded (max ${maxPendingFiles} files or ${maxPendingBytes} bytes)`,
         );
@@ -308,7 +311,10 @@ export class UploadService {
     const requestedRetentionDays = options?.retentionDays;
 
     if (requestedRetentionDays !== undefined) {
-      if (typeof requestedRetentionDays !== 'number' || requestedRetentionDays <= 0) {
+      if (
+        typeof requestedRetentionDays !== 'number' ||
+        requestedRetentionDays <= 0
+      ) {
         throw new ValidationError('retentionDays must be a positive integer', {
           code: 'validation_failed',
         });
@@ -325,9 +331,13 @@ export class UploadService {
           },
         );
       }
-      retainUntil = new Date(Date.now() + requestedRetentionDays * 86400 * 1000);
+      retainUntil = new Date(
+        Date.now() + requestedRetentionDays * 86400 * 1000,
+      );
     } else if (policy.defaultRetentionDays !== undefined) {
-      retainUntil = new Date(Date.now() + policy.defaultRetentionDays * 86400 * 1000);
+      retainUntil = new Date(
+        Date.now() + policy.defaultRetentionDays * 86400 * 1000,
+      );
     }
 
     // 3. Reserve quota through TenantQuotaService (UR-13) & QuotaGate seam
@@ -798,8 +808,12 @@ export class UploadService {
 
       if (this.clamAvScanner) {
         try {
-          const downloadStream = await primaryDriver.downloadStream(uploadResult.ref);
-          const scanRes = await this.clamAvScanner.scanStream(downloadStream.stream);
+          const downloadStream = await primaryDriver.downloadStream(
+            uploadResult.ref,
+          );
+          const scanRes = await this.clamAvScanner.scanStream(
+            downloadStream.stream,
+          );
           const newScanStatus = scanRes.clean ? 'CLEAN' : 'INFECTED';
           const newFileStatus = scanRes.clean ? 'ACTIVE' : 'QUARANTINED';
 
@@ -855,22 +869,27 @@ export class UploadService {
             scanStatus: newScanStatus,
           };
         } catch (scanErr: unknown) {
-          this.logger.warn(`waitForScan ClamAV scan failed: ${String(scanErr)}`);
+          this.logger.warn(
+            `waitForScan ClamAV scan failed: ${String(scanErr)}`,
+          );
           const scanStatusOnFailure =
             this.configService.scanFailMode === 'open' ? 'CLEAN' : 'ERROR';
           const db = this.databaseService?.getDb();
           if (db) {
-            await db.transaction().execute(async (trx) => {
-              const current = await this.fileRepo.findById(fileId, trx);
-              if (current && current.status !== 'DELETED') {
-                await this.fileRepo.updateStatus(
-                  fileId,
-                  current.version,
-                  { scanStatus: scanStatusOnFailure },
-                  trx,
-                );
-              }
-            }).catch(() => {});
+            await db
+              .transaction()
+              .execute(async (trx) => {
+                const current = await this.fileRepo.findById(fileId, trx);
+                if (current && current.status !== 'DELETED') {
+                  await this.fileRepo.updateStatus(
+                    fileId,
+                    current.version,
+                    { scanStatus: scanStatusOnFailure },
+                    trx,
+                  );
+                }
+              })
+              .catch(() => {});
           }
           fileRecord = (await this.fileRepo.findById(fileId)) ?? {
             ...fileRecord,

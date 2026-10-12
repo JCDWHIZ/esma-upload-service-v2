@@ -60,10 +60,7 @@ export class UnauthenticatedError extends AppError {
 }
 
 export class BadRequestError extends AppError {
-  constructor(
-    message = 'Bad request',
-    options?: Partial<AppErrorOptions>,
-  ) {
+  constructor(message = 'Bad request', options?: Partial<AppErrorOptions>) {
     super({
       message,
       code: 'validation_failed',

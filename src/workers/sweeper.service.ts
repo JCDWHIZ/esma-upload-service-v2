@@ -793,7 +793,11 @@ export class SweeperService implements OnApplicationShutdown {
         return 0;
       }
 
-      const expiredFiles = await this.fileRepo.findExpiredRetained(now, 50, trx);
+      const expiredFiles = await this.fileRepo.findExpiredRetained(
+        now,
+        50,
+        trx,
+      );
       if (expiredFiles.length === 0) {
         return 0;
       }
@@ -861,5 +865,3 @@ export class SweeperService implements OnApplicationShutdown {
     });
   }
 }
-
-

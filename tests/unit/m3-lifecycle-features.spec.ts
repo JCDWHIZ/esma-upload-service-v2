@@ -1,24 +1,43 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as crypto from 'node:crypto';
 import { Readable } from 'node:stream';
-import { TenantPurgeService, PURGE_COMPLETED_TOPIC } from '../../src/workers/tenant-purge.service.js';
-import { TenantExportService, EXPORT_COMPLETED_TOPIC } from '../../src/workers/tenant-export.service.js';
+import {
+  TenantPurgeService,
+  PURGE_COMPLETED_TOPIC,
+} from '../../src/workers/tenant-purge.service.js';
+import {
+  TenantExportService,
+  EXPORT_COMPLETED_TOPIC,
+} from '../../src/workers/tenant-export.service.js';
 import { buildZipArchive } from '../../src/workers/zip-builder.js';
 import { TenantQuotaService } from '../../src/admin/tenant-quota.service.js';
 import { TenantUsageReconciler } from '../../src/admin/tenant-usage-reconciler.service.js';
 import { DeleteService } from '../../src/files/delete.service.js';
-import { FileReadService } from '../../src/files/file-read.service.js';
-import { TenantPurgingError, ForbiddenError } from '../../src/core/errors/app-error.js';
+import {
+  TenantPurgingError,
+  ForbiddenError,
+} from '../../src/core/errors/app-error.js';
 import type { RequestContext } from '../../src/core/request-context.js';
+import type { DatabaseService } from '../../src/db/database.service.js';
+import type { StorageRegistry } from '../../src/storage/registry.js';
+import type { OutboxRepository } from '../../src/db/repositories/outbox.repository.js';
+import type { AuditService } from '../../src/observability/audit.service.js';
+import type { DomainEventPublisher } from '../../src/events/domain-event.publisher.js';
+import type { FileRepository } from '../../src/db/repositories/file.repository.js';
+import type { ReplicaRepository } from '../../src/db/repositories/replica.repository.js';
+import type { AppConfigService } from '../../src/config/config.service.js';
+import type { AuthorizationService } from '../../src/authz/authorization.service.js';
+import type { UsageRepository } from '../../src/db/repositories/usage.repository.js';
+import type { OutboxWriter } from '../../src/events/outbox-writer.js';
 
 describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
   describe('UR-18: Tenant Purge Orchestrator', () => {
     let purgeService: TenantPurgeService;
-    let mockDbService: any;
-    let mockStorageRegistry: any;
-    let mockOutboxRepo: any;
-    let mockAuditService: any;
-    let mockDriver: any;
+    let mockDbService: { getDb: ReturnType<typeof vi.fn> };
+    let mockStorageRegistry: { get: ReturnType<typeof vi.fn> };
+    let mockOutboxRepo: { enqueue: ReturnType<typeof vi.fn> };
+    let mockAuditService: { log: ReturnType<typeof vi.fn> };
+    let mockDriver: { name: string; delete: ReturnType<typeof vi.fn> };
 
     beforeEach(() => {
       mockDriver = {
@@ -43,10 +62,10 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
       };
 
       purgeService = new TenantPurgeService(
-        mockDbService,
-        mockStorageRegistry,
-        mockOutboxRepo,
-        mockAuditService,
+        mockDbService as unknown as DatabaseService,
+        mockStorageRegistry as unknown as StorageRegistry,
+        mockOutboxRepo as unknown as OutboxRepository,
+        mockAuditService as unknown as AuditService,
       );
     });
 
@@ -66,8 +85,8 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
     it('should refuse purge when files are under legal hold (UR-18.2)', async () => {
       const mockDb = {
         getExecutor: vi.fn().mockReturnValue({
-          transformQuery: (q: any) => q,
-          compileQuery: (q: any) => ({ sql: '', parameters: [] }),
+          transformQuery: <T>(q: T): T => q,
+          compileQuery: () => ({ sql: '', parameters: [] }),
           executeQuery: vi.fn().mockResolvedValue({
             rows: [{ count: '3' }], // 3 held files
           }),
@@ -91,7 +110,7 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
           envelope: expect.objectContaining({
             status: 'REFUSED',
             reason: 'LEGAL_HOLD',
-          }),
+          }) as unknown as Record<string, unknown>,
         }),
       );
     });
@@ -101,49 +120,69 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
       const file2Id = '01920000-0000-7000-8000-000000000002';
 
       let callIndex = 0;
-      const mockDb: any = {
+      const mockDb = {
         getExecutor: vi.fn().mockReturnValue({
-          transformQuery: (q: any) => q,
-          compileQuery: (q: any) => ({ sql: '', parameters: [] }),
-          executeQuery: vi.fn().mockImplementation(async () => {
+          transformQuery: <T>(q: T): T => q,
+          compileQuery: () => ({ sql: '', parameters: [] }),
+          executeQuery: vi.fn().mockImplementation(() => {
             callIndex++;
             if (callIndex === 1) {
               // 1. Legal hold count query -> 0
-              return { rows: [{ count: '0' }] };
+              return Promise.resolve({ rows: [{ count: '0' }] });
             } else if (callIndex === 2) {
               // 2. Set is_purging = true query
-              return { rows: [] };
+              return Promise.resolve({ rows: [] });
             } else if (callIndex === 3) {
               // 3. Query all files
-              return {
+              return Promise.resolve({
                 rows: [
-                  { id: file1Id, size_bytes: '1000', namespace: 'student-documents' },
-                  { id: file2Id, size_bytes: '2500', namespace: 'support-attachments' },
+                  {
+                    id: file1Id,
+                    size_bytes: '1000',
+                    namespace: 'student-documents',
+                  },
+                  {
+                    id: file2Id,
+                    size_bytes: '2500',
+                    namespace: 'support-attachments',
+                  },
                 ],
-              };
+              });
             } else if (callIndex === 4) {
               // 4. Query replicas for batch
-              return {
+              return Promise.resolve({
                 rows: [
-                  { id: 'rep-1', file_id: file1Id, provider: 'seaweedfs', provider_key: 'k1' },
-                  { id: 'rep-2', file_id: file2Id, provider: 'seaweedfs', provider_key: 'k2' },
+                  {
+                    id: 'rep-1',
+                    file_id: file1Id,
+                    provider: 'seaweedfs',
+                    provider_key: 'k1',
+                  },
+                  {
+                    id: 'rep-2',
+                    file_id: file2Id,
+                    provider: 'seaweedfs',
+                    provider_key: 'k2',
+                  },
                 ],
-              };
+              });
             }
-            return { rows: [] };
+            return Promise.resolve({ rows: [] });
           }),
         }),
         transaction: vi.fn().mockReturnValue({
-          execute: vi.fn().mockImplementation(async (cb) => {
-            const trxMock = {
-              getExecutor: vi.fn().mockReturnValue({
-                transformQuery: (q: any) => q,
-                compileQuery: (q: any) => ({ sql: '', parameters: [] }),
-                executeQuery: vi.fn().mockResolvedValue({ rows: [] }),
-              }),
-            };
-            return cb(trxMock);
-          }),
+          execute: vi
+            .fn()
+            .mockImplementation((cb: (trx: unknown) => Promise<unknown>) => {
+              const trxMock = {
+                getExecutor: vi.fn().mockReturnValue({
+                  transformQuery: <T>(q: T): T => q,
+                  compileQuery: () => ({ sql: '', parameters: [] }),
+                  executeQuery: vi.fn().mockResolvedValue({ rows: [] }),
+                }),
+              };
+              return cb(trxMock);
+            }),
         }),
       };
       mockDbService.getDb.mockReturnValue(mockDb);
@@ -187,7 +226,7 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
           envelope: expect.objectContaining({
             status: 'COMPLETED',
             checksum: `sha256:${expectedHash}`,
-          }),
+          }) as unknown as Record<string, unknown>,
         }),
       );
     });
@@ -195,8 +234,14 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
 
   describe('UR-19: Tenant Export Worker & ZIP Bundle Builder', () => {
     it('should build a valid PKWARE ZIP archive using buildZipArchive', () => {
-      const fileData = Buffer.from('hello world from tenant export file', 'utf8');
-      const manifestData = Buffer.from('{"fileId":"f1","path":"files/doc.txt"}\n', 'utf8');
+      const fileData = Buffer.from(
+        'hello world from tenant export file',
+        'utf8',
+      );
+      const manifestData = Buffer.from(
+        '{"fileId":"f1","path":"files/doc.txt"}\n',
+        'utf8',
+      );
 
       const zipBuffer = buildZipArchive([
         { path: 'manifest.jsonl', data: manifestData },
@@ -215,33 +260,45 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
         downloadStream: vi.fn().mockResolvedValue({
           stream: Readable.from([Buffer.from('export-test-content')]),
         }),
-        upload: vi.fn().mockResolvedValue({ ref: { provider: 'seaweedfs', key: 'key.zip' } }),
+        upload: vi.fn().mockResolvedValue({
+          ref: { provider: 'seaweedfs', key: 'key.zip' },
+        }),
       };
 
-      const mockStorageRegistry: any = {
+      const mockStorageRegistry: {
+        get: ReturnType<typeof vi.fn>;
+      } = {
         get: vi.fn().mockReturnValue(mockDriver),
       };
 
-      const mockOutboxRepo: any = {
+      const mockOutboxRepo: {
+        enqueue: ReturnType<typeof vi.fn>;
+      } = {
         enqueue: vi.fn().mockResolvedValue(undefined),
       };
 
-      const mockDomainEventPublisher: any = {
+      const mockDomainEventPublisher: {
+        publish: ReturnType<typeof vi.fn>;
+      } = {
         publish: vi.fn().mockResolvedValue(undefined),
       };
 
-      const mockFileRepo: any = {
+      const mockFileRepo: {
+        insert: ReturnType<typeof vi.fn>;
+      } = {
         insert: vi.fn().mockResolvedValue(undefined),
       };
 
-      const mockReplicaRepo: any = {
+      const mockReplicaRepo: {
+        insertMany: ReturnType<typeof vi.fn>;
+      } = {
         insertMany: vi.fn().mockResolvedValue([]),
       };
 
-      const mockDb: any = {
+      const mockDb = {
         getExecutor: vi.fn().mockReturnValue({
-          transformQuery: (q: any) => q,
-          compileQuery: (q: any) => ({ sql: '', parameters: [] }),
+          transformQuery: <T>(q: T): T => q,
+          compileQuery: () => ({ sql: '', parameters: [] }),
           executeQuery: vi.fn().mockResolvedValue({
             rows: [
               {
@@ -261,17 +318,19 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
         }),
       };
 
-      const mockDbService: any = {
+      const mockDbService: {
+        getDb: ReturnType<typeof vi.fn>;
+      } = {
         getDb: vi.fn().mockReturnValue(mockDb),
       };
 
       const exportService = new TenantExportService(
-        mockDbService,
-        mockStorageRegistry,
-        mockOutboxRepo,
-        mockDomainEventPublisher,
-        mockFileRepo,
-        mockReplicaRepo,
+        mockDbService as unknown as DatabaseService,
+        mockStorageRegistry as unknown as StorageRegistry,
+        mockOutboxRepo as unknown as OutboxRepository,
+        mockDomainEventPublisher as unknown as DomainEventPublisher,
+        mockFileRepo as unknown as FileRepository,
+        mockReplicaRepo as unknown as ReplicaRepository,
       );
 
       const receipt = await exportService.exportTenant({
@@ -299,7 +358,7 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
           tenantId: 'org-export',
           mimetype: 'application/zip',
           claimed: true,
-          retainUntil: expect.any(Date),
+          retainUntil: expect.any(Date) as unknown as Date,
         }),
       );
 
@@ -312,7 +371,7 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
           data: expect.objectContaining({
             requestId: 'req-export-1',
             files: 1,
-          }),
+          }) as unknown as Record<string, unknown>,
         }),
       );
 
@@ -324,7 +383,7 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
           envelope: expect.objectContaining({
             status: 'COMPLETED',
             bundleFileId: receipt.bundleFileId,
-          }),
+          }) as unknown as Record<string, unknown>,
         }),
       );
     });
@@ -332,10 +391,10 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
 
   describe('UR-18.5 & UR-21: Quota & Purge Gate Hardening', () => {
     let quotaService: TenantQuotaService;
-    let mockDbService: any;
-    let mockConfigService: any;
-    let mockDomainEventPublisher: any;
-    let mockAuditService: any;
+    let mockDbService: { getDb: ReturnType<typeof vi.fn> };
+    let mockConfigService: { defaultTenantQuotaBytes: number };
+    let mockDomainEventPublisher: { publish: ReturnType<typeof vi.fn> };
+    let mockAuditService: { log: ReturnType<typeof vi.fn> };
 
     beforeEach(() => {
       mockDbService = { getDb: vi.fn() };
@@ -344,10 +403,10 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
       mockAuditService = { log: vi.fn() };
 
       quotaService = new TenantQuotaService(
-        mockDbService,
-        mockConfigService,
-        mockDomainEventPublisher,
-        mockAuditService,
+        mockDbService as unknown as DatabaseService,
+        mockConfigService as unknown as AppConfigService,
+        mockDomainEventPublisher as unknown as DomainEventPublisher,
+        mockAuditService as unknown as AuditService,
       );
     });
 
@@ -384,14 +443,24 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
       const ctx: RequestContext = {
         tenantId: 'org-platform',
         namespace: 'platform-archives',
-        actor: { type: 'service', id: 'srv-1', actingService: 'platform', roles: [], scopes: [] },
+        actor: {
+          type: 'service',
+          id: 'srv-1',
+          actingService: 'platform',
+          roles: [],
+          scopes: [],
+        },
         correlationId: 'corr-2',
         ipAddress: '127.0.0.1',
         attributes: {},
       };
 
       // Uploading 10 GB into platform-archives
-      await quotaService.checkUploadQuota('org-platform', 10 * 1024 * 1024 * 1024, ctx);
+      await quotaService.checkUploadQuota(
+        'org-platform',
+        10 * 1024 * 1024 * 1024,
+        ctx,
+      );
 
       // getEffectiveQuota was never called because platform-archives is exempt
       expect(getQuotaSpy).not.toHaveBeenCalled();
@@ -400,8 +469,11 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
 
   describe('UR-21: Platform Archives Namespace Delete Authorization', () => {
     let deleteService: DeleteService;
-    let mockFileRepo: any;
-    let mockAuthzService: any;
+    let mockFileRepo: { findById: ReturnType<typeof vi.fn> };
+    let mockAuthzService: {
+      canAccessTenant: ReturnType<typeof vi.fn>;
+      authorize: ReturnType<typeof vi.fn>;
+    };
 
     beforeEach(() => {
       mockFileRepo = {
@@ -413,15 +485,15 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
       };
 
       deleteService = new DeleteService(
-        {} as any,
-        mockAuthzService,
-        {} as any,
-        {} as any,
-        mockFileRepo,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
+        {} as unknown as StorageRegistry,
+        mockAuthzService as unknown as AuthorizationService,
+        {} as unknown as AppConfigService,
+        {} as unknown as DatabaseService,
+        mockFileRepo as unknown as FileRepository,
+        {} as unknown as ReplicaRepository,
+        {} as unknown as UsageRepository,
+        {} as unknown as OutboxRepository,
+        {} as unknown as OutboxWriter,
       );
     });
 
@@ -486,49 +558,60 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
 
   describe('UR-12 & UR-23: Usage & Egress Metering', () => {
     it('should format storage.bytes, storage.files, and storage.egress.bytes events to exact UR-12 & UR-23 specs', async () => {
-      const mockOutboxRepo: any = {
+      const mockOutboxRepo: {
+        enqueue: ReturnType<typeof vi.fn>;
+      } = {
         enqueue: vi.fn().mockResolvedValue(undefined),
       };
 
       let queryCall = 0;
-      const mockDb: any = {
+      const mockDb = {
         getExecutor: vi.fn().mockReturnValue({
-          transformQuery: (q: any) => q,
-          compileQuery: (q: any) => ({ sql: '', parameters: [] }),
-          executeQuery: vi.fn().mockImplementation(async () => {
+          transformQuery: <T>(q: T): T => q,
+          compileQuery: () => ({ sql: '', parameters: [] }),
+          executeQuery: vi.fn().mockImplementation(() => {
             queryCall++;
             if (queryCall === 1) {
               // activeStats
-              return {
+              return Promise.resolve({
                 rows: [
-                  { tenant_id: 'org-usage-1', active_bytes: '5000000', active_files: '12' },
+                  {
+                    tenant_id: 'org-usage-1',
+                    active_bytes: '5000000',
+                    active_files: '12',
+                  },
                 ],
-              };
+              });
             } else if (queryCall === 2) {
               // tenant_daily_egress
-              return {
+              return Promise.resolve({
                 rows: [{ bytes_served: '250000' }],
-              };
+              });
             }
-            return { rows: [] };
+            return Promise.resolve({ rows: [] });
           }),
         }),
         selectFrom: vi.fn().mockReturnValue({
           selectAll: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              execute: vi.fn().mockResolvedValue([
-                { bytes_used: 5000000, file_count: 12 },
-              ]),
+              execute: vi
+                .fn()
+                .mockResolvedValue([{ bytes_used: 5000000, file_count: 12 }]),
             }),
           }),
         }),
       };
 
-      const mockDbService: any = {
+      const mockDbService: {
+        getDb: ReturnType<typeof vi.fn>;
+      } = {
         getDb: vi.fn().mockReturnValue(mockDb),
       };
 
-      const reconciler = new TenantUsageReconciler(mockDbService, mockOutboxRepo);
+      const reconciler = new TenantUsageReconciler(
+        mockDbService as unknown as DatabaseService,
+        mockOutboxRepo as unknown as OutboxRepository,
+      );
 
       const targetDate = new Date('2026-10-15T01:00:00Z');
       const result = await reconciler.runDailyReconciliation(targetDate);
@@ -550,7 +633,7 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
             quantity: 5000000,
             unit: 'bytes',
             source: 'esma-upload-service',
-          }),
+          }) as unknown as Record<string, unknown>,
         }),
       );
 
@@ -568,7 +651,7 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
             quantity: 12,
             unit: 'files',
             source: 'esma-upload-service',
-          }),
+          }) as unknown as Record<string, unknown>,
         }),
       );
 
@@ -586,7 +669,7 @@ describe('M3 Lifecycle Operations & Hardening (UR-18 through UR-23)', () => {
             quantity: 250000,
             unit: 'bytes',
             source: 'esma-upload-service',
-          }),
+          }) as unknown as Record<string, unknown>,
         }),
       );
     });

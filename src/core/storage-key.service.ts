@@ -67,7 +67,6 @@ export const MIME_TO_EXT: Readonly<Record<string, string>> = Object.freeze({
   'video/x-matroska': '.mkv',
 });
 
-
 const SAFE_SEGMENT_REGEX = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 /**

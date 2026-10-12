@@ -17,31 +17,38 @@ import {
 } from '../../src/core/errors/app-error.js';
 import { RequestContext } from '../../src/core/request-context.js';
 import { DeleteService } from '../../src/files/delete.service.js';
-
-function createMockKysely(
-  handler: (sqlText: string) => any[],
-) {
-  return {
-    getExecutor: () => ({
-      executeQuery: async (compiled: { sql: string; parameters: any[] }) => {
-        return {
-          rows: handler(compiled.sql),
-        };
-      },
-    }),
-  };
-}
+import type { RedisService } from '../../src/common/redis.service.js';
+import type { MetricsService } from '../../src/observability/metrics.service.js';
+import type { DatabaseService } from '../../src/db/database.service.js';
+import type { AppConfigService } from '../../src/config/config.service.js';
+import type { AuditService } from '../../src/observability/audit.service.js';
+import type { StorageRegistry } from '../../src/storage/registry.js';
+import type { AuthorizationService } from '../../src/authz/authorization.service.js';
+import type { FileRepository } from '../../src/db/repositories/file.repository.js';
+import type { ReplicaRepository } from '../../src/db/repositories/replica.repository.js';
+import type { UsageRepository } from '../../src/db/repositories/usage.repository.js';
+import type { OutboxRepository } from '../../src/db/repositories/outbox.repository.js';
+import type { OutboxWriter } from '../../src/events/outbox-writer.js';
 
 describe('M2 Platform Requirements: UR-09 to UR-17', () => {
   describe('UR-09: Token Revocation & Permission Versioning', () => {
     let revocationService: RevocationService;
-    let mockRedisClient: any;
-    let mockRedisService: any;
-    let mockMetrics: any;
+    let mockRedisClient: {
+      get: ReturnType<typeof vi.fn<(key: string) => Promise<string | null>>>;
+    };
+    let mockRedisService: {
+      isReady: ReturnType<typeof vi.fn>;
+      getClient: ReturnType<typeof vi.fn>;
+    };
+    let mockMetrics: {
+      revocationRedisUnavailableTotal: {
+        inc: ReturnType<typeof vi.fn>;
+      };
+    };
 
     beforeEach(() => {
       mockRedisClient = {
-        get: vi.fn(),
+        get: vi.fn<(key: string) => Promise<string | null>>(),
       };
       mockRedisService = {
         isReady: vi.fn().mockReturnValue(true),
@@ -53,49 +60,64 @@ describe('M2 Platform Requirements: UR-09 to UR-17', () => {
         },
       };
       revocationService = new RevocationService(
-        mockRedisService as any,
-        mockMetrics as any,
+        mockRedisService as unknown as RedisService,
+        mockMetrics as unknown as MetricsService,
       );
     });
 
     it('passes verification when session is valid and version is fresh', async () => {
-      mockRedisClient.get.mockImplementation(async (key: string) => {
-        if (key === 'esma:revoked:sid:sess-123') return null;
-        if (key === 'esma:org-permission-version:org-100') return '2';
-        return null;
+      mockRedisClient.get.mockImplementation((key: string) => {
+        if (key === 'esma:revoked:sid:sess-123') return Promise.resolve(null);
+        if (key === 'esma:org-permission-version:org-100')
+          return Promise.resolve('2');
+        return Promise.resolve(null);
       });
 
       await expect(
         revocationService.checkRevocation(
-          { sid: 'sess-123', organizationId: 'org-100', permissionVersion: 2 } as any,
+          {
+            sid: 'sess-123',
+            organizationId: 'org-100',
+            permissionVersion: 2,
+          },
           'GET',
         ),
       ).resolves.toBeUndefined();
     });
 
     it('rejects with TokenRevokedError (401 token_revoked) when sid is in revocation store', async () => {
-      mockRedisClient.get.mockImplementation(async (key: string) => {
-        if (key === 'esma:revoked:sid:sess-revoked') return '1';
-        return null;
+      mockRedisClient.get.mockImplementation((key: string) => {
+        if (key === 'esma:revoked:sid:sess-revoked')
+          return Promise.resolve('1');
+        return Promise.resolve(null);
       });
 
       await expect(
         revocationService.checkRevocation(
-          { sid: 'sess-revoked', organizationId: 'org-100', permissionVersion: 2 } as any,
+          {
+            sid: 'sess-revoked',
+            organizationId: 'org-100',
+            permissionVersion: 2,
+          },
           'GET',
         ),
       ).rejects.toThrow(TokenRevokedError);
     });
 
     it('rejects with TokenStaleError (401 token_stale) when token permissionVersion < current org version', async () => {
-      mockRedisClient.get.mockImplementation(async (key: string) => {
-        if (key === 'esma:org-permission-version:org-100') return '5';
-        return null;
+      mockRedisClient.get.mockImplementation((key: string) => {
+        if (key === 'esma:org-permission-version:org-100')
+          return Promise.resolve('5');
+        return Promise.resolve(null);
       });
 
       await expect(
         revocationService.checkRevocation(
-          { sid: 'sess-fresh', organizationId: 'org-100', permissionVersion: 3 } as any,
+          {
+            sid: 'sess-fresh',
+            organizationId: 'org-100',
+            permissionVersion: 3,
+          },
           'POST',
         ),
       ).rejects.toThrow(TokenStaleError);
@@ -107,12 +129,18 @@ describe('M2 Platform Requirements: UR-09 to UR-17', () => {
 
       await expect(
         revocationService.checkRevocation(
-          { sid: 'sess-123', organizationId: 'org-100', permissionVersion: 2 } as any,
+          {
+            sid: 'sess-123',
+            organizationId: 'org-100',
+            permissionVersion: 2,
+          },
           'GET',
         ),
       ).resolves.toBeUndefined();
 
-      expect(mockMetrics.revocationRedisUnavailableTotal.inc).toHaveBeenCalled();
+      expect(
+        mockMetrics.revocationRedisUnavailableTotal.inc,
+      ).toHaveBeenCalled();
     });
 
     it('fails closed for mutations (POST) when Redis is unavailable and records metric', async () => {
@@ -121,33 +149,37 @@ describe('M2 Platform Requirements: UR-09 to UR-17', () => {
 
       await expect(
         revocationService.checkRevocation(
-          { sid: 'sess-123', organizationId: 'org-100', permissionVersion: 2 } as any,
+          {
+            sid: 'sess-123',
+            organizationId: 'org-100',
+            permissionVersion: 2,
+          },
           'POST',
         ),
       ).rejects.toThrow(UnauthenticatedError);
 
-      expect(mockMetrics.revocationRedisUnavailableTotal.inc).toHaveBeenCalled();
+      expect(
+        mockMetrics.revocationRedisUnavailableTotal.inc,
+      ).toHaveBeenCalled();
     });
   });
 
   describe('UR-13: Commercial Quota Gate & Suspension', () => {
     let quotaService: TenantQuotaService;
-    let mockDbService: any;
-    let mockOutboxWriter: any;
-    let mockDomainPublisher: any;
+    let mockDbService: { getDb: ReturnType<typeof vi.fn> };
+    let mockDomainPublisher: { publish: ReturnType<typeof vi.fn> };
 
     beforeEach(() => {
-      mockOutboxWriter = { enqueue: vi.fn().mockResolvedValue(undefined) };
       mockDomainPublisher = { publish: vi.fn().mockResolvedValue({}) };
     });
 
     it('throws TenantSuspendedError (403 tenant_suspended) when tenant is suspended', async () => {
-      mockDbService = { getDb: () => ({}) };
+      mockDbService = { getDb: vi.fn().mockReturnValue({}) };
       quotaService = new TenantQuotaService(
-        mockDbService as any,
-        {} as any,
-        mockDomainPublisher as any,
-        {} as any,
+        mockDbService as unknown as DatabaseService,
+        {} as unknown as AppConfigService,
+        mockDomainPublisher as unknown as DomainEventPublisher,
+        {} as unknown as AuditService,
       );
 
       vi.spyOn(quotaService, 'getEffectiveQuota').mockResolvedValue({
@@ -181,12 +213,12 @@ describe('M2 Platform Requirements: UR-09 to UR-17', () => {
       const currentUsed = 950000;
       const requested = 100000;
 
-      mockDbService = { getDb: () => ({}) };
+      mockDbService = { getDb: vi.fn().mockReturnValue({}) };
       quotaService = new TenantQuotaService(
-        mockDbService as any,
-        {} as any,
-        mockDomainPublisher as any,
-        {} as any,
+        mockDbService as unknown as DatabaseService,
+        {} as unknown as AppConfigService,
+        mockDomainPublisher as unknown as DomainEventPublisher,
+        {} as unknown as AuditService,
       );
 
       vi.spyOn(quotaService, 'getEffectiveQuota').mockResolvedValue({
@@ -210,7 +242,7 @@ describe('M2 Platform Requirements: UR-09 to UR-17', () => {
         attributes: {},
       };
 
-      let thrownError: any = null;
+      let thrownError: unknown = null;
       try {
         await quotaService.checkUploadQuota('org-overquota', requested, ctx);
       } catch (err) {
@@ -218,24 +250,25 @@ describe('M2 Platform Requirements: UR-09 to UR-17', () => {
       }
 
       expect(thrownError).toBeInstanceOf(QuotaExceededError);
-      expect(thrownError.status).toBe(507);
-      expect(thrownError.code).toBe('quota_exceeded');
-      expect(thrownError.quotaBytes).toBe(quotaLimit);
-      expect(thrownError.usedBytes).toBe(currentUsed);
-      expect(thrownError.requestedBytes).toBe(requested);
+      const quotaErr = thrownError as QuotaExceededError;
+      expect(quotaErr.status).toBe(507);
+      expect(quotaErr.code).toBe('quota_exceeded');
+      expect(quotaErr.quotaBytes).toBe(quotaLimit);
+      expect(quotaErr.usedBytes).toBe(currentUsed);
+      expect(quotaErr.requestedBytes).toBe(requested);
     });
 
     it('emits file.quota.threshold.v1 when crossing 80%, 95%, or 100% threshold', async () => {
       const quotaLimit = 1000000;
       const currentUsed = 750000; // 75%
-      const requested = 100000;   // reaches 85% (crosses 80%)
+      const requested = 100000; // reaches 85% (crosses 80%)
 
-      mockDbService = { getDb: () => ({}) };
+      mockDbService = { getDb: vi.fn().mockReturnValue({}) };
       quotaService = new TenantQuotaService(
-        mockDbService as any,
-        {} as any,
-        mockDomainPublisher as any,
-        {} as any,
+        mockDbService as unknown as DatabaseService,
+        {} as unknown as AppConfigService,
+        mockDomainPublisher as unknown as DomainEventPublisher,
+        {} as unknown as AuditService,
       );
 
       vi.spyOn(quotaService, 'getEffectiveQuota').mockResolvedValue({
@@ -267,7 +300,7 @@ describe('M2 Platform Requirements: UR-09 to UR-17', () => {
           organizationId: 'org-thresh',
           data: expect.objectContaining({
             thresholdPercent: 80,
-          }),
+          }) as unknown as Record<string, unknown>,
         }),
       );
     });
@@ -332,15 +365,15 @@ describe('M2 Platform Requirements: UR-09 to UR-17', () => {
       };
 
       const deleteService = new DeleteService(
-        {} as any,
-        mockAuthz as any,
-        { eventsEnabled: false } as any,
-        {} as any,
-        mockFileRepo as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
+        {} as unknown as StorageRegistry,
+        mockAuthz as unknown as AuthorizationService,
+        { eventsEnabled: false } as unknown as AppConfigService,
+        {} as unknown as DatabaseService,
+        mockFileRepo as unknown as FileRepository,
+        {} as unknown as ReplicaRepository,
+        {} as unknown as UsageRepository,
+        {} as unknown as OutboxRepository,
+        {} as unknown as OutboxWriter,
       );
 
       const ctx: RequestContext = {
@@ -363,7 +396,9 @@ describe('M2 Platform Requirements: UR-09 to UR-17', () => {
       const mockOutboxWriter = {
         enqueue: vi.fn().mockResolvedValue(undefined),
       };
-      const publisher = new DomainEventPublisher(mockOutboxWriter as any);
+      const publisher = new DomainEventPublisher(
+        mockOutboxWriter as unknown as OutboxWriter,
+      );
 
       const ctx: RequestContext = {
         namespace: 'imports',

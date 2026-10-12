@@ -39,7 +39,9 @@ export class TenantQuotaService {
    */
   async getEffectiveQuota(tenantId: string): Promise<EffectiveQuotaResult> {
     const db = this.dbService.getDb();
-    if (!db || typeof (db as any).getExecutor !== 'function') {
+    const dbExecutor = db as unknown as
+      { getExecutor?: () => unknown } | undefined;
+    if (!db || typeof dbExecutor?.getExecutor !== 'function') {
       const defaultBytes = this.configService.defaultTenantQuotaBytes;
       return {
         tenantId,
@@ -85,7 +87,8 @@ export class TenantQuotaService {
         : null;
 
     const rawOverride =
-      row?.override_quota_bytes !== null && row?.override_quota_bytes !== undefined
+      row?.override_quota_bytes !== null &&
+      row?.override_quota_bytes !== undefined
         ? Number(row.override_quota_bytes)
         : null;
 

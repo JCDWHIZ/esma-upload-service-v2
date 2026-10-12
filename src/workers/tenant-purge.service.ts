@@ -54,12 +54,18 @@ export class TenantPurgeService {
    * 6. Records a single TENANT_PURGED audit row.
    * 7. Emits receipt to esma.platform.tenant-purge-completed.v1.
    */
-  async purgeTenant(payload: TenantPurgeRequestPayload): Promise<TenantPurgeReceipt> {
+  async purgeTenant(
+    payload: TenantPurgeRequestPayload,
+  ): Promise<TenantPurgeReceipt> {
     const { requestId, organizationId } = payload;
     const completedAt = new Date().toISOString();
 
     // 1. Check if 'files' owner is included in request
-    if (payload.owners && payload.owners.length > 0 && !payload.owners.includes('files')) {
+    if (
+      payload.owners &&
+      payload.owners.length > 0 &&
+      !payload.owners.includes('files')
+    ) {
       this.logger.log(
         `Purge request ${requestId} for org ${organizationId} skipped: 'files' not in owners [${payload.owners.join(', ')}]`,
       );
@@ -70,7 +76,8 @@ export class TenantPurgeService {
         status: 'SKIPPED',
         completedAt,
         counts: { files: 0, bytes: 0, replicas: 0 },
-        checksum: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        checksum:
+          'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
         failures: [],
       };
     }
@@ -100,7 +107,8 @@ export class TenantPurgeService {
         reason: 'LEGAL_HOLD',
         completedAt,
         counts: { files: 0, bytes: 0, replicas: 0 },
-        checksum: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        checksum:
+          'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
         failures: [],
       };
 
