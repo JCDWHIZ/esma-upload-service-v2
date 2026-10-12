@@ -13,8 +13,8 @@ describe('HTTP Security Hardening & Information Leakage Defense (P6-09)', () => 
       const canonical = mapExceptionToCanonical(dbError, 'test-corr-id');
 
       expect(canonical.status).toBe(500);
-      expect(canonical.code).toBe('INTERNAL');
-      expect(canonical.title).toBe('Internal server error');
+      expect(canonical.code).toBe('unexpected');
+      expect(canonical.title).toBe('Unexpected');
       // Must NOT leak SQL query or internal library stack details
       expect(canonical.detail).toBe('An unexpected internal error occurred');
       expect(canonical.detail).not.toContain('syntax error');

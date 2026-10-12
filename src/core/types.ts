@@ -6,7 +6,12 @@ export type FileStatus =
   'PENDING_UPLOAD' | 'ACTIVE' | 'QUARANTINED' | 'DELETING' | 'DELETED';
 
 export type ScanStatus =
-  'NOT_REQUIRED' | 'PENDING' | 'CLEAN' | 'INFECTED' | 'ERROR';
+  | 'SKIPPED'
+  | 'NOT_REQUIRED'
+  | 'PENDING'
+  | 'CLEAN'
+  | 'INFECTED'
+  | 'ERROR';
 
 export type ReplicationStatus =
   'NOT_REQUIRED' | 'QUEUED' | 'IN_PROGRESS' | 'SYNCED' | 'PARTIAL' | 'FAILED';
@@ -38,6 +43,7 @@ export interface FileRecord {
   replicationStatus: ReplicationStatus;
   primaryProvider: Provider;
   uploadedBy: string;
+  actingService?: string | null;
   tags: string[];
   attributes: Record<string, unknown>;
   legacyPublicId: string | null;
@@ -49,6 +55,11 @@ export interface FileRecord {
   updatedAt: Date;
   deletedAt: Date | null;
   expiresAt?: Date | null;
+  claimed?: boolean;
+  claimedAt?: Date | null;
+  unclaimedExpiresAt?: Date | null;
+  retainUntil?: Date | null;
+  held?: boolean;
 }
 
 export interface FileDerivative {
@@ -79,6 +90,7 @@ export interface NewFileRecord {
   replicationStatus?: ReplicationStatus;
   primaryProvider: Provider;
   uploadedBy: string;
+  actingService?: string | null;
   tags?: string[];
   attributes?: Record<string, unknown>;
   derivatives?: FileDerivatives;
@@ -86,10 +98,15 @@ export interface NewFileRecord {
   idempotencyKey?: string | null;
   correlationId: string;
   expiresAt?: Date | null;
+  claimed?: boolean;
+  claimedAt?: Date | null;
+  unclaimedExpiresAt?: Date | null;
+  retainUntil?: Date | null;
+  held?: boolean;
 }
 
 export interface FileListFilter {
-  namespace: string;
+  namespace?: string;
   tenantId: string;
   subTenantId?: string | null;
   folder?: string;
@@ -97,6 +114,10 @@ export interface FileListFilter {
   visibility?: FileVisibility;
   tags?: string[];
   mimetype?: string;
+  ownerType?: string;
+  ownerId?: string;
+  kind?: string;
+  claimed?: boolean;
   createdFrom?: Date;
   createdTo?: Date;
 }
@@ -121,6 +142,11 @@ export interface FileStatusUpdate {
   attributes?: Record<string, unknown>;
   derivatives?: FileDerivatives;
   expiresAt?: Date | null;
+  retainUntil?: Date | null;
+  held?: boolean;
+  claimed?: boolean;
+  claimedAt?: Date | null;
+  unclaimedExpiresAt?: Date | null;
 }
 
 export interface FileReplica {
@@ -196,6 +222,7 @@ export interface AuditLogEntry {
   outcome: AuditOutcome;
   actorId: string;
   actorType: string;
+  actingService?: string | null;
   roles: string[];
   namespace: string;
   tenantId: string | null;
@@ -203,6 +230,9 @@ export interface AuditLogEntry {
   ipAddress: string | null;
   userAgent: string | null;
   correlationId: string;
+  traceId?: string | null;
+  actSub?: string | null;
+  supportGrantId?: string | null;
   details: Record<string, unknown>;
 }
 
@@ -213,6 +243,7 @@ export interface NewAuditLogEntry {
   outcome: AuditOutcome;
   actorId: string;
   actorType: string;
+  actingService?: string | null;
   roles?: string[];
   namespace: string;
   tenantId?: string | null;
@@ -220,6 +251,9 @@ export interface NewAuditLogEntry {
   ipAddress?: string | null;
   userAgent?: string | null;
   correlationId: string;
+  traceId?: string | null;
+  actSub?: string | null;
+  supportGrantId?: string | null;
   details?: Record<string, unknown>;
 }
 

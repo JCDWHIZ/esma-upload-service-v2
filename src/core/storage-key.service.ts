@@ -30,6 +30,7 @@ export const MIME_TO_EXT: Readonly<Record<string, string>> = Object.freeze({
   'image/gif': '.gif',
   'image/bmp': '.bmp',
   'image/tiff': '.tiff',
+  'image/svg+xml': '.svg', // branding namespace only (sanitised)
   'application/pdf': '.pdf',
   'application/msword': '.doc',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
@@ -39,17 +40,33 @@ export const MIME_TO_EXT: Readonly<Record<string, string>> = Object.freeze({
   'application/vnd.ms-powerpoint': '.ppt',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation':
     '.pptx',
+  // UR-03: ODS for imports namespace
+  'application/vnd.oasis.opendocument.spreadsheet': '.ods',
   'text/plain': '.txt',
   'text/csv': '.csv',
+  'text/x-log': '.log',
   'application/json': '.json',
+  // UR-03: JSONL for platform-archives
+  'application/x-ndjson': '.jsonl',
   'application/zip': '.zip',
+  // UR-03: binary / encrypted for tenant-exports and platform-archives
+  'application/octet-stream': '.bin',
+  'application/x-encrypted': '.enc',
+  // UR-03: gzip and parquet for platform-archives
+  'application/gzip': '.gz',
+  'application/x-parquet': '.parquet',
   'audio/mpeg': '.mp3',
   'audio/wav': '.wav',
   'audio/ogg': '.ogg',
+  'audio/mp4': '.m4a',
+  'audio/x-m4a': '.m4a',
   'video/mp4': '.mp4',
   'video/webm': '.webm',
   'video/quicktime': '.mov',
+  // UR-03: session-recordings namespace
+  'video/x-matroska': '.mkv',
 });
+
 
 const SAFE_SEGMENT_REGEX = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
@@ -212,6 +229,22 @@ export class KeyService {
     if (options.fieldname && options.fieldname.trim().length > 0) {
       assertSafeSegment(options.fieldname, 'fieldname');
       folderSegments.push(options.fieldname);
+    }
+
+    // UR-03: New storage key layout is <organisationId>/<namespace>/<yyyy>/<mm>/<fileId><ext>
+    // Legacy namespaces (esma-tenant, esma-admin, generic) retain previous layout for compatibility
+    const isLegacyNamespace =
+      ctx.namespace === 'esma-tenant' ||
+      ctx.namespace === 'esma-admin' ||
+      ctx.namespace === 'generic';
+
+    if (!isLegacyNamespace) {
+      assertSafeSegment(ctx.tenantId, 'tenantId');
+      assertSafeSegment(ctx.namespace, 'namespace');
+      const now = new Date();
+      const yyyy = String(now.getUTCFullYear());
+      const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+      return `${ctx.tenantId}/${ctx.namespace}/${yyyy}/${mm}/${fileWithExt}`;
     }
 
     const isSystemScope =

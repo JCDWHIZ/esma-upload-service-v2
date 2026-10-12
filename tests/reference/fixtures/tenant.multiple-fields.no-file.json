@@ -2,16 +2,16 @@
   "status": 500,
   "contentType": "application/problem+json",
   "body": {
-    "code": "INTERNAL",
+    "code": "unexpected",
     "correlationId": "unknown",
     "detail": "An unexpected internal error occurred",
-    "error": "INTERNAL",
+    "error": "unexpected",
     "errors": [],
     "message": "An unexpected internal error occurred",
     "status": 500,
     "statusCode": 500,
-    "title": "Internal server error",
-    "type": "<URL>"
+    "title": "Unexpected",
+    "type": "urn:esma:files:error:unexpected"
   },
   "bodyShape": {
     "code": "string",

@@ -27,6 +27,7 @@ export class AuditRepository extends BaseRepository {
         outcome: entry.outcome,
         actor_id: entry.actorId,
         actor_type: entry.actorType,
+        acting_service: entry.actingService ?? null,
         roles: entry.roles ?? [],
         namespace: entry.namespace,
         tenant_id: entry.tenantId ?? null,
@@ -34,6 +35,9 @@ export class AuditRepository extends BaseRepository {
         ip_address: entry.ipAddress ?? null,
         user_agent: entry.userAgent ?? null,
         correlation_id: entry.correlationId,
+        trace_id: entry.traceId ?? null,
+        act_sub: entry.actSub ?? null,
+        support_grant_id: entry.supportGrantId ?? null,
         details: entry.details ?? {},
       })
       .returningAll()

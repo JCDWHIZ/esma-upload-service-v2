@@ -1,5 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Readable } from 'node:stream';
+import { sql } from 'kysely';
+import { DatabaseService } from '../db/database.service.js';
 import { AppConfigService } from '../config/config.service.js';
 import { RequestContext } from '../core/request-context.js';
 import { FileRecord } from '../core/types.js';
@@ -8,7 +10,7 @@ import { StorageRegistry } from '../storage/registry.js';
 import { FileRepository } from '../db/repositories/file.repository.js';
 import { ReplicaRepository } from '../db/repositories/replica.repository.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
-import { isEsmaAdminActor } from '../authz/authorize.js';
+import { isEsmaAdminActor, isSchoolAdminActor } from '../authz/authorize.js';
 import { ReplicaSelector } from './replica-selector.js';
 import {
   SignedUrlService,
@@ -20,6 +22,9 @@ import {
   UnauthenticatedError,
   FileNotReadyError,
   FileQuarantinedError,
+  FileInfectedError,
+  ScanUnavailableError,
+  ScanPendingError,
   StorageUnavailableError,
 } from '../core/errors/app-error.js';
 
@@ -151,9 +156,33 @@ export class FileReadService {
     private readonly signedUrlService: SignedUrlService,
     private readonly configService: AppConfigService,
     @Optional() replicaSelector?: ReplicaSelector,
+    @Optional() private readonly dbService?: DatabaseService,
   ) {
     this.selector =
       replicaSelector ?? new ReplicaSelector(this.storageRegistry);
+  }
+
+  /**
+   * Records egress bytes in tenant_daily_egress table for the tenant (UR-23).
+   */
+  public async recordEgress(tenantId: string, bytes: number): Promise<void> {
+    if (bytes <= 0 || !tenantId) return;
+    try {
+      const db = this.dbService?.getDb();
+      if (db) {
+        const today = new Date().toISOString().slice(0, 10);
+        await sql`
+          INSERT INTO tenant_daily_egress (tenant_id, usage_date, bytes_served, updated_at)
+          VALUES (${tenantId}, ${today}::date, ${bytes}::bigint, now())
+          ON CONFLICT (tenant_id, usage_date)
+          DO UPDATE SET
+            bytes_served = tenant_daily_egress.bytes_served + ${bytes}::bigint,
+            updated_at = now()
+        `.execute(db);
+      }
+    } catch (err) {
+      this.logger.debug(`Failed to record egress: ${String(err)}`);
+    }
   }
 
   getMetrics(): ReadMetrics {
@@ -203,23 +232,25 @@ export class FileReadService {
       throw new NotFoundError(`File '${fileId}' not found`);
     }
 
-    // 3. Status and Scan gating
+    // 3. Status and Scan gating (UR-05)
     if (file.status === 'DELETED' || file.status === 'DELETING') {
       throw new NotFoundError(`File '${fileId}' not found`);
     }
 
-    if (
-      file.status === 'QUARANTINED' ||
-      file.scanStatus === 'INFECTED' ||
-      file.scanStatus === 'ERROR'
-    ) {
-      throw new FileQuarantinedError(
+    if (file.status === 'QUARANTINED' || file.scanStatus === 'INFECTED') {
+      throw new FileInfectedError(
         `File '${fileId}' has been quarantined due to security scan failure`,
       );
     }
 
+    if (file.scanStatus === 'ERROR') {
+      throw new ScanUnavailableError(
+        `File '${fileId}' virus scan resulted in error and fail-closed policy is active`,
+      );
+    }
+
     if (file.scanStatus === 'PENDING') {
-      throw new FileNotReadyError(
+      throw new ScanPendingError(
         `File '${fileId}' is undergoing virus scanning and is not ready`,
       );
     }
@@ -228,12 +259,40 @@ export class FileReadService {
       throw new NotFoundError(`File '${fileId}' not found`);
     }
 
-    // 4. Authorization per ARCH §4.3
+    // 4. Authorization per ARCH §4.3, UR-04, UR-29.5, UR-30.5
     let verifiedSignedDisp: 'inline' | 'attachment' | undefined = undefined;
     let isAuthorizedBySignature = false;
 
-    if (signatureQuery && signatureQuery.sig) {
-      const verifyRes = this.signedUrlService.verify(fileId, signatureQuery);
+    // UR-29.5 & UR-30.5: Unclaimed file access rules
+    if (file.claimed === false) {
+      if (!ctx) {
+        throw new UnauthenticatedError(
+          'Authentication required to access unclaimed file',
+        );
+      }
+      if (ctx.actor.type === 'service') {
+        if (!this.authzService.canAccessTenant(ctx, file.tenantId)) {
+          throw new NotFoundError(`File '${fileId}' not found`);
+        }
+      } else if (ctx.actor.type === 'user') {
+        if (ctx.actor.id !== file.uploadedBy) {
+          throw new NotFoundError(`File '${fileId}' not found`);
+        }
+        if (file.scanStatus !== 'CLEAN') {
+          throw new NotFoundError(`File '${fileId}' is not ready for preview`);
+        }
+      } else {
+        throw new NotFoundError(`File '${fileId}' not found`);
+      }
+      isAuthorizedBySignature = true;
+    }
+
+    if (!isAuthorizedBySignature && signatureQuery && signatureQuery.sig) {
+      const verifyRes = this.signedUrlService.verify(
+        fileId,
+        signatureQuery,
+        file.tenantId,
+      );
       if (verifyRes.valid) {
         isAuthorizedBySignature = true;
         verifiedSignedDisp = verifyRes.disposition;
@@ -258,9 +317,14 @@ export class FileReadService {
         const isPlatformAdmin = isEsmaAdminActor(ctx);
         // Cross-tenant check: return 404 to avoid leaking file existence (ARCH §4.3 & F-42)
         if (!isPlatformAdmin) {
+          if (!this.authzService.canAccessTenant(ctx, file.tenantId)) {
+            throw new NotFoundError(`File '${fileId}' not found`);
+          }
           if (
-            !this.authzService.canAccessTenant(ctx, file.tenantId) ||
-            ctx.namespace !== file.namespace
+            ctx.actor.type !== 'service' &&
+            ctx.namespace !== file.namespace &&
+            ctx.namespace !== 'generic' &&
+            ctx.namespace !== 'generic-default'
           ) {
             throw new NotFoundError(`File '${fileId}' not found`);
           }
@@ -287,24 +351,65 @@ export class FileReadService {
         const isPlatformAdmin = isEsmaAdminActor(ctx);
         // Cross-tenant check returns 404
         if (!isPlatformAdmin) {
+          if (!this.authzService.canAccessTenant(ctx, file.tenantId)) {
+            throw new NotFoundError(`File '${fileId}' not found`);
+          }
           if (
-            !this.authzService.canAccessTenant(ctx, file.tenantId) ||
-            ctx.namespace !== file.namespace
+            ctx.actor.type !== 'service' &&
+            ctx.namespace !== file.namespace &&
+            ctx.namespace !== 'generic' &&
+            ctx.namespace !== 'generic-default'
           ) {
             throw new NotFoundError(`File '${fileId}' not found`);
           }
         }
 
-        const decision = this.authzService.authorize(ctx, 'read', {
-          namespace: file.namespace,
-          tenantId: file.tenantId,
-          subTenantId: file.subTenantId,
-          uploadedBy: file.uploadedBy,
-          visibility: file.visibility,
-        });
+        // UR-04 & UR-10 authorization rules for private files:
+        if (ctx.actor.type === 'service') {
+          // Service principal in the header's organisation: allowed for any file whose namespace is permitted
+          const clientId = ctx.actor.id;
+          let allowedMap: Record<string, string[]> = {
+            'esma-storage-client': ['*'],
+          };
+          try {
+            const rawConfigMap =
+              this.configService?.raw?.SERVICE_CLIENT_NAMESPACES;
+            if (rawConfigMap) {
+              allowedMap = JSON.parse(rawConfigMap);
+            }
+          } catch {
+            // fallback
+          }
+          const allowedList =
+            allowedMap[clientId] ??
+            (ctx.actor.scopes?.includes('internal.files') ? ['*'] : []);
+          const hasNamespaceAccess =
+            allowedList.includes('*') ||
+            allowedList.includes(file.namespace) ||
+            ctx.namespace === file.namespace;
 
-        if (!decision.allowed) {
-          throw new ForbiddenError(decision.reason);
+          if (!hasNamespaceAccess) {
+            throw new ForbiddenError(
+              `Service client "${clientId}" is not authorized for namespace "${file.namespace}"`,
+            );
+          }
+        } else {
+          // User token: allowed only to uploader OR user with files.file.read.any (or platform/school admin)
+          const isUploader =
+            file.uploadedBy !== undefined && file.uploadedBy === ctx.actor.id;
+          const userPerms = ctx.actor.permissions ?? [];
+          const hasReadAnyPerm =
+            userPerms.includes('files.file.read.any') ||
+            userPerms.includes('files_file_read_any') ||
+            userPerms.includes('upload_files_admin') ||
+            userPerms.includes('files_admin');
+          const isSchoolAdmin = isSchoolAdminActor(ctx);
+
+          if (!isPlatformAdmin && !isUploader && !hasReadAnyPerm && !isSchoolAdmin) {
+            throw new ForbiddenError(
+              'Private files are only accessible to the uploader or users with files.file.read.any permission',
+            );
+          }
         }
       }
     }
@@ -443,6 +548,7 @@ export class FileReadService {
       });
 
       this.recordReadSuccess(file.primaryProvider);
+      void this.recordEgress(file.tenantId, variantMeta.size);
       return {
         kind: 'stream',
         statusCode: 200,
@@ -600,6 +706,7 @@ export class FileReadService {
             (redirectMode === 'always' || redirectMode === 'auto')
           ) {
             this.recordReadSuccess(candidate.provider);
+            void this.recordEgress(file.tenantId, totalBytes);
             return {
               kind: 'redirect',
               statusCode: 302,
@@ -651,6 +758,7 @@ export class FileReadService {
           });
 
           this.recordReadSuccess(candidate.provider);
+          void this.recordEgress(file.tenantId, parsedRange.chunkSize);
           return {
             kind: 'stream',
             statusCode: 206,
@@ -671,6 +779,7 @@ export class FileReadService {
         });
 
         this.recordReadSuccess(candidate.provider);
+        void this.recordEgress(file.tenantId, totalBytes);
         return {
           kind: 'stream',
           statusCode: 200,

@@ -2,16 +2,16 @@
   "status": 403,
   "contentType": "application/problem+json",
   "body": {
-    "code": "FORBIDDEN",
+    "code": "forbidden",
     "correlationId": "unknown",
     "detail": "Forbidden: superadmin or admin role required",
-    "error": "FORBIDDEN",
+    "error": "forbidden",
     "errors": [],
     "message": "Forbidden: superadmin or admin role required",
     "status": 403,
     "statusCode": 403,
     "title": "Forbidden",
-    "type": "<URL>"
+    "type": "urn:esma:files:error:forbidden"
   },
   "bodyShape": {
     "code": "string",

@@ -2,16 +2,16 @@
   "status": 403,
   "contentType": "application/problem+json",
   "body": {
-    "code": "FORBIDDEN",
+    "code": "forbidden",
     "correlationId": "unknown",
     "detail": "Forbidden: tenant mismatch",
-    "error": "FORBIDDEN",
+    "error": "forbidden",
     "errors": [],
     "message": "Forbidden: tenant mismatch",
     "status": 403,
     "statusCode": 403,
     "title": "Forbidden",
-    "type": "<URL>"
+    "type": "urn:esma:files:error:forbidden"
   },
   "bodyShape": {
     "code": "string",

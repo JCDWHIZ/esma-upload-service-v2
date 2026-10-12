@@ -10,7 +10,7 @@ import { AppConfigService } from '../config/config.service.js';
 import { closePgPool, createPgPool } from './pool.js';
 import { createKysely } from './kysely.js';
 import type { Database } from './types.js';
-import { runMigrations } from './migrate.js';
+import { runMigrations, createMigrator } from './migrate.js';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
@@ -21,9 +21,85 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
   constructor(private readonly configService: AppConfigService) {}
 
   async onModuleInit(): Promise<void> {
-    if (this.configService.raw.DB_ENABLED) {
+    const config = this.configService.raw;
+
+    // UR-08: DB_ENABLED is forced true in production
+    const dbEnabled = config.DB_ENABLED || config.NODE_ENV === 'production';
+
+    if (dbEnabled) {
       this.initConnection();
-      await this.autoMigrate();
+
+      // UR-08: AUTO_MIGRATE defaults to true outside production, false in production
+      const autoMigrate =
+        config.AUTO_MIGRATE !== undefined
+          ? config.AUTO_MIGRATE
+          : config.NODE_ENV !== 'production';
+
+      if (autoMigrate) {
+        await this.autoMigrate();
+      } else {
+        await this.checkNoMigrationsPending();
+      }
+    }
+  }
+
+  /**
+   * UR-08: In production (AUTO_MIGRATE=false), only verify no migrations are
+   * pending. If any are pending, log them and exit non-zero so the pod fails fast.
+   */
+  private async checkNoMigrationsPending(): Promise<void> {
+    if (!this.db) return;
+    try {
+      this.logger.log(
+        'Checking for pending database migrations (AUTO_MIGRATE=false)...',
+      );
+      const migrator = createMigrator(this.db);
+      const migrations = await migrator.getMigrations();
+      const pending = migrations.filter(
+        (m: { executedAt?: unknown }) => !m.executedAt,
+      );
+      if (pending.length > 0) {
+        const names = pending.map((m: { name: string }) => m.name).join(', ');
+        this.logger.error(
+          `STARTUP FAILED: ${pending.length} pending migration(s) found. ` +
+            `Run the migration Job before starting the application. ` +
+            `Pending: ${names}`,
+        );
+        // Exit non-zero so Kubernetes restarts / prevents traffic
+        process.exit(1);
+      }
+      this.logger.log('Database schema is up to date (no pending migrations).');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Migration check failed: ${message}`);
+      throw err;
+    }
+  }
+
+  /**
+   * UR-08: Check if any migrations are pending without exiting.
+   * Used by readiness probe (/health/ready).
+   */
+  async hasPendingMigrations(): Promise<boolean> {
+    const config = this.configService.raw;
+    const dbEnabled = config.DB_ENABLED || config.NODE_ENV === 'production';
+    if (!dbEnabled) {
+      return false;
+    }
+    const db = this.getDb();
+    if (!db) {
+      return false;
+    }
+    try {
+      const migrator = createMigrator(db);
+      const migrations = await migrator.getMigrations();
+      return migrations.some(
+        (m: { executedAt?: unknown }) => !m.executedAt,
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Pending migrations check failed: ${message}`);
+      return true;
     }
   }
 
@@ -64,21 +140,27 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
   }
 
   getPool(): Pool | undefined {
-    if (!this.pool && this.configService.raw.DB_ENABLED) {
+    const config = this.configService.raw;
+    const dbEnabled = config.DB_ENABLED || config.NODE_ENV === 'production';
+    if (!this.pool && dbEnabled) {
       this.initConnection();
     }
     return this.pool;
   }
 
   getDb(): Kysely<Database> | undefined {
-    if (!this.db && this.configService.raw.DB_ENABLED) {
+    const config = this.configService.raw;
+    const dbEnabled = config.DB_ENABLED || config.NODE_ENV === 'production';
+    if (!this.db && dbEnabled) {
       this.initConnection();
     }
     return this.db;
   }
 
   async ping(): Promise<boolean> {
-    if (!this.configService.raw.DB_ENABLED) {
+    const config = this.configService.raw;
+    const dbEnabled = config.DB_ENABLED || config.NODE_ENV === 'production';
+    if (!dbEnabled) {
       return true;
     }
 

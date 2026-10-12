@@ -2,16 +2,16 @@
   "status": 401,
   "contentType": "application/problem+json",
   "body": {
-    "code": "UNAUTHENTICATED",
+    "code": "unauthenticated",
     "correlationId": "unknown",
     "detail": "Missing or invalid authorization header",
-    "error": "UNAUTHENTICATED",
+    "error": "unauthenticated",
     "errors": [],
     "message": "Missing or invalid authorization header",
     "status": 401,
     "statusCode": 401,
     "title": "Unauthenticated",
-    "type": "<URL>"
+    "type": "urn:esma:files:error:unauthenticated"
   },
   "bodyShape": {
     "code": "string",

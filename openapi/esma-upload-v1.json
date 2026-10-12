@@ -1,0 +1,2362 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health/live": {
+      "get": {
+        "operationId": "HealthController_live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Process is running"
+          }
+        },
+        "summary": "Liveness probe",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Service is ready"
+          },
+          "503": {
+            "description": "Service is not ready"
+          }
+        },
+        "summary": "Readiness probe",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/drivers": {
+      "get": {
+        "operationId": "HealthController_drivers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Driver health status"
+          }
+        },
+        "summary": "Storage drivers health status",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/admin/audit": {
+      "get": {
+        "description": "Retrieve system and security audit logs filtered by namespace, tenant, actor, file, action, outcome, or time range.",
+        "operationId": "AuditController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated list of audit log records"
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Query audit log entries with filters and keyset pagination",
+        "tags": [
+          "admin-audit"
+        ]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "description": "Returns application metrics in Prometheus text format. Protected by METRICS_TOKEN if configured.",
+        "operationId": "MetricsController_getMetrics",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": false,
+            "in": "header",
+            "description": "Bearer token matching METRICS_TOKEN when auth is configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prometheus metrics payload"
+          }
+        },
+        "summary": "Expose Prometheus metrics",
+        "tags": [
+          "observability"
+        ]
+      }
+    },
+    "/api/v1/files/upload": {
+      "post": {
+        "description": "Accepts single or multi-file multipart uploads. Returns 201 when all succeed, or 207 Multi-Status with per-file outcomes for partial failures.",
+        "operationId": "FilesController_upload",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Client-provided unique idempotency key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "File(s) uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileUploadSuccessResponseDto"
+                }
+              }
+            }
+          },
+          "207": {
+            "description": "Multi-Status: partial upload success/failure outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileUploadMultiStatusResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden action or scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient quota",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload file(s)",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/presigned-upload": {
+      "post": {
+        "description": "Reserves quota and generates a presigned PUT URL for direct storage upload",
+        "operationId": "FilesController_initiatePresignedUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiatePresignedUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Presigned upload URL created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiatePresignedUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden branch or upload access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient storage quota",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Initiate direct-to-storage presigned upload",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{fileId}/complete-upload": {
+      "post": {
+        "description": "Verifies object existence in storage, commits quota, and creates manifest",
+        "operationId": "FilesController_completePresignedUpload",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "description": "UUIDv7 identifier of the file",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompletePresignedUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File manifest after confirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileManifestResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden access to file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found or cross-tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage object not found in SeaweedFS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Confirm and finalize direct upload",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files": {
+      "get": {
+        "description": "Keyset pagination with authorization scoping and filters",
+        "operationId": "FilesController_listFiles",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size (1-100, default 20)",
+            "schema": {}
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque pagination cursor",
+            "schema": {}
+          },
+          {
+            "name": "createdTo",
+            "required": false,
+            "in": "query",
+            "description": "ISO end datetime",
+            "schema": {}
+          },
+          {
+            "name": "createdFrom",
+            "required": false,
+            "in": "query",
+            "description": "ISO start datetime",
+            "schema": {}
+          },
+          {
+            "name": "tag",
+            "required": false,
+            "in": "query",
+            "description": "Tag filter",
+            "schema": {}
+          },
+          {
+            "name": "mimetype",
+            "required": false,
+            "in": "query",
+            "description": "MIME type filter",
+            "schema": {}
+          },
+          {
+            "name": "subTenantId",
+            "required": false,
+            "in": "query",
+            "description": "Sub-tenant (branch) filter",
+            "schema": {}
+          },
+          {
+            "name": "folder",
+            "required": false,
+            "in": "query",
+            "description": "Folder prefix filter",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated file listing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileListResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List files for tenant",
+        "tags": [
+          "files"
+        ]
+      },
+      "delete": {
+        "operationId": "FilesController_deleteByOwner",
+        "parameters": [
+          {
+            "name": "ownerType",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ownerId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Bulk delete files by owner attributes (UR-06)",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{fileId}": {
+      "get": {
+        "description": "Supports byte ranges (206), conditionals (304), signed URLs, and storage redirects (302)",
+        "operationId": "FilesController_getFileContent",
+        "parameters": [
+          {
+            "name": "range",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "if-none-match",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "description": "Image derivative variant name (e.g. thumb, medium)",
+            "schema": {}
+          },
+          {
+            "name": "provider",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "local",
+                "cloudinary",
+                "seaweedfs"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "redirect",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "auto",
+                "always",
+                "never"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "disp",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "inline",
+                "attachment"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "exp",
+            "required": false,
+            "in": "query",
+            "description": "Expiry timestamp for signed URL",
+            "schema": {}
+          },
+          {
+            "name": "sig",
+            "required": false,
+            "in": "query",
+            "description": "HMAC signature for signed URL access",
+            "schema": {}
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "ETag validation header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "description": "Byte range header (e.g. bytes=0-1023)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "description": "UUIDv7 identifier of the file",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full file content stream"
+          },
+          "206": {
+            "description": "Partial content byte range slice"
+          },
+          "302": {
+            "description": "Direct storage / CDN redirect"
+          },
+          "304": {
+            "description": "Not modified conditional ETag match"
+          },
+          "401": {
+            "description": "Unauthenticated (for private files)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found or cross-tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "Range not satisfiable"
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Download or stream file content",
+        "tags": [
+          "files"
+        ]
+      },
+      "delete": {
+        "operationId": "FilesController_deleteFile",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "description": "UUIDv7 identifier of the file",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "File deleted successfully"
+          },
+          "403": {
+            "description": "Forbidden access to file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found or cross-tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Purge file and replicas",
+        "tags": [
+          "files"
+        ]
+      },
+      "patch": {
+        "operationId": "FilesController_patchFileRetention",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "description": "UUIDv7 identifier of the file",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Extend file retention (service principals only, UR-14)",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{fileId}/metadata": {
+      "get": {
+        "operationId": "FilesController_getMetadata",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "description": "UUIDv7 identifier of the file",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File metadata manifest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileManifestResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden access to file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found or cross-tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get file metadata manifest without content bytes",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{fileId}/signed-url": {
+      "post": {
+        "operationId": "FilesController_generateSignedUrl",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "description": "UUIDv7 identifier of the file",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSignedUrlDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed URL generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedUrlResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden access to file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found or cross-tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Generate time-limited signed URL for direct content access",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{fileId}/claim": {
+      "post": {
+        "operationId": "FilesController_claimFile",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "description": "UUIDv7 identifier of the file",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimFileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Claim a file for an owning business entity (UR-30)",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{fileId}/hold": {
+      "post": {
+        "operationId": "FilesController_placeLegalHold",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "description": "UUIDv7 identifier of the file",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Place legal hold on a file (UR-14.4)",
+        "tags": [
+          "files"
+        ]
+      },
+      "delete": {
+        "operationId": "FilesController_clearLegalHold",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "description": "UUIDv7 identifier of the file",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Clear legal hold on a file (UR-14.4)",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{fileId}/permanent": {
+      "delete": {
+        "description": "Immediately purges physical storage objects across all drivers, deletes DB records, enqueues file.erased audit event, and frees quota.",
+        "operationId": "FilesController_hardDeleteFile",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "description": "UUIDv7 identifier of the file",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File and replicas permanently erased",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HardDeleteResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden access to file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found or cross-tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Permanently purge a file and all replicas (hard delete)",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/bulk-delete": {
+      "post": {
+        "operationId": "FilesController_bulkDelete",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDeleteRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk delete outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fileIds input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Bulk delete up to 100 files",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{fileId}/replicate": {
+      "post": {
+        "description": "Enqueues file.replicate outbox events for specified target providers or missing secondary replicas.",
+        "operationId": "FilesController_triggerReplication",
+        "parameters": [
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "description": "UUIDv7 identifier of the file",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerReplicationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Replication jobs enqueued successfully"
+          },
+          "404": {
+            "description": "File not found or cross-tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Manually trigger replication for a file (admin)",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/api/v1/admin/replication": {
+      "get": {
+        "operationId": "FilesController_getReplicationAdminSummary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Replication operational metrics summary"
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get replication engine operational metrics and status summary (admin)",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/admin/dlq": {
+      "get": {
+        "description": "Retrieve dead-lettered messages, filtering by status, topic, event, or timestamp.",
+        "operationId": "DlqController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of dead letters with pagination cursor and totalOpen count"
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List dead letters with filters and keyset pagination",
+        "tags": [
+          "admin-dlq"
+        ]
+      }
+    },
+    "/api/v1/admin/dlq/stats": {
+      "get": {
+        "description": "Returns the count of OPEN dead letters corresponding to metric gus_dlq_depth.",
+        "operationId": "DlqController_getStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "DLQ depth and metrics"
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get DLQ depth and operational stats",
+        "tags": [
+          "admin-dlq"
+        ]
+      }
+    },
+    "/api/v1/admin/dlq/{id}": {
+      "get": {
+        "operationId": "DlqController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Dead letter UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dead letter details"
+          },
+          "404": {
+            "description": "Dead letter not found"
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get dead letter by ID",
+        "tags": [
+          "admin-dlq"
+        ]
+      }
+    },
+    "/api/v1/admin/dlq/{id}/redrive": {
+      "post": {
+        "description": "Republish dead letter to its original topic through the outbox with attempt reset, marking it REDRIVEN.",
+        "operationId": "DlqController_redrive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Dead letter UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DlqRedriveBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dead letter successfully redriven"
+          },
+          "400": {
+            "description": "Dead letter is not in OPEN status"
+          },
+          "404": {
+            "description": "Dead letter not found"
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Redrive dead letter",
+        "tags": [
+          "admin-dlq"
+        ]
+      }
+    },
+    "/api/v1/admin/dlq/{id}/discard": {
+      "post": {
+        "description": "Mark a dead letter as DISCARDED so it is permanently resolved without re-execution.",
+        "operationId": "DlqController_discard",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Dead letter UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DlqDiscardBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dead letter discarded successfully"
+          },
+          "400": {
+            "description": "Dead letter is not in OPEN status"
+          },
+          "404": {
+            "description": "Dead letter not found"
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Discard dead letter",
+        "tags": [
+          "admin-dlq"
+        ]
+      }
+    },
+    "/api/v1/admin/tenants/{tenantId}/quota": {
+      "get": {
+        "operationId": "QuotaController_getQuota",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "required": true,
+            "in": "path",
+            "description": "Tenant UUID or identifier",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "required": false,
+            "in": "query",
+            "description": "Target namespace (defaults to \"generic\")",
+            "schema": {
+              "example": "generic"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenant storage usage and quota"
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get quota and current storage usage for a tenant",
+        "tags": [
+          "admin-quota"
+        ]
+      },
+      "patch": {
+        "operationId": "QuotaController_setQuota",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "required": true,
+            "in": "path",
+            "description": "Tenant UUID or identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuotaPatchBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated tenant quota record"
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update storage quota for a tenant",
+        "tags": [
+          "admin-quota"
+        ]
+      }
+    },
+    "/api/v1/admin/tenants/{tenantId}/reconcile": {
+      "post": {
+        "operationId": "QuotaController_reconcile",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "required": true,
+            "in": "path",
+            "description": "Tenant UUID or identifier",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "required": false,
+            "in": "query",
+            "description": "Target namespace (defaults to \"generic\")",
+            "schema": {
+              "example": "generic"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reconciliation results"
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Trigger storage usage drift reconciliation for a tenant",
+        "tags": [
+          "admin-quota"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "ESMA Upload Service (v2)",
+    "description": "File upload and delivery API",
+    "version": "2.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      },
+      "api-key": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    },
+    "schemas": {
+      "ProblemDetailsDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "https://errors.esma.example/gus/file-not-found",
+            "description": "URI reference identifying the problem type"
+          },
+          "title": {
+            "type": "string",
+            "example": "File not found",
+            "description": "Short human-readable summary of problem"
+          },
+          "status": {
+            "type": "number",
+            "example": 404,
+            "description": "HTTP status code generated by origin server"
+          },
+          "code": {
+            "type": "string",
+            "example": "FILE_NOT_FOUND",
+            "description": "Stable uppercase application error code"
+          },
+          "detail": {
+            "type": "string",
+            "example": "File '0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b90' not found",
+            "description": "Human-readable explanation specific to this occurrence"
+          },
+          "correlationId": {
+            "type": "string",
+            "example": "0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b91",
+            "description": "Unique correlation ID for tracing and debugging"
+          },
+          "errors": {
+            "example": [],
+            "description": "Array of detailed sub-errors or field validation issues",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "detail",
+          "correlationId"
+        ]
+      },
+      "ManifestDataDto": {
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "example": "0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b90"
+          },
+          "filename": {
+            "type": "string",
+            "example": "academic_report_2026.pdf"
+          },
+          "mimetype": {
+            "type": "string",
+            "example": "application/pdf"
+          },
+          "size": {
+            "type": "number",
+            "example": 2458902
+          },
+          "sha256": {
+            "type": "object",
+            "example": "9f2b5c0a1d7e4b6a8c3f0e1d2a4b6c8e0f1a3b5c7d9e1f2a4b6c8d0e2f4a6b8c",
+            "nullable": true
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "tenant",
+              "subtenant",
+              "private"
+            ],
+            "example": "tenant"
+          },
+          "canonicalUrl": {
+            "type": "string",
+            "example": "https://upload.esma.example/api/v1/files/0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b90"
+          },
+          "publicUrl": {
+            "type": "object",
+            "example": null,
+            "nullable": true
+          },
+          "primaryProvider": {
+            "type": "string",
+            "example": "seaweedfs"
+          },
+          "replicas": {
+            "type": "object",
+            "description": "Map of storage providers to replica sync status",
+            "example": {
+              "seaweedfs": {
+                "status": "AVAILABLE",
+                "syncedAt": "2026-09-21T12:00:00.120Z"
+              },
+              "local": {
+                "status": "QUEUED",
+                "syncedAt": null
+              }
+            }
+          },
+          "replicationStatus": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "IN_PROGRESS",
+              "COMPLETED",
+              "FAILED"
+            ],
+            "example": "QUEUED"
+          },
+          "scanStatus": {
+            "type": "string",
+            "example": "NOT_REQUIRED"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-09-21T12:00:00.125Z"
+          }
+        },
+        "required": [
+          "fileId",
+          "filename",
+          "mimetype",
+          "size",
+          "visibility",
+          "canonicalUrl",
+          "primaryProvider",
+          "replicas",
+          "replicationStatus",
+          "scanStatus",
+          "createdAt"
+        ]
+      },
+      "FileManifestResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "File uploaded. Replication to secondary storage is queued."
+          },
+          "data": {
+            "$ref": "#/components/schemas/ManifestDataDto"
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
+      "FileListQueryDto": {
+        "type": "object",
+        "properties": {
+          "folder": {
+            "type": "string",
+            "description": "Filter files by logical folder prefix",
+            "example": "admissions/2026"
+          },
+          "subTenantId": {
+            "type": "string",
+            "description": "Filter files by sub-tenant (branch) ID",
+            "example": "branch_abj_01"
+          },
+          "mimetype": {
+            "type": "string",
+            "description": "Filter files by MIME type",
+            "example": "application/pdf"
+          },
+          "tag": {
+            "type": "string",
+            "description": "Filter files by tag",
+            "example": "financial"
+          },
+          "status": {
+            "type": "string",
+            "description": "Filter files by lifecycle status (defaults to ACTIVE)",
+            "enum": [
+              "ACTIVE",
+              "DELETED",
+              "DELETING",
+              "PENDING_UPLOAD",
+              "QUARANTINED"
+            ],
+            "example": "ACTIVE"
+          },
+          "createdFrom": {
+            "type": "string",
+            "description": "Filter files created after ISO timestamp",
+            "example": "2026-01-01T00:00:00Z"
+          },
+          "createdTo": {
+            "type": "string",
+            "description": "Filter files created before ISO timestamp",
+            "example": "2026-12-31T23:59:59Z"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Opaque pagination cursor from previous response"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Page limit (1 to 100, default 20)",
+            "example": 20,
+            "default": 20
+          }
+        }
+      },
+      "FileReadQueryDto": {
+        "type": "object",
+        "properties": {
+          "exp": {
+            "type": "string",
+            "description": "Expiry epoch timestamp for signed URL authentication"
+          },
+          "disp": {
+            "type": "string",
+            "enum": [
+              "inline",
+              "attachment"
+            ],
+            "description": "Override Content-Disposition header"
+          },
+          "sig": {
+            "type": "string",
+            "description": "HMAC signature for signed URL authentication"
+          },
+          "redirect": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "default": "auto",
+            "description": "Redirect behavior for storage driver URL vs streaming through API"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "local",
+              "cloudinary",
+              "seaweedfs"
+            ],
+            "description": "Specific replica provider to read from (admin only)"
+          },
+          "variant": {
+            "type": "string",
+            "description": "Image derivative variant name (e.g. thumb, medium)",
+            "example": "thumb"
+          }
+        }
+      },
+      "TriggerReplicationDto": {
+        "type": "object",
+        "properties": {
+          "targetProvider": {
+            "type": "string",
+            "description": "Specific target provider to replicate to",
+            "enum": [
+              "local",
+              "cloudinary",
+              "seaweedfs"
+            ],
+            "example": "cloudinary"
+          },
+          "targetProviders": {
+            "type": "array",
+            "description": "Multiple target providers to replicate to",
+            "example": [
+              "cloudinary",
+              "seaweedfs"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "local",
+                "cloudinary",
+                "seaweedfs"
+              ]
+            }
+          }
+        }
+      },
+      "HardDeleteResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "File and all replicas permanently deleted"
+          },
+          "fileId": {
+            "type": "string",
+            "example": "0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b90"
+          },
+          "replicasDeleted": {
+            "type": "number",
+            "example": 2
+          },
+          "dbRecordsDeleted": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "fileId",
+          "replicasDeleted",
+          "dbRecordsDeleted"
+        ]
+      },
+      "FileUploadBodyDto": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "File payload(s) to upload"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Target logical folder path",
+            "example": "reports/2026"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "tenant",
+              "private"
+            ],
+            "default": "tenant",
+            "description": "File visibility level"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Comma-separated tags or JSON array of strings",
+            "example": "finance,academic,q1"
+          },
+          "attributes": {
+            "type": "object",
+            "description": "Key-value metadata dictionary (JSON string or object)",
+            "example": "{\"department\":\"admissions\"}"
+          },
+          "subTenantId": {
+            "type": "string",
+            "description": "Sub-tenant (branch) ID to scope the uploaded file",
+            "example": "branch_abj_01"
+          }
+        },
+        "required": [
+          "file"
+        ]
+      },
+      "FileUploadSuccessResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "File uploaded. Replication to secondary storage is queued."
+          },
+          "data": {
+            "description": "File manifest or array of manifests for batch upload",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ManifestDataDto"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ManifestDataDto"
+                }
+              }
+            ]
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ]
+      },
+      "FileUploadMultiStatusItemDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "fileId": {
+            "type": "string",
+            "example": "0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b90"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/ManifestDataDto"
+          },
+          "filename": {
+            "type": "string",
+            "example": "report.pdf"
+          },
+          "error": {
+            "type": "object",
+            "description": "Error information if file ingestion failed",
+            "example": {
+              "code": "UNSUPPORTED_MEDIA_TYPE",
+              "message": "MIME not allowed"
+            }
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "FileUploadMultiStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string",
+            "example": "Batch upload completed with one or more failures."
+          },
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileUploadMultiStatusItemDto"
+            }
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "outcomes"
+        ]
+      },
+      "InitiatePresignedUploadDto": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Original name of the file to be uploaded",
+            "example": "video_lecture_2026.mp4"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "description": "Exact file size in bytes to reserve against tenant quota",
+            "example": 104857600
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "MIME type of the file payload",
+            "example": "video/mp4"
+          },
+          "branchId": {
+            "type": "string",
+            "description": "Branch ID within the tenant",
+            "example": "branch_lagos_01"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Logical folder path",
+            "example": "courses/lectures"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "tenant",
+              "subtenant",
+              "private"
+            ],
+            "default": "tenant",
+            "description": "Visibility level"
+          },
+          "tags": {
+            "description": "Tags for searching and categorizing",
+            "example": [
+              "lecture",
+              "physics"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "attributes": {
+            "type": "object",
+            "description": "Arbitrary key-value metadata",
+            "example": {
+              "courseId": "PHY101"
+            }
+          },
+          "expiresInSeconds": {
+            "type": "number",
+            "description": "Presigned PUT URL validity in seconds (default 900s)",
+            "example": 900,
+            "default": 900
+          }
+        },
+        "required": [
+          "filename",
+          "sizeBytes",
+          "mimeType"
+        ]
+      },
+      "InitiatePresignedUploadResponse": {
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "example": "0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b90"
+          },
+          "uploadUrl": {
+            "type": "string",
+            "description": "Direct S3 Presigned PUT URL for upload",
+            "example": "https://s3.esma.example/esma-files/generic/0198f3a2/video.mp4?X-Amz-Signature=..."
+          },
+          "requiredHeaders": {
+            "type": "object",
+            "description": "Headers that must accompany the client PUT upload",
+            "example": {
+              "Content-Type": "video/mp4"
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp after which the upload URL expires",
+            "example": "2026-09-28T12:15:00.000Z"
+          }
+        },
+        "required": [
+          "fileId",
+          "uploadUrl",
+          "requiredHeaders",
+          "expiresAt"
+        ]
+      },
+      "CompletePresignedUploadDto": {
+        "type": "object",
+        "properties": {
+          "clientEtag": {
+            "type": "string",
+            "description": "ETag header returned by S3 after successful PUT",
+            "example": "\"9b105d4c9e12ecb530c31449320ce0ed\""
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Optional client-computed SHA-256 hash",
+            "example": "9f2b5c0a1d7e4b6a8c3f0e1d2a4b6c8e0f1a3b5c7d9e1f2a4b6c8d0e2f4a6b8c"
+          }
+        }
+      },
+      "FileListResponseDto": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManifestDataDto"
+            }
+          },
+          "nextCursor": {
+            "type": "object",
+            "example": "cursor_eyJpZCI6IjAxOThm..."
+          },
+          "count": {
+            "type": "number",
+            "example": 1
+          }
+        },
+        "required": [
+          "files",
+          "count"
+        ]
+      },
+      "CreateSignedUrlDto": {
+        "type": "object",
+        "properties": {
+          "expiresInSeconds": {
+            "type": "number",
+            "description": "Lifetime of signed URL in seconds (max 7 days = 604800s, default 900s)",
+            "example": 3600,
+            "default": 900
+          },
+          "ttlSeconds": {
+            "type": "number",
+            "description": "Alias for expiresInSeconds (ARCH §9.1)",
+            "example": 3600
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "inline",
+              "attachment"
+            ],
+            "description": "Content-Disposition when accessing via signed URL",
+            "default": "attachment"
+          }
+        }
+      },
+      "SignedUrlResponseDto": {
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "example": "0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b90"
+          },
+          "url": {
+            "type": "string",
+            "example": "https://upload.esma.example/api/v1/files/0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b90?exp=1790683200&disp=attachment&sig=a8c1f9..."
+          },
+          "expiresAt": {
+            "type": "string",
+            "example": "2026-09-28T12:00:00.000Z"
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "inline",
+              "attachment"
+            ],
+            "example": "attachment"
+          }
+        },
+        "required": [
+          "fileId",
+          "url",
+          "expiresAt"
+        ]
+      },
+      "ClaimFileDto": {
+        "type": "object",
+        "properties": {
+          "ownerType": {
+            "type": "string",
+            "description": "Owning entity type",
+            "example": "SUPPORT_TICKET"
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Owning entity ID",
+            "example": "ticket-123"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Kind within owner",
+            "example": "attachment"
+          }
+        },
+        "required": [
+          "ownerType",
+          "ownerId"
+        ]
+      },
+      "BulkDeleteRequestDto": {
+        "type": "object",
+        "properties": {
+          "fileIds": {
+            "description": "Array of file IDs to delete (1 to 100)",
+            "example": [
+              "0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b90",
+              "0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b91"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "fileIds"
+        ]
+      },
+      "BulkDeleteResultItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "0198f3a2-7c1e-7b40-9d2a-5e6f1a8c3b90"
+          },
+          "deleted": {
+            "type": "boolean",
+            "example": true
+          },
+          "error": {
+            "type": "string",
+            "example": "File not found"
+          }
+        },
+        "required": [
+          "id",
+          "deleted"
+        ]
+      },
+      "BulkDeleteResponseDto": {
+        "type": "object",
+        "properties": {
+          "requested": {
+            "type": "number",
+            "example": 2
+          },
+          "deletedCount": {
+            "type": "number",
+            "example": 2
+          },
+          "failedCount": {
+            "type": "number",
+            "example": 0
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkDeleteResultItemDto"
+            }
+          }
+        },
+        "required": [
+          "requested",
+          "deletedCount",
+          "failedCount",
+          "results"
+        ]
+      },
+      "DlqRedriveBodyDto": {
+        "type": "object",
+        "properties": {
+          "directPublish": {
+            "type": "boolean",
+            "description": "Directly publish to broker bypassing outbox relay"
+          }
+        }
+      },
+      "DlqDiscardBodyDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Reason for discarding the dead letter"
+          }
+        }
+      },
+      "QuotaPatchBodyDto": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "description": "Target namespace (defaults to \"generic\")",
+            "example": "generic"
+          },
+          "maxBytes": {
+            "type": "object",
+            "description": "Maximum allowable storage bytes (null for unlimited)",
+            "nullable": true,
+            "example": 104857600
+          },
+          "maxFiles": {
+            "type": "object",
+            "description": "Maximum allowable file count (null for unlimited)",
+            "nullable": true,
+            "example": 1000
+          },
+          "overrideQuotaBytes": {
+            "type": "object",
+            "description": "Administrative override quota bytes (UR-13)",
+            "nullable": true,
+            "example": 2147483648
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason for administrative quota override (UR-13)",
+            "example": "Extended evaluation tier approval"
+          },
+          "expiresAt": {
+            "type": "object",
+            "description": "Expiration date/time of the override (ISO 8601, null for persistent)",
+            "nullable": true,
+            "example": "2026-12-31T23:59:59Z"
+          }
+        }
+      }
+    }
+  }
+}

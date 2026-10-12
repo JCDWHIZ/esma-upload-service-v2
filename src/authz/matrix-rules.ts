@@ -73,11 +73,16 @@ export function isEsmaAdminActor(
     return true;
   }
 
-  // 2. Check canonical ESMA Admin permissions
+  // 2. Check canonical ESMA Admin permissions (UR-10)
   const perms = ctx.actor.permissions ?? [];
   return (
+    perms.includes('platform.files.admin') ||
+    perms.includes('platform_files_admin') ||
+    perms.includes('platform.files.dlq.manage') ||
     perms.includes(UploadPermissions.QUOTAS_MANAGE) ||
     perms.includes(UploadPermissions.QUOTAS_VIEW) ||
+    perms.includes('files.quota.manage') ||
+    perms.includes('files.quota.view') ||
     perms.includes('storage_quota_view') ||
     perms.includes('storage_quota_edit') ||
     perms.includes('storage_files_view') ||
@@ -89,6 +94,7 @@ export function isEsmaAdminActor(
     perms.includes(UploadPermissions.SYSTEM_FILES_LIST) ||
     perms.includes(UploadPermissions.TENANTS_USAGE_VIEW) ||
     perms.includes(UploadPermissions.AUDIT_VIEW) ||
+    perms.includes('files.audit.view') ||
     perms.includes(UploadPermissions.FILES_BULK_DELETE)
   );
 }
@@ -103,9 +109,11 @@ export function isSchoolAdminActor(ctx: RequestContext): boolean {
 
   const perms = ctx.actor.permissions ?? [];
   if (
+    perms.includes('files.file.admin') ||
+    perms.includes(UploadPermissions.FILES_ADMIN) ||
+    perms.includes('files.quota.manage') ||
     perms.includes(UploadPermissions.BRANCHES_MANAGE) ||
-    perms.includes(UploadPermissions.QUOTAS_VIEW) ||
-    perms.includes(UploadPermissions.FILES_ADMIN)
+    perms.includes(UploadPermissions.QUOTAS_VIEW)
   ) {
     return true;
   }
@@ -435,10 +443,16 @@ export const MATRIX_RULES: readonly MatrixRule[] = Object.freeze([
       ctx.actor.type === 'service' || ctx.namespace !== 'esma-tenant',
     evaluate: ({ ctx, action, resource }) => {
       const scopes = ctx.actor.scopes ?? [];
+      const perms = ctx.actor.permissions ?? [];
+      const isService = ctx.actor.type === 'service';
       const hasWildcard =
-        scopes.includes('*') || scopes.includes('files:admin');
+        scopes.includes('*') ||
+        scopes.includes('files:admin') ||
+        perms.includes('*') ||
+        perms.includes('files.file.admin') ||
+        perms.includes('platform.files.admin');
 
-      // Required scope mapping
+      // Required scope & permission mapping
       const requiredScopeMap: Record<AuthzAction, string> = {
         upload: 'files:write',
         read: 'files:read',
@@ -447,27 +461,52 @@ export const MATRIX_RULES: readonly MatrixRule[] = Object.freeze([
         admin: 'files:admin',
       };
 
-      const requiredScope = requiredScopeMap[action];
-      const hasScope = hasWildcard || scopes.includes(requiredScope);
+      const requiredPermMap: Record<AuthzAction, string> = {
+        upload: 'files.file.upload',
+        read: 'files.file.read',
+        list: 'files.file.list',
+        delete: 'files.file.delete',
+        admin: 'files.file.admin',
+      };
 
-      if (!hasScope) {
+      const requiredScope = requiredScopeMap[action];
+      const requiredPerm = requiredPermMap[action];
+      const isInternalFilesService =
+        isService &&
+        (scopes.includes('internal.files') ||
+          perms.includes('internal.files') ||
+          perms.includes('*'));
+
+      const hasAccess =
+        isInternalFilesService ||
+        hasWildcard ||
+        scopes.includes(requiredScope) ||
+        perms.includes(requiredPerm) ||
+        (action === 'read' && perms.includes('files.file.read.any')) ||
+        (action === 'delete' && perms.includes('files.file.delete.any'));
+
+      if (!hasAccess) {
         return {
           allowed: false,
-          reason: `API client missing required scope '${requiredScope}' for action '${action}'`,
+          reason: `Actor missing required permission '${requiredPerm}' for action '${action}'`,
           ruleId: 'GENERIC_SCOPE_MISSING',
         };
       }
 
-      // Private visibility handling
+      // Private visibility handling (UR-04.2)
       if (action === 'read' && resource.visibility === 'private') {
         const isUploader =
           resource.uploadedBy !== undefined &&
           resource.uploadedBy === ctx.actor.id;
-        if (!isUploader && !hasWildcard) {
+        const hasReadAny =
+          perms.includes('files.file.read.any') ||
+          perms.includes('files_read_any');
+
+        if (!isService && !isUploader && !hasReadAny && !hasWildcard) {
           return {
             allowed: false,
             reason:
-              'Private files can only be accessed by uploader or clients with files:admin scope',
+              'Private files can only be accessed by original uploader, service principals, or holders of files.file.read.any',
             ruleId: 'PRIVATE_VISIBILITY_DENIED',
           };
         }
@@ -475,7 +514,7 @@ export const MATRIX_RULES: readonly MatrixRule[] = Object.freeze([
 
       return {
         allowed: true,
-        reason: `API client authorized for action '${action}' with scope '${requiredScope}'`,
+        reason: `Actor authorized for action '${action}'`,
         ruleId: 'GENERIC_ACTION_ALLOWED',
       };
     },

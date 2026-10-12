@@ -29,13 +29,14 @@ export interface FilesTable {
     'PENDING_UPLOAD' | 'ACTIVE' | 'QUARANTINED' | 'DELETING' | 'DELETED'
   >;
   scan_status: Generated<
-    'NOT_REQUIRED' | 'PENDING' | 'CLEAN' | 'INFECTED' | 'ERROR'
+    'SKIPPED' | 'NOT_REQUIRED' | 'PENDING' | 'CLEAN' | 'INFECTED' | 'ERROR'
   >;
   replication_status: Generated<
     'NOT_REQUIRED' | 'QUEUED' | 'IN_PROGRESS' | 'SYNCED' | 'PARTIAL' | 'FAILED'
   >;
   primary_provider: 'local' | 'seaweedfs' | 'cloudinary';
   uploaded_by: string;
+  acting_service: string | null;
   tags: Generated<string[]>;
   attributes: Generated<Record<string, unknown>>;
   derivatives: Generated<Record<string, unknown>>;
@@ -47,6 +48,11 @@ export interface FilesTable {
   updated_at: Timestamp;
   deleted_at: NullableTimestamp;
   expires_at: NullableTimestamp;
+  claimed: Generated<boolean>;
+  claimed_at: NullableTimestamp;
+  unclaimed_expires_at: NullableTimestamp;
+  retain_until: NullableTimestamp;
+  held: Generated<boolean>;
 }
 
 export interface FileReplicasTable {
@@ -92,6 +98,7 @@ export interface AuditLogTable {
   outcome: 'SUCCESS' | 'DENIED' | 'FAILURE';
   actor_id: string;
   actor_type: string;
+  acting_service: string | null;
   roles: Generated<string[]>;
   namespace: string;
   tenant_id: string | null;
@@ -99,6 +106,9 @@ export interface AuditLogTable {
   ip_address: string | null;
   user_agent: string | null;
   correlation_id: string;
+  trace_id: string | null;
+  act_sub: string | null;
+  support_grant_id: string | null;
   details: Generated<Record<string, unknown>>;
 }
 
@@ -154,6 +164,26 @@ export interface IdempotencyKeysTable {
   expires_at: Timestamp;
 }
 
+export interface TenantQuotaTable {
+  tenant_id: string;
+  plan_quota_bytes: number | string | null;
+  override_quota_bytes: number | string | null;
+  override_reason: string | null;
+  override_expires_at: NullableTimestamp;
+  is_suspended: Generated<boolean>;
+  suspended_at: NullableTimestamp;
+  is_purging: Generated<boolean>;
+  purged_at: NullableTimestamp;
+  updated_at: Timestamp;
+}
+
+export interface TenantDailyEgressTable {
+  tenant_id: string;
+  usage_date: string;
+  bytes_served: Generated<number | string>;
+  updated_at: Timestamp;
+}
+
 export interface Database {
   files: FilesTable;
   file_replicas: FileReplicasTable;
@@ -162,6 +192,9 @@ export interface Database {
   audit_log: AuditLogTable;
   api_clients: ApiClientsTable;
   tenant_usage: TenantUsageTable;
+  tenant_quota: TenantQuotaTable;
+  tenant_daily_egress: TenantDailyEgressTable;
   dead_letters: DeadLettersTable;
   idempotency_keys: IdempotencyKeysTable;
 }
+

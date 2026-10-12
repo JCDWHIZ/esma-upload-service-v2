@@ -9,12 +9,15 @@ import { JwtVerifierService } from './jwt/jwt-verifier.service.js';
 import { ApiKeyAuthenticatorService } from './apikey/apikey-authenticator.service.js';
 import { AuthGuard } from './guards/auth.guard.js';
 
+import { RevocationService } from './revocation.service.js';
+
 @Global()
 @Module({
   providers: [
     AuthService,
     JwtVerifierService,
     ApiKeyAuthenticatorService,
+    RevocationService,
     AuthGuard,
     {
       provide: APP_GUARD,
@@ -29,6 +32,7 @@ import { AuthGuard } from './guards/auth.guard.js';
     AuthService,
     JwtVerifierService,
     ApiKeyAuthenticatorService,
+    RevocationService,
     AuthGuard,
     EsmaTenantContextResolver,
     EsmaAdminContextResolver,

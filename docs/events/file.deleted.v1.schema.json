@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:esma:events:file.deleted.v1.schema.json",
+  "title": "FileDeletedEventV1",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "occurredAt",
+    "organizationId",
+    "producer",
+    "actor",
+    "data"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "type": "string", "const": "file.deleted.v1" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "organizationId": { "type": "string" },
+    "producer": { "type": "string", "const": "esma-upload-service" },
+    "traceId": { "type": ["string", "null"] },
+    "correlationId": { "type": ["string", "null"] },
+    "actor": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "enum": ["USER", "SERVICE", "SYSTEM"] },
+        "id": { "type": "string" },
+        "actingService": { "type": ["string", "null"] }
+      }
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "fileId",
+        "namespace",
+        "reason",
+        "attributes"
+      ],
+      "properties": {
+        "fileId": { "type": "string" },
+        "namespace": { "type": "string" },
+        "reason": {
+          "type": "string",
+          "enum": ["USER", "OWNER", "RETENTION", "PURGE", "INFECTED", "UNCLAIMED"]
+        },
+        "attributes": { "type": "object" }
+      }
+    }
+  }
+}

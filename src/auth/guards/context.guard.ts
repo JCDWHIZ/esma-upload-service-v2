@@ -101,6 +101,9 @@ export class ContextGuard implements CanActivate {
 
     const token = req.user ?? req.token ?? req.principal;
     if (token && typeof token === 'object') {
+      if ('grant_type' in token && (token as { grant_type?: unknown }).grant_type === 'client_credentials') {
+        return this.genericResolver;
+      }
       if (token.organizationId || token.schoolId) {
         return this.tenantResolver;
       }

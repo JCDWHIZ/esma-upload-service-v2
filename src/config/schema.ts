@@ -53,31 +53,47 @@ export const rawConfigSchema = z.object({
     )
     .default('info'),
   TRUST_PROXY: z.string().default('loopback'),
+  // UR-29: CORS enabled (default false in production, true in dev)
+  CORS_ENABLED: booleanCoerce.optional(),
   CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
   SWAGGER_ENABLED: booleanCoerce.default(true),
   INSTANCE_COUNT_HINT: intCoerce(1).default(1),
 
+  // UR-29 & UR-30: Direct browser upload & Claim flow
+  UNCLAIMED_TTL_HOURS: intCoerce(24).default(24),
+  UNCLAIMED_MAX_FILES_PER_USER: intCoerce(50).default(50),
+  UNCLAIMED_MAX_BYTES_PER_USER: intCoerce(524288000).default(524288000), // 500 MB
+  USER_NAMESPACE_PERMISSIONS: z.string().default('{}'),
+
   // --- Auth ---
-  JWT_SECRET: z
-    .string()
-    .default('dev-insecure-jwt-secret-do-not-use-in-production-min-32-chars'),
-  JWT_ALGORITHMS: z.string().default('HS256'),
+  JWT_SECRET: z.string().optional(),
+  // UR-01: RS256 is the default; HS256 allowed only when JWT_ALGORITHMS contains 'HS256' AND JWT_SECRET is set.
+  JWT_ALGORITHMS: z.string().default('RS256'),
   JWT_KEYS: z.string().optional(),
   JWT_CLOCK_TOLERANCE_SECONDS: intCoerce(5).default(5),
+  // UR-01.4: audience check; set empty in non-production until identity ships audience claim
+  JWT_REQUIRED_AUDIENCE: z.string().default('esma-files'),
   ADMIN_ALLOWED_ROLES: z.string().default('PLATFORM_ADMIN'),
   ADMIN_AUTH_MODE: z.enum(['off', 'report', 'enforce']).default('enforce'),
   SIGNED_URL_SECRET: z
     .string()
     .default('dev-insecure-signed-url-secret-do-not-use-in-prod'),
-  SIGNED_URL_MAX_TTL_SECONDS: intCoerce(900).default(900),
+  // UR-26: secondary secret for rotation window
+  SIGNED_URL_SECRET_PREVIOUS: z.string().optional(),
+  // UR-04: TTL capped at 600 s (was 900)
+  SIGNED_URL_MAX_TTL_SECONDS: intCoerce(600).default(600),
   IDENTITY_JWKS_URI: z
     .string()
-    .default('https://api.esma.elsoft.ng/identity/oauth2/jwks'),
+    .default('http://esma-identity-service:7071/identity/oauth2/jwks'),
   IDENTITY_ISSUER: z
     .string()
     .default('http://esma-identity-service:7071/identity'),
+  // UR-02: per-client namespace allowlist JSON e.g. {"esma-storage-client":["*"]}
+  SERVICE_CLIENT_NAMESPACES: z.string().default('{"esma-storage-client":["*"]}'),
 
   // --- Database and cache ---
+  // UR-08: AUTO_MIGRATE defaults true outside production, false in production
+  AUTO_MIGRATE: booleanCoerce.optional(),
   DB_ENABLED: booleanCoerce.default(false),
   DATABASE_URL: z.string().default('postgres://gus:gus@localhost:5432/gus'),
   DATABASE_POOL_MAX: intCoerce(10).default(10),
@@ -158,6 +174,8 @@ export const rawConfigSchema = z.object({
   CLAMAV_HOST: z.string().default('localhost'),
   CLAMAV_PORT: intCoerce(3310).default(3310),
   CLAMAV_TIMEOUT_MS: intCoerce(30000).default(30000),
+  // UR-05: files over this size are streamed to ClamAV or marked ERROR
+  CLAMAV_MAX_BYTES: intCoerce(104857600).default(104857600), // 100 MB
   SCAN_FAIL_MODE: z.enum(['closed', 'open']).default('closed'),
   QUARANTINE_RETENTION_DAYS: intCoerce(7).default(7),
   PURGE_INLINE: booleanCoerce.default(false),
@@ -206,6 +224,7 @@ export const rawConfigSchema = z.object({
   DEFAULT_UPLOAD_BYTES_PER_MIN: intCoerce(524288000).default(524288000),
   DEFAULT_READ_LIMIT_PER_MIN: intCoerce(600).default(600),
   DEFAULT_FAILED_AUTH_LIMIT_PER_MIN: intCoerce(10).default(10),
+  DEFAULT_TENANT_QUOTA_BYTES: intCoerce(1073741824).default(1073741824), // 1 GiB (UR-13.2)
 });
 
 export type RawConfig = z.infer<typeof rawConfigSchema>;
@@ -447,15 +466,52 @@ export function runCrossFieldGuards(
     }
   }
 
-  // Production guards
-  if (isProd) {
-    if (!data.JWT_SECRET || String(data.JWT_SECRET).length < 32) {
+  // UR-01: JWT algorithm / secret guards
+  const algorithms = ((data.JWT_ALGORITHMS as string) ?? 'RS256')
+    .split(',')
+    .map((a: string) => a.trim().toUpperCase());
+
+  const needsHmac = algorithms.includes('HS256');
+  const needsRs256 = algorithms.includes('RS256');
+
+  if (needsHmac) {
+    // HS256 is opt-in; when included JWT_SECRET is mandatory everywhere
+    if (!data.JWT_SECRET || String(data.JWT_SECRET).trim() === '') {
+      addIssue(
+        'JWT_SECRET',
+        'JWT_SECRET is required when JWT_ALGORITHMS includes HS256',
+      );
+    } else if (isProd && String(data.JWT_SECRET).length < 32) {
       addIssue(
         'JWT_SECRET',
         'JWT_SECRET must be at least 32 characters in production',
       );
     }
+  }
 
+  if (needsRs256 && !needsHmac) {
+    // RS256-only: JWT_SECRET is NOT required (UR-01 item 1)
+    // Warn but don't block in non-prod
+  }
+
+  // UR-01: IDENTITY_JWKS_URI and IDENTITY_ISSUER must be set in production
+  if (isProd) {
+    if (!data.IDENTITY_JWKS_URI || String(data.IDENTITY_JWKS_URI).trim() === '') {
+      addIssue(
+        'IDENTITY_JWKS_URI',
+        'IDENTITY_JWKS_URI is required in production (UR-01)',
+      );
+    }
+    if (!data.IDENTITY_ISSUER || String(data.IDENTITY_ISSUER).trim() === '') {
+      addIssue(
+        'IDENTITY_ISSUER',
+        'IDENTITY_ISSUER is required in production (UR-01)',
+      );
+    }
+  }
+
+  // Production guards
+  if (isProd) {
     if (!data.SIGNED_URL_SECRET || String(data.SIGNED_URL_SECRET).length < 32) {
       addIssue(
         'SIGNED_URL_SECRET',
@@ -478,6 +534,33 @@ export function runCrossFieldGuards(
       addIssue(
         'ADMIN_AUTH_MODE',
         'ADMIN_AUTH_MODE cannot be "off" in production',
+      );
+    }
+
+    // UR-08: DATABASE_URL is required in production (DB_ENABLED is forced true)
+    if (!data.DATABASE_URL || String(data.DATABASE_URL).trim() === '' ||
+        String(data.DATABASE_URL).includes('gus:gus@localhost')) {
+      addIssue(
+        'DATABASE_URL',
+        'DATABASE_URL must be set to a real database in production (UR-08)',
+      );
+    }
+
+    // UR-08: EVENTS_ENABLED + EVENT_BROKER required in production
+    if (data.EVENTS_ENABLED === false || data.EVENTS_ENABLED === 'false') {
+      addIssue(
+        'EVENTS_ENABLED',
+        'EVENTS_ENABLED must be true in production (UR-08)',
+      );
+    }
+    if (
+      data.EVENT_BROKER === 'memory' &&
+      data.ALLOW_MEMORY_BROKER !== true &&
+      data.ALLOW_MEMORY_BROKER !== 'true'
+    ) {
+      addIssue(
+        'EVENT_BROKER',
+        'EVENT_BROKER must be kafka or pulsar in production (UR-08)',
       );
     }
   }

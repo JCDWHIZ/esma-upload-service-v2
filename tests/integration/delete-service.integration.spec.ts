@@ -76,7 +76,10 @@ describe('DeleteService & FileQuery Integration [P2-08]', () => {
   const replicasDb = new Map<string, FileReplica[]>();
   let usageReleasedCount = 0;
 
+  const origPurgeInline = process.env.PURGE_INLINE;
+
   beforeAll(async () => {
+    process.env.PURGE_INLINE = 'true';
     fakeDriver = new FakeStorageDriver('local');
 
     const mockStorageRegistry = {
@@ -219,6 +222,11 @@ describe('DeleteService & FileQuery Integration [P2-08]', () => {
   });
 
   afterAll(async () => {
+    if (origPurgeInline !== undefined) {
+      process.env.PURGE_INLINE = origPurgeInline;
+    } else {
+      delete process.env.PURGE_INLINE;
+    }
     if (app) {
       await app.close();
     }

@@ -3,6 +3,7 @@ import {
   Get,
   Head,
   Post,
+  Patch,
   Delete,
   Param,
   Query,
@@ -69,7 +70,10 @@ import {
   createSignedUrlSchema,
   bulkDeleteSchema,
   fileUploadMetadataSchema,
+  ClaimFileDto,
+  claimFileDtoSchema,
 } from './dto/files.dto.js';
+import { ClaimService } from './claim.service.js';
 import { FileRepository } from '../db/repositories/file.repository.js';
 import { ReplicaRepository } from '../db/repositories/replica.repository.js';
 import { OutboxRepository } from '../db/repositories/outbox.repository.js';
@@ -93,12 +97,14 @@ import { PolicyRegistry } from '../config/policy-registry.js';
 import type { AuthenticatedHttpRequest } from '../auth/context.js';
 import type { RequestContext } from '../core/request-context.js';
 import {
+  BadRequestError,
   ForbiddenError,
   NotFoundError,
   StorageUnavailableError,
   ValidationError,
 } from '../core/errors/app-error.js';
-import type { UploadManifestResponse } from '../core/manifest.js';
+import { toManifest, type UploadManifestResponse } from '../core/manifest.js';
+import { AppConfigService } from '../config/config.service.js';
 import { EVENT_TYPES } from '../events/catalog.js';
 import { createEnvelope } from '../events/envelope.js';
 import type { Provider } from '../core/types.js';
@@ -160,6 +166,8 @@ export class FilesController {
     private readonly authzService: AuthorizationService,
     private readonly policyRegistry: PolicyRegistry,
     private readonly idempotencyService: IdempotencyService,
+    private readonly claimService: ClaimService,
+    private readonly configService: AppConfigService,
   ) {}
 
   // ── 1. Multipart Upload ─────────────────────────────────────────────────────
@@ -239,7 +247,9 @@ export class FilesController {
       attributes?: Record<string, string>;
       subTenantId?: string;
       atomic?: boolean;
+      waitForScan?: number;
     },
+    @Query('waitForScan') queryWaitForScan?: string | number,
     @Req() req?: AuthenticatedHttpRequest,
     @Res() res?: Response,
   ) {
@@ -296,6 +306,11 @@ export class FilesController {
       attributes: body.attributes,
       atomic: body.atomic ?? false,
       idempotencyKey,
+      waitForScan:
+        body.waitForScan ??
+        (queryWaitForScan !== undefined && queryWaitForScan !== null
+          ? Math.min(30, Math.max(0, parseInt(String(queryWaitForScan), 10)))
+          : undefined),
     };
 
     let outcomes;
@@ -533,12 +548,21 @@ export class FilesController {
   listFiles(
     @Query(new ZodValidationPipe(fileListQuerySchema))
     query: {
+      namespace?: string;
+      ownerType?: string;
+      ownerId?: string;
+      kind?: string;
+      claimed?: boolean;
       folder?: string;
       subTenantId?: string;
       mimetype?: string;
       tag?: string;
       status?:
-        'ACTIVE' | 'DELETED' | 'DELETING' | 'PENDING_UPLOAD' | 'QUARANTINED';
+        | 'ACTIVE'
+        | 'DELETED'
+        | 'DELETING'
+        | 'PENDING_UPLOAD'
+        | 'QUARANTINED';
       createdFrom?: string;
       createdTo?: string;
       cursor?: string;
@@ -551,17 +575,28 @@ export class FilesController {
       .list(
         ctx,
         {
+          namespace: query.namespace,
+          ownerType: query.ownerType,
+          ownerId: query.ownerId,
+          kind: query.kind,
+          claimed: query.claimed,
           folder: query.folder,
           subTenantId: query.subTenantId,
           mimetype: query.mimetype,
           tag: query.tag,
           status: query.status,
+          createdFrom: query.createdFrom
+            ? new Date(query.createdFrom)
+            : undefined,
+          createdTo: query.createdTo ? new Date(query.createdTo) : undefined,
         },
         query.cursor,
         query.limit ?? 20,
       )
       .then((res) => ({
+        data: res.items,
         files: res.items,
+        items: res.items,
         total: res.total,
         count: res.items.length,
         nextCursor: res.nextCursor,
@@ -810,10 +845,15 @@ export class FilesController {
       throw new ForbiddenError(decision.reason);
     }
 
+    if (file.claimed === false && ctx.actor.type === 'user') {
+      throw new ForbiddenError('Unclaimed files cannot be signed by users');
+    }
+
     const effectiveTtl = body?.expiresInSeconds ?? body?.ttlSeconds ?? 900;
     const signed = this.signedUrlService.sign(param.fileId, {
       expiresInSeconds: effectiveTtl,
       disposition: body?.disposition,
+      organizationId: file.tenantId,
     });
 
     return {
@@ -824,7 +864,35 @@ export class FilesController {
     };
   }
 
-  // ── 7. Delete File ──────────────────────────────────────────────────────────
+  // ── 7. Delete File & Owner Bulk Delete ─────────────────────────────────────
+
+  @Delete()
+  @HttpCode(HttpStatus.OK)
+  @RequireAction('delete')
+  @ApiOperation({ summary: 'Bulk delete files by owner attributes (UR-06)' })
+  @ApiQuery({ name: 'ownerType', required: true })
+  @ApiQuery({ name: 'ownerId', required: true })
+  @ApiQuery({ name: 'namespace', required: false })
+  async deleteByOwner(
+    @Query('ownerType') ownerType?: string,
+    @Query('ownerId') ownerId?: string,
+    @Query('namespace') namespace?: string,
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    if (!ownerType || !ownerId) {
+      throw new BadRequestError(
+        'ownerType and ownerId are required query parameters',
+      );
+    }
+    const ctx = getRequestContext(req, 'req-delete-owner');
+    const result = await this.deleteService.deleteByOwner(
+      ctx,
+      ownerType,
+      ownerId,
+      namespace,
+    );
+    return { data: result };
+  }
 
   @Delete(':fileId')
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -847,7 +915,196 @@ export class FilesController {
     @Req() req?: AuthenticatedHttpRequest,
   ) {
     const ctx = getRequestContext(req, 'req-delete');
-    await this.deleteService.delete(ctx, param.fileId);
+    try {
+      await this.deleteService.delete(ctx, param.fileId);
+    } catch (err) {
+      if (err instanceof NotFoundError) {
+        // UR-16: DELETE returns 204 for file that does not exist or already deleted
+        return;
+      }
+      throw err;
+    }
+  }
+
+  // ── 7b. Claim File ───────────────────────────────────────────────────────────
+
+  @Post(':fileId/claim')
+  @HttpCode(HttpStatus.OK)
+  @RequireAction('upload')
+  @ApiOperation({
+    summary: 'Claim a file for an owning business entity (UR-30)',
+  })
+  @ApiParam({ name: 'fileId', description: 'UUIDv7 identifier of the file' })
+  @ApiBody({ type: ClaimFileDto })
+  async claimFile(
+    @Param(new ZodValidationPipe(fileIdParamSchema)) param: { fileId: string },
+    @Body(new ZodValidationPipe(claimFileDtoSchema)) body: ClaimFileDto,
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const ctx = getRequestContext(req, 'req-claim');
+    return this.claimService.claim(ctx, param.fileId, body);
+  }
+
+  // ── 7c. Extend Retention & Legal Hold (UR-14) ───────────────────────────────
+
+  @Patch(':fileId')
+  @HttpCode(HttpStatus.OK)
+  @RequireAction('upload')
+  @ApiOperation({
+    summary: 'Extend file retention (service principals only, UR-14)',
+  })
+  @ApiParam({ name: 'fileId', description: 'UUIDv7 identifier of the file' })
+  async patchFileRetention(
+    @Param(new ZodValidationPipe(fileIdParamSchema)) param: { fileId: string },
+    @Body() body: { retainUntil?: string; retentionDays?: number },
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const ctx = getRequestContext(req, 'req-patch-retention');
+
+    const isAdmin =
+      ctx.actor.permissions?.includes('platform.files.admin') ||
+      ctx.actor.permissions?.includes('platform_admin');
+    if (ctx.actor.type !== 'service' && !isAdmin) {
+      throw new ForbiddenError(
+        'User principals are not permitted to extend retention',
+      );
+    }
+
+    const file = await this.fileRepo.findById(param.fileId);
+    if (!file || file.status === 'DELETED' || file.status === 'DELETING') {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    if (!this.authzService.canAccessTenant(ctx, file.tenantId)) {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    let targetDate: Date;
+    if (body?.retainUntil) {
+      targetDate = new Date(body.retainUntil);
+      if (isNaN(targetDate.getTime())) {
+        throw new ValidationError('Invalid retainUntil ISO datetime', {
+          code: 'validation_failed',
+        });
+      }
+    } else if (body?.retentionDays !== undefined) {
+      if (typeof body.retentionDays !== 'number' || body.retentionDays <= 0) {
+        throw new ValidationError('retentionDays must be a positive integer', {
+          code: 'validation_failed',
+        });
+      }
+      targetDate = new Date(Date.now() + body.retentionDays * 86400 * 1000);
+    } else {
+      throw new ValidationError(
+        'Either retainUntil or retentionDays must be provided',
+        { code: 'validation_failed' },
+      );
+    }
+
+    const policy = this.policyRegistry.get(file.namespace);
+    if (policy.maxRetentionDays !== undefined) {
+      const maxAllowedTime =
+        file.createdAt.getTime() + policy.maxRetentionDays * 86400 * 1000;
+      if (targetDate.getTime() > maxAllowedTime) {
+        throw new ValidationError(
+          `Requested retainUntil exceeds namespace maximum retention limit of ${policy.maxRetentionDays} days`,
+          {
+            code: 'validation_failed',
+            detail: `Requested: ${targetDate.toISOString()}, max allowed: ${new Date(maxAllowedTime).toISOString()}`,
+          },
+        );
+      }
+    }
+
+    const updated = await this.fileRepo.updateStatus(file.id, file.version, {
+      retainUntil: targetDate,
+    });
+
+    const replicas = await this.replicaRepo.listByFile(file.id);
+    const baseUrl = this.configService.get().APP_BASE_URL;
+    return toManifest(updated, replicas, baseUrl, {
+      message: 'Retention extended successfully.',
+    });
+  }
+
+  @Post(':fileId/hold')
+  @HttpCode(HttpStatus.OK)
+  @RequireAction('admin')
+  @ApiOperation({ summary: 'Place legal hold on a file (UR-14.4)' })
+  @ApiParam({ name: 'fileId', description: 'UUIDv7 identifier of the file' })
+  async placeLegalHold(
+    @Param(new ZodValidationPipe(fileIdParamSchema)) param: { fileId: string },
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const ctx = getRequestContext(req, 'req-place-hold');
+    const isAdmin =
+      ctx.actor.permissions?.includes('platform.files.admin') ||
+      ctx.actor.permissions?.includes('platform_admin');
+    if (!isAdmin) {
+      throw new ForbiddenError(
+        'Placing legal hold requires platform.files.admin permission',
+      );
+    }
+
+    const file = await this.fileRepo.findById(param.fileId);
+    if (!file || file.status === 'DELETED' || file.status === 'DELETING') {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    if (!this.authzService.canAccessTenant(ctx, file.tenantId)) {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    await this.fileRepo.updateStatus(file.id, file.version, {
+      held: true,
+    });
+
+    return {
+      success: true,
+      fileId: file.id,
+      held: true,
+      message: 'Legal hold placed successfully',
+    };
+  }
+
+  @Delete(':fileId/hold')
+  @HttpCode(HttpStatus.OK)
+  @RequireAction('admin')
+  @ApiOperation({ summary: 'Clear legal hold on a file (UR-14.4)' })
+  @ApiParam({ name: 'fileId', description: 'UUIDv7 identifier of the file' })
+  async clearLegalHold(
+    @Param(new ZodValidationPipe(fileIdParamSchema)) param: { fileId: string },
+    @Req() req?: AuthenticatedHttpRequest,
+  ) {
+    const ctx = getRequestContext(req, 'req-clear-hold');
+    const isAdmin =
+      ctx.actor.permissions?.includes('platform.files.admin') ||
+      ctx.actor.permissions?.includes('platform_admin');
+    if (!isAdmin) {
+      throw new ForbiddenError(
+        'Clearing legal hold requires platform.files.admin permission',
+      );
+    }
+
+    const file = await this.fileRepo.findById(param.fileId);
+    if (!file || file.status === 'DELETED' || file.status === 'DELETING') {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    if (!this.authzService.canAccessTenant(ctx, file.tenantId)) {
+      throw new NotFoundError(`File '${param.fileId}' not found`);
+    }
+
+    await this.fileRepo.updateStatus(file.id, file.version, {
+      held: false,
+    });
+
+    return {
+      success: true,
+      fileId: file.id,
+      held: false,
+      message: 'Legal hold cleared successfully',
+    };
   }
 
   @Delete(':fileId/permanent')

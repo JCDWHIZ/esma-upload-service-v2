@@ -18,6 +18,8 @@ import {
   normalizePermissions,
 } from '../../authz/permissions.js';
 
+import { RevocationService } from '../revocation.service.js';
+
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -25,6 +27,7 @@ export class AuthGuard implements CanActivate {
     private readonly jwtVerifier: JwtVerifierService,
     private readonly apiKeyAuthenticator: ApiKeyAuthenticatorService,
     private readonly configService: AppConfigService,
+    private readonly revocationService?: RevocationService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -119,6 +122,14 @@ export class AuthGuard implements CanActivate {
       }
 
       const claims = await this.jwtVerifier.verifyToken(extractedJwt);
+
+      // UR-09: Revocation & permission version check
+      if (this.revocationService) {
+        await this.revocationService.checkRevocation(
+          claims,
+          req.method ?? 'GET',
+        );
+      }
 
       // Verify specific accepted JWT subtypes if constrained
       if (

@@ -7,6 +7,7 @@ import { AuthModule } from '../auth/auth.module.js';
 import { AuthorizationModule } from '../authz/authorization.module.js';
 import { DlqController } from './dlq.controller.js';
 import { QuotaController } from './quota.controller.js';
+import { TenantQuotaService } from './tenant-quota.service.js';
 import { TenantUsageReconciler } from './tenant-usage-reconciler.service.js';
 
 @Module({
@@ -19,6 +20,7 @@ import { TenantUsageReconciler } from './tenant-usage-reconciler.service.js';
     AuthorizationModule,
   ],
   controllers: [DlqController, QuotaController],
-  providers: [TenantUsageReconciler],
+  providers: [TenantUsageReconciler, TenantQuotaService],
+  exports: [TenantQuotaService, TenantUsageReconciler],
 })
 export class AdminModule {}

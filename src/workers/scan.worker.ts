@@ -14,6 +14,7 @@ import { defineConsumer } from '../events/consumer.js';
 import type { ConsumerRunnable } from '../events/consumer.interface.js';
 import { EVENT_TYPES, type FileScanPayload } from '../events/catalog.js';
 import { createEnvelope, type EventEnvelope } from '../events/envelope.js';
+import { DomainEventPublisher } from '../events/domain-event.publisher.js';
 import { ClamAvScanner } from '../ingest/clamav.scanner.js';
 import type { FileRecord } from '../core/types.js';
 
@@ -49,6 +50,8 @@ export class ScanWorker {
     @Optional()
     @Inject(MESSAGE_BROKER)
     private readonly broker?: IMessageBroker,
+    @Optional()
+    private readonly domainEventPublisher?: DomainEventPublisher,
   ) {}
 
   async start(): Promise<void> {
@@ -256,6 +259,20 @@ export class ScanWorker {
       });
 
       await this.outboxWriter.enqueue(trx, scannedEnvelope);
+
+      if (this.domainEventPublisher) {
+        await this.domainEventPublisher.publish(trx, {
+          eventType: 'file.scanned.v1',
+          organizationId: file.tenantId,
+          correlationId: envelope.correlationId,
+          data: {
+            fileId: file.id,
+            scanStatus: 'CLEAN',
+            threat: null,
+            scannedAt: new Date().toISOString(),
+          },
+        });
+      }
     });
   }
 
@@ -306,6 +323,20 @@ export class ScanWorker {
       });
 
       await this.outboxWriter.enqueue(trx, scannedEnvelope);
+
+      if (this.domainEventPublisher) {
+        await this.domainEventPublisher.publish(trx, {
+          eventType: 'file.scanned.v1',
+          organizationId: file.tenantId,
+          correlationId: envelope.correlationId,
+          data: {
+            fileId: file.id,
+            scanStatus: 'INFECTED',
+            threat,
+            scannedAt: new Date().toISOString(),
+          },
+        });
+      }
     });
 
     // 4. Emit high-severity security alert

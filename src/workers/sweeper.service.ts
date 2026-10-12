@@ -17,6 +17,7 @@ import { IdempotencyRepository } from '../db/repositories/idempotency.repository
 import { OutboxWriter } from '../events/outbox-writer.js';
 import { createEnvelope } from '../events/envelope.js';
 import { EVENT_TYPES } from '../events/catalog.js';
+import { DomainEventPublisher } from '../events/domain-event.publisher.js';
 
 export interface SweeperSweepResult {
   stuckQueuedReenqueued: number;
@@ -28,6 +29,8 @@ export interface SweeperSweepResult {
   outboxCleaned: number;
   stagingCleaned: number;
   idempotencyKeysCleaned: number;
+  unclaimedExpiredSwept: number;
+  expiredRetainedSwept: number;
 }
 
 @Injectable()
@@ -45,6 +48,7 @@ export class SweeperService implements OnApplicationShutdown {
     private readonly outboxWriter: OutboxWriter,
     private readonly idempotencyRepo?: IdempotencyRepository,
     @Optional() private readonly policyRegistry?: PolicyRegistry,
+    @Optional() private readonly domainEventPublisher?: DomainEventPublisher,
   ) {}
 
   start(): void {
@@ -94,6 +98,8 @@ export class SweeperService implements OnApplicationShutdown {
         outboxCleaned: 0,
         stagingCleaned: 0,
         idempotencyKeysCleaned: 0,
+        unclaimedExpiredSwept: 0,
+        expiredRetainedSwept: 0,
       };
     }
 
@@ -108,6 +114,8 @@ export class SweeperService implements OnApplicationShutdown {
       const outboxCleaned = await this.sweepOutbox();
       const stagingCleaned = await this.sweepStaging();
       const idempotencyKeysCleaned = await this.sweepIdempotencyKeys();
+      const unclaimedExpiredSwept = await this.sweepExpiredUnclaimed();
+      const expiredRetainedSwept = await this.sweepExpiredRetained();
 
       return {
         stuckQueuedReenqueued,
@@ -119,6 +127,8 @@ export class SweeperService implements OnApplicationShutdown {
         outboxCleaned,
         stagingCleaned,
         idempotencyKeysCleaned,
+        unclaimedExpiredSwept,
+        expiredRetainedSwept,
       };
     } catch (err: unknown) {
       this.logger.error(`Error during sweep cycle: ${String(err)}`);
@@ -132,6 +142,8 @@ export class SweeperService implements OnApplicationShutdown {
         outboxCleaned: 0,
         stagingCleaned: 0,
         idempotencyKeysCleaned: 0,
+        unclaimedExpiredSwept: 0,
+        expiredRetainedSwept: 0,
       };
     } finally {
       this.isSweeping = false;
@@ -682,4 +694,172 @@ export class SweeperService implements OnApplicationShutdown {
       return deletedCount;
     });
   }
+
+  /**
+   * Sweeps expired unclaimed files uploaded by users (UR-30.4).
+   * Deletes expired unclaimed files and publishes file.deleted.v1 with reason=UNCLAIMED.
+   */
+  async sweepExpiredUnclaimed(dryRun = false): Promise<number> {
+    const database = this.db.getDb();
+    if (!database) return 0;
+
+    const now = new Date();
+
+    return database.transaction().execute(async (trx) => {
+      const lock = await sql<{
+        locked: boolean;
+      }>`SELECT pg_try_advisory_xact_lock(hashtext('sweeper_unclaimed_files')) AS locked`.execute(
+        trx,
+      );
+      if (!lock.rows[0]?.locked) {
+        return 0;
+      }
+
+      const expiredFiles = await this.fileRepo.findExpiredUnclaimed(
+        now,
+        50,
+        trx,
+      );
+      if (expiredFiles.length === 0) {
+        return 0;
+      }
+
+      if (dryRun) {
+        this.logger.log(
+          `[DRY-RUN] Unclaimed sweep: found ${expiredFiles.length} expired unclaimed files`,
+        );
+        return expiredFiles.length;
+      }
+
+      let count = 0;
+      for (const file of expiredFiles) {
+        const marked = await this.fileRepo.markDeleting(file.id, trx);
+        if (marked) {
+          // Enqueue purge
+          const purgeEnvelope = createEnvelope({
+            eventType: EVENT_TYPES.FILE_PURGE,
+            partitionKey: file.id,
+            payload: { fileId: file.id },
+            namespace: file.namespace,
+            tenantId: file.tenantId,
+          });
+          await this.outboxWriter.enqueue(trx, purgeEnvelope);
+
+          // Enqueue file.deleted.v1 with reason=UNCLAIMED (UR-30.4)
+          const deletedEnvelope = createEnvelope({
+            eventType: EVENT_TYPES.FILE_DELETED,
+            partitionKey: file.id,
+            payload: {
+              fileId: file.id,
+              namespace: file.namespace,
+              reason: 'UNCLAIMED',
+              attributes: file.attributes ?? {},
+            },
+            namespace: file.namespace,
+            tenantId: file.tenantId,
+          });
+          await this.outboxWriter.enqueue(trx, deletedEnvelope);
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        this.logger.log(
+          `Unclaimed sweep: enqueued ${count} expired unclaimed files for deletion`,
+        );
+      }
+      return count;
+    });
+  }
+
+  /**
+   * 11. Retention sweep: Finds ACTIVE files whose retain_until <= now (UR-14).
+   * Files with held = true are SKIPPED (immune from retention sweeper).
+   * Soft-deletes expired files and enqueues file.deleted.v1 with reason=RETENTION.
+   */
+  async sweepExpiredRetained(dryRun = false): Promise<number> {
+    const database = this.db.getDb();
+    if (!database) return 0;
+
+    const now = new Date();
+
+    return database.transaction().execute(async (trx) => {
+      const lock = await sql<{
+        locked: boolean;
+      }>`SELECT pg_try_advisory_xact_lock(hashtext('sweeper_retained_files')) AS locked`.execute(
+        trx,
+      );
+      if (!lock.rows[0]?.locked) {
+        return 0;
+      }
+
+      const expiredFiles = await this.fileRepo.findExpiredRetained(now, 50, trx);
+      if (expiredFiles.length === 0) {
+        return 0;
+      }
+
+      if (dryRun) {
+        this.logger.log(
+          `[DRY-RUN] Retention sweep: found ${expiredFiles.length} expired retained files`,
+        );
+        return expiredFiles.length;
+      }
+
+      let count = 0;
+      for (const file of expiredFiles) {
+        // UR-14.4: Legal hold check - held files are immune from retention deletion
+        if (file.held) {
+          continue;
+        }
+
+        const marked = await this.fileRepo.markDeleting(file.id, trx);
+        if (marked) {
+          const purgeEnvelope = createEnvelope({
+            eventType: EVENT_TYPES.FILE_PURGE,
+            partitionKey: file.id,
+            payload: { fileId: file.id },
+            namespace: file.namespace,
+            tenantId: file.tenantId,
+          });
+          await this.outboxWriter.enqueue(trx, purgeEnvelope);
+
+          const deletedEnvelope = createEnvelope({
+            eventType: EVENT_TYPES.FILE_DELETED,
+            partitionKey: file.id,
+            payload: {
+              fileId: file.id,
+              namespace: file.namespace,
+              reason: 'RETENTION',
+              attributes: file.attributes ?? {},
+            },
+            namespace: file.namespace,
+            tenantId: file.tenantId,
+          });
+          await this.outboxWriter.enqueue(trx, deletedEnvelope);
+
+          if (this.domainEventPublisher) {
+            await this.domainEventPublisher.publish(trx, {
+              eventType: 'file.deleted.v1',
+              organizationId: file.tenantId,
+              data: {
+                fileId: file.id,
+                namespace: file.namespace,
+                reason: 'RETENTION',
+              },
+            });
+          }
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        this.logger.log(
+          `Retention sweep: soft-deleted ${count} expired retained files (reason=RETENTION)`,
+        );
+      }
+      return count;
+    });
+  }
 }
+
+

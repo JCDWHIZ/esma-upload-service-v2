@@ -26,10 +26,12 @@ const VALID_TOPICS = new Set<string>([
   'processing',
   'audit',
   'dlq',
+  'esma.files.events.v1',
+  'esma.platform.usage.v1',
 ]);
 
-function isLogicalTopic(t: string): t is LogicalTopic {
-  return VALID_TOPICS.has(t);
+function isLogicalTopic(t: string): boolean {
+  return VALID_TOPICS.has(t) || t.includes('.');
 }
 
 /**
@@ -164,9 +166,9 @@ export class OutboxRelay {
       try {
         const envelope = row.envelope as unknown as EventEnvelope<unknown>;
         const topicRaw = row.topic;
-        const topic: LogicalTopic = isLogicalTopic(topicRaw)
+        const topic: LogicalTopic = (isLogicalTopic(topicRaw)
           ? topicRaw
-          : 'audit';
+          : 'audit') as LogicalTopic;
 
         await this.broker!.publish(topic, row.partitionKey, envelope);
 

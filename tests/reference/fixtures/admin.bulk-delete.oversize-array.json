@@ -2,16 +2,16 @@
   "status": 400,
   "contentType": "application/problem+json",
   "body": {
-    "code": "BAD_REQUEST",
+    "code": "validation_failed",
     "correlationId": "unknown",
     "detail": "Bulk delete exceeded maximum limit of 100 items",
-    "error": "BAD_REQUEST",
+    "error": "validation_failed",
     "errors": [],
     "message": "Bulk delete exceeded maximum limit of 100 items",
     "status": 400,
     "statusCode": 400,
-    "title": "Bad request",
-    "type": "<URL>"
+    "title": "Validation failed",
+    "type": "urn:esma:files:error:validation_failed"
   },
   "bodyShape": {
     "code": "string",

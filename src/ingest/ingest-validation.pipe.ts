@@ -16,7 +16,7 @@ import {
   UnsupportedMediaTypeError,
 } from '../core/errors/app-error.js';
 import { hashFile } from '../core/hashing.js';
-import { sanitizeFilename } from './sanitize.js';
+import { sanitizeFilename, sanitizeSvgFile } from './sanitize.js';
 import { assertMimeCompatibility, detectFileType } from './sniff.js';
 import { IngestedFile } from './types.js';
 import type { IngestValidationOptions } from './types.js';
@@ -187,6 +187,12 @@ export class IngestValidationPipe implements PipeTransform {
           detail: `Size: ${stat.size} bytes, limit: ${policy.maxFileSizeBytes} bytes`,
         },
       );
+    }
+
+    // Sanitize SVG content (UR-15 / UR-31)
+    if (detected.mime === 'image/svg+xml') {
+      await sanitizeSvgFile(file.path);
+      stat = await fs.promises.stat(file.path);
     }
 
     // Compute SHA-256 hex digest

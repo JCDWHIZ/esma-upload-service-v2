@@ -14,6 +14,7 @@ export const EVENT_TYPES = {
   FILE_ERASED: 'file.erased',
   FILE_SCANNED: 'file.scanned',
   FILE_PROCESSED: 'file.processed',
+  FILE_CLAIMED: 'file.claimed.v1',
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];
@@ -81,6 +82,11 @@ export const EVENT_CATALOG: Record<EventType, EventMetadata> = {
   },
   [EVENT_TYPES.FILE_PROCESSED]: {
     type: EVENT_TYPES.FILE_PROCESSED,
+    kind: 'event',
+    defaultTopic: 'audit',
+  },
+  [EVENT_TYPES.FILE_CLAIMED]: {
+    type: EVENT_TYPES.FILE_CLAIMED,
     kind: 'event',
     defaultTopic: 'audit',
   },
@@ -160,6 +166,15 @@ export const FileProcessedPayloadSchema = z.object({
 });
 export type FileProcessedPayload = z.infer<typeof FileProcessedPayloadSchema>;
 
+export const FileClaimedPayloadSchema = z.object({
+  fileId: z.string().min(1),
+  namespace: z.string().min(1),
+  ownerType: z.string().min(1),
+  ownerId: z.string().min(1),
+  kind: z.string().min(1),
+});
+export type FileClaimedPayload = z.infer<typeof FileClaimedPayloadSchema>;
+
 export const EVENT_PAYLOAD_SCHEMAS = {
   [EVENT_TYPES.FILE_REPLICATE]: FileReplicatePayloadSchema,
   [EVENT_TYPES.FILE_PURGE]: FilePurgePayloadSchema,
@@ -172,6 +187,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
   [EVENT_TYPES.FILE_ERASED]: FileErasedPayloadSchema,
   [EVENT_TYPES.FILE_SCANNED]: FileScannedPayloadSchema,
   [EVENT_TYPES.FILE_PROCESSED]: FileProcessedPayloadSchema,
+  [EVENT_TYPES.FILE_CLAIMED]: FileClaimedPayloadSchema,
 } as const;
 
 export type EventPayloadMap = {
@@ -186,6 +202,7 @@ export type EventPayloadMap = {
   [EVENT_TYPES.FILE_ERASED]: FileErasedPayload;
   [EVENT_TYPES.FILE_SCANNED]: FileScannedPayload;
   [EVENT_TYPES.FILE_PROCESSED]: FileProcessedPayload;
+  [EVENT_TYPES.FILE_CLAIMED]: FileClaimedPayload;
 };
 
 export const SUPPORTED_SCHEMA_VERSIONS = new Set<number>([1]);

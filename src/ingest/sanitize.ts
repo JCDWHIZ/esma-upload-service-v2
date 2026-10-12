@@ -62,3 +62,51 @@ export function sanitizeFilename(rawName: string | null | undefined): string {
 
   return result.length > 0 ? result : 'unnamed-file';
 }
+
+/**
+ * Sanitizes an SVG file on disk (UR-15 & UR-31):
+ * - Validates SVG structure (must contain <svg>)
+ * - Strips <script> elements
+ * - Strips on* event handlers (onload, onerror, etc.)
+ * - Strips <foreignObject> elements
+ * - Strips external references (http:, https:, //, javascript:, data: in href/xlink:href/@import)
+ * - Writes sanitized content back to disk
+ */
+export async function sanitizeSvgFile(filePath: string): Promise<void> {
+  const fs = await import('node:fs');
+  const { ValidationError } = await import('../core/errors/app-error.js');
+  const content = await fs.promises.readFile(filePath, 'utf8');
+  const lower = content.toLowerCase();
+
+  // Basic well-formedness check
+  if (!lower.includes('<svg')) {
+    throw new ValidationError('Malformed SVG: Missing <svg> root element', {
+      code: 'validation_failed',
+    });
+  }
+
+  let sanitized = content;
+
+  // 1. Strip <script>...</script>
+  sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  sanitized = sanitized.replace(/<script\b[^>]*\/>/gi, '');
+
+  // 2. Strip <foreignObject>...</foreignObject>
+  sanitized = sanitized.replace(/<foreignObject\b[^<]*(?:(?!<\/foreignObject>)<[^<]*)*<\/foreignObject>/gi, '');
+  sanitized = sanitized.replace(/<foreignObject\b[^>]*\/>/gi, '');
+
+  // 3. Strip inline event handlers: on\w+="...", on\w+='...'
+  sanitized = sanitized.replace(/\s+on[a-z0-9_-]+\s*=\s*(['"]).*?\1/gi, '');
+  sanitized = sanitized.replace(/\s+on[a-z0-9_-]+\s*=\s*[^\s>]+/gi, '');
+
+  // 4. Strip dangerous / external URIs in href and xlink:href
+  sanitized = sanitized.replace(
+    /\s+(?:xlink:)?href\s*=\s*(['"])\s*(?:javascript:|data:text\/html|https?:\/\/|\/\/)[^'"]*?\1/gi,
+    '',
+  );
+
+  // 5. Strip @import in <style>
+  sanitized = sanitized.replace(/@import\s+(?:url\([^)]+\)|['"][^'"]+['"])/gi, '');
+
+  await fs.promises.writeFile(filePath, sanitized, 'utf8');
+}

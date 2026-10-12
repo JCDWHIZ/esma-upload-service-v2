@@ -26,6 +26,14 @@ export interface FileManifestData {
   replicas: Record<string, FileReplicaManifest>;
   replicationStatus: ReplicationStatus;
   scanStatus: ScanStatus;
+  namespace?: string;
+  status?: string;
+  attributes?: Record<string, unknown>;
+  actingService?: string | null;
+  uploadedBy?: string;
+  claimed?: boolean;
+  claimedAt?: string | null;
+  retainUntil?: string | null;
   createdAt: string;
 }
 
@@ -63,6 +71,8 @@ export function toManifest(
     );
     if (cdnReplica && cdnReplica.url) {
       publicUrl = cdnReplica.url;
+    } else {
+      publicUrl = canonicalUrl;
     }
   }
 
@@ -106,6 +116,18 @@ export function toManifest(
       replicas: replicasMap,
       replicationStatus: file.replicationStatus,
       scanStatus: file.scanStatus,
+      namespace: file.namespace,
+      status: file.status,
+      attributes: file.attributes,
+      actingService: file.actingService ?? null,
+      uploadedBy: file.uploadedBy,
+      claimed: file.claimed ?? false,
+      claimedAt: file.claimedAt ? file.claimedAt.toISOString() : null,
+      retainUntil: file.retainUntil
+        ? file.retainUntil.toISOString()
+        : file.expiresAt
+          ? file.expiresAt.toISOString()
+          : null,
       createdAt: file.createdAt.toISOString(),
     },
   };
@@ -135,7 +157,22 @@ export const fileManifestDataSchema = z.object({
     'PARTIAL',
     'FAILED',
   ]),
-  scanStatus: z.enum(['NOT_REQUIRED', 'PENDING', 'CLEAN', 'INFECTED', 'ERROR']),
+  scanStatus: z.enum([
+    'SKIPPED',
+    'NOT_REQUIRED',
+    'PENDING',
+    'CLEAN',
+    'INFECTED',
+    'ERROR',
+  ]),
+  namespace: z.string().optional(),
+  status: z.string().optional(),
+  attributes: z.record(z.string(), z.unknown()).optional(),
+  actingService: z.string().nullable().optional(),
+  uploadedBy: z.string().optional(),
+  claimed: z.boolean().optional(),
+  claimedAt: z.string().datetime().nullable().optional(),
+  retainUntil: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime(),
 });
 

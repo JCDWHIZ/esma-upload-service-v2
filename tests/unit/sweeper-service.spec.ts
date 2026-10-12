@@ -134,6 +134,8 @@ describe('SweeperService [P4-10]', () => {
       }),
       hardDeleteTombstones: vi.fn().mockResolvedValue(2),
       markDeleting: vi.fn().mockResolvedValue(true),
+      findExpiredUnclaimed: vi.fn().mockResolvedValue([]),
+      findExpiredRetained: vi.fn().mockResolvedValue([]),
     } as unknown as FileRepository;
 
     mockReplicaRepo = {

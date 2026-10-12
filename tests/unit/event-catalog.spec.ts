@@ -254,10 +254,25 @@ describe('Event Catalog & Envelope Unit Tests (P4-03)', () => {
           { fileId: 'f-1', derivatives: 'not-array' }, // invalid derivatives
         ],
       },
+      {
+        type: EVENT_TYPES.FILE_CLAIMED,
+        validPayload: {
+          fileId: 'f-1',
+          namespace: 'support-attachments',
+          ownerType: 'SUPPORT_TICKET',
+          ownerId: 'T1',
+          kind: 'attachment',
+        },
+        invalidPayloads: [
+          {},
+          { fileId: 'f-1' },
+          { fileId: 'f-1', namespace: 'support-attachments' },
+        ],
+      },
     ];
 
-    it('verifies all 11 catalog event types have metadata defined', () => {
-      expect(Object.keys(EVENT_CATALOG).length).toBe(11);
+    it('verifies all catalog event types have metadata defined', () => {
+      expect(Object.keys(EVENT_CATALOG).length).toBe(testCases.length);
       for (const tc of testCases) {
         const meta = EVENT_CATALOG[tc.type];
         expect(meta).toBeDefined();

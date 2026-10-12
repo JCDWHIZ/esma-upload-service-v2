@@ -103,31 +103,47 @@ async function bootstrap() {
   app.set('trust proxy', config.trustProxy);
 
   // ── CORS ────────────────────────────────────────────────────────────────────
-  // In production, only origins on the allowlist get CORS headers; no wildcard.
-  // In development, all origins are allowed so local frontends work out of the box.
-  const allowedOrigins = config.corsAllowedOrigins
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean);
+  // UR-29.3: Behind the gateway/trust proxy in production, the gateway manages CORS headers.
+  // The upload service must not add duplicate CORS headers unless CORS_ENABLED=true.
+  if (config.corsEnabled) {
+    const allowedOrigins = config.corsAllowedOrigins
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean);
 
-  app.enableCors({
-    origin: config.isProduction() ? allowedOrigins : true,
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-API-Key',
-      'X-Correlation-Id',
-      'X-School-Id',
-      'X-Branch-Id',
-      'X-Tenant-Id',
-      'X-Namespace',
-      'X-Sub-Tenant-Id',
-    ],
-    exposedHeaders: ['X-Correlation-Id'],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
-    credentials: true,
-    maxAge: 86_400, // 24 h preflight cache
-  });
+    app.enableCors({
+      origin: config.isProduction() ? allowedOrigins : true,
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-API-Key',
+        'X-Correlation-Id',
+        'X-Organization-Id',
+        'X-School-Id',
+        'X-Branch-Id',
+        'X-Tenant-Id',
+        'X-Namespace',
+        'X-Sub-Tenant-Id',
+        'Idempotency-Key',
+        'traceparent',
+        'If-None-Match',
+      ],
+      exposedHeaders: [
+        'X-Correlation-Id',
+        'traceparent',
+        'ETag',
+        'Idempotent-Replayed',
+        'Retry-After',
+        'Content-Disposition',
+        'Content-Range',
+        'Accept-Ranges',
+        'Location',
+      ],
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
+      credentials: true,
+      maxAge: 86_400, // 24 h preflight cache
+    });
+  }
 
   // ── Body size limits ─────────────────────────────────────────────────────────
   // Limit raw JSON and URL-encoded bodies.  File uploads are handled by multer
@@ -163,6 +179,17 @@ async function bootstrap() {
     const swaggerPath = basePath ? `${basePath}/docs` : 'docs';
     SwaggerModule.setup(swaggerPath, app, document);
     logger.log(`Swagger UI available at /${swaggerPath}`);
+
+    // UR-24: publish OpenAPI JSON document at /uploads/api/docs-json
+    const docsJsonPaths = [
+      basePath ? `/${basePath}/api/docs-json` : '/api/docs-json',
+      '/api/docs-json',
+      '/uploads/api/docs-json',
+    ];
+    app.use(docsJsonPaths, (_req: Request, res: Response) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.json(document);
+    });
   }
 
   // ── Start HTTP server ─────────────────────────────────────────────────────

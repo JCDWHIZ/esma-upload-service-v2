@@ -25,6 +25,7 @@ export class MetricsService implements OnModuleInit {
   public readonly duplicateHashTotal: Counter<string>;
   public readonly quarantinedFilesTotal: Counter<string>;
   public readonly sha256MismatchesTotal: Counter<string>;
+  public readonly revocationRedisUnavailableTotal: Counter<string>;
 
   constructor(@Optional() private readonly configService?: AppConfigService) {
     this.registry = new Registry();
@@ -110,6 +111,12 @@ export class MetricsService implements OnModuleInit {
       name: 'gus_sha256_mismatches_total',
       help: 'Total count of checksum integrity mismatches detected',
       labelNames: ['provider'],
+      registers: [this.registry],
+    });
+
+    this.revocationRedisUnavailableTotal = new Counter({
+      name: 'gus_revocation_redis_unavailable_total',
+      help: 'Total occurrences of Redis unavailable during revocation check (UR-09.3)',
       registers: [this.registry],
     });
   }

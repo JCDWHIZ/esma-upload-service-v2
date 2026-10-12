@@ -1,13 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AppConfigService } from '../config/config.service.js';
 import { RequestContext } from '../core/request-context.js';
 import {
   AppError,
   ForbiddenError,
+  LegalHoldError,
   NotFoundError,
   StorageUnavailableError,
   ValidationError,
 } from '../core/errors/app-error.js';
+import { DomainEventPublisher } from '../events/domain-event.publisher.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { StorageRegistry } from '../storage/registry.js';
 import type { ProviderRef } from '../storage/types.js';
@@ -48,6 +50,8 @@ export class DeleteService {
     private readonly usageRepo: UsageRepository,
     private readonly outboxRepo: OutboxRepository,
     private readonly outboxWriter: OutboxWriter,
+    @Optional()
+    private readonly domainEventPublisher?: DomainEventPublisher,
   ) {}
 
   /**
@@ -89,6 +93,27 @@ export class DeleteService {
     });
     if (!decision.allowed) {
       throw new ForbiddenError(decision.reason);
+    }
+
+    // UR-21: Deleting files in platform-archives requires platform.files.admin
+    if (file.namespace === 'platform-archives') {
+      const perms = ctx.actor.permissions ?? [];
+      const hasAdmin =
+        perms.includes('platform.files.admin') ||
+        perms.includes('*') ||
+        ctx.actor.isPlatformAdmin === true;
+      if (!hasAdmin) {
+        throw new ForbiddenError(
+          'Deleting files in platform-archives namespace requires platform.files.admin permission',
+        );
+      }
+    }
+
+    // UR-14.4: Legal hold check
+    if (file.held) {
+      throw new LegalHoldError(
+        `File '${fileId}' is under legal hold and cannot be deleted`,
+      );
     }
 
     // Idempotent: file is already fully deleted
@@ -135,6 +160,19 @@ export class DeleteService {
             payload: { fileId },
           });
           await this.outboxWriter.enqueue(trx, purgeEnvelope);
+
+          if (this.domainEventPublisher) {
+            await this.domainEventPublisher.publish(trx, {
+              eventType: 'file.deleted.v1',
+              organizationId: file.tenantId,
+              context: ctx,
+              data: {
+                fileId,
+                namespace: file.namespace,
+                reason: 'USER',
+              },
+            });
+          }
         }
       });
     }
@@ -275,4 +313,47 @@ export class DeleteService {
       results,
     };
   }
+
+  /**
+   * Bulk deletes files matching an owner (UR-06).
+   * Deletes all matching files synchronously up to 1,000.
+   */
+  async deleteByOwner(
+    ctx: RequestContext,
+    ownerType: string,
+    ownerId: string,
+    namespace?: string,
+  ): Promise<{ deleted: number }> {
+    if (!ownerType || !ownerId) {
+      throw new ValidationError('ownerType and ownerId are required');
+    }
+
+    const tenantId = ctx.tenantId;
+    if (!tenantId) {
+      throw new ValidationError('Tenant context is required');
+    }
+
+    const files = await this.fileRepo.findByOwner(
+      tenantId,
+      ownerType,
+      ownerId,
+      namespace,
+      1000,
+    );
+
+    let deleted = 0;
+    for (const file of files) {
+      try {
+        await this.delete(ctx, file.id);
+        deleted++;
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Failed to delete file ${file.id} in deleteByOwner: ${String(err)}`,
+        );
+      }
+    }
+
+    return { deleted };
+  }
 }
+

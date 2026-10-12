@@ -207,7 +207,9 @@ describe('UploadService Integration (NestJS Module & FakeStorageDriver)', () => 
 
   it('failure injection: quota exceeded triggers compensation and throws QuotaExceededError', async () => {
     const file = makeMockFile('over_quota.png');
-    vi.spyOn(usageRepo, 'tryReserve').mockResolvedValue(false);
+    vi.spyOn(usageRepo, 'tryReserve')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
 
     await expect(uploadService.upload(mockCtx, policy, [file])).rejects.toThrow(
       QuotaExceededError,
@@ -220,6 +222,8 @@ describe('UploadService Integration (NestJS Module & FakeStorageDriver)', () => 
   });
 
   it('failure injection: atomic batch rollback compensates all completed files', async () => {
+    releaseSpy.mockClear();
+    hardDeleteSpy.mockClear();
     const file1 = makeMockFile('f1.png');
     const file2 = makeMockFile('f2.png');
     const file3 = makeMockFile('f3.png');
@@ -248,6 +252,6 @@ describe('UploadService Integration (NestJS Module & FakeStorageDriver)', () => 
 
     // Verify both files were hard deleted from DB
     expect(hardDeleteSpy).toHaveBeenCalledTimes(2);
-    expect(releaseSpy).toHaveBeenCalledTimes(2);
+    expect(releaseSpy).toHaveBeenCalledTimes(3);
   });
 });

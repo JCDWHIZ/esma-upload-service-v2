@@ -42,15 +42,16 @@ export class EsmaTenantContextResolver implements ContextResolver {
         );
       }
 
-      // Validate against x-school-id header if supplied
-      const headerSchoolId = req.headers?.['x-school-id'];
-      if (headerSchoolId !== undefined) {
+      // Validate against x-organization-id or x-school-id header if supplied
+      const headerOrgId =
+        req.headers?.['x-organization-id'] ?? req.headers?.['x-school-id'];
+      if (headerOrgId !== undefined) {
         if (
-          typeof headerSchoolId !== 'string' ||
-          headerSchoolId !== tokenTenantId
+          typeof headerOrgId !== 'string' ||
+          headerOrgId.trim() !== tokenTenantId
         ) {
           throw new TenantMismatchError(
-            `Header x-school-id (${String(headerSchoolId)}) does not match token tenant ID (${tokenTenantId})`,
+            `Header X-Organization-Id (${String(headerOrgId)}) does not match token tenant ID (${tokenTenantId})`,
           );
         }
       }
@@ -177,8 +178,14 @@ export class EsmaTenantContextResolver implements ContextResolver {
           isPlatformAdmin,
           branchGrants: uniqueBranchGrants,
           isSchoolAdmin,
+          actSub: token.act?.sub,
+          supportGrantId: token.supportGrantId,
         },
         correlationId,
+        traceId:
+          typeof req.headers?.['traceparent'] === 'string'
+            ? req.headers['traceparent'].split('-')[1]
+            : undefined,
         ipAddress,
         userAgent,
         attributes,

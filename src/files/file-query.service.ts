@@ -15,6 +15,11 @@ import { ReplicaRepository } from '../db/repositories/replica.repository.js';
 import { toManifest, type UploadManifestResponse } from '../core/manifest.js';
 
 export interface FileListQueryFilter {
+  namespace?: string;
+  ownerType?: string;
+  ownerId?: string;
+  kind?: string;
+  claimed?: boolean;
   folder?: string;
   subTenantId?: string | null;
   mimetype?: string;
@@ -81,7 +86,7 @@ export class FileQueryService {
 
     const repoResult = await this.fileRepo.list(
       {
-        namespace: ctx.namespace,
+        namespace: filter?.namespace ?? ctx.namespace,
         tenantId: ctx.tenantId,
         subTenantId: effectiveSubTenantId,
         folder: filter?.folder,
@@ -89,6 +94,10 @@ export class FileQueryService {
         visibility: filter?.visibility,
         mimetype: filter?.mimetype,
         tags: combinedTags,
+        ownerType: filter?.ownerType,
+        ownerId: filter?.ownerId,
+        kind: filter?.kind,
+        claimed: filter?.claimed,
         createdFrom: filter?.createdFrom,
         createdTo: filter?.createdTo,
       },
@@ -127,16 +136,32 @@ export class FileQueryService {
       throw new NotFoundError(`File '${fileId}' not found`);
     }
 
-    // Authorize caller for 'read' action
-    const decision = this.authzService.authorize(ctx, 'read', {
-      namespace: file.namespace,
-      tenantId: file.tenantId,
-      subTenantId: file.subTenantId,
-      uploadedBy: file.uploadedBy,
-      visibility: file.visibility,
-    });
-    if (!decision.allowed) {
-      throw new ForbiddenError(decision.reason);
+    // UR-29.5 & UR-30.5: Unclaimed file access & uploader metadata rules
+    const isUploader = ctx.actor.id === file.uploadedBy;
+    const isService = ctx.actor.type === 'service';
+
+    if (file.claimed === false) {
+      // Unclaimed files are visible ONLY to the uploader and to service principals.
+      // Other users in the same organization receive 404!
+      if (!isUploader && !isService) {
+        throw new NotFoundError(`File '${fileId}' not found`);
+      }
+    }
+
+    // UR-29.5 & UR-30.5: Unclaimed files are private to uploader and service principals.
+    // They can view unclaimed metadata without requiring files.file.read.
+    // For claimed files, enforce standard authorization checks.
+    if (file.claimed !== false) {
+      const decision = this.authzService.authorize(ctx, 'read', {
+        namespace: file.namespace,
+        tenantId: file.tenantId,
+        subTenantId: file.subTenantId,
+        uploadedBy: file.uploadedBy,
+        visibility: file.visibility,
+      });
+      if (!decision.allowed) {
+        throw new ForbiddenError(decision.reason);
+      }
     }
 
     const replicas = await this.replicaRepo.listByFile(fileId);

@@ -59,6 +59,7 @@ export function mapFileRow(row: Selectable<FilesTable>): FileRecord {
     replicationStatus: row.replication_status,
     primaryProvider: row.primary_provider,
     uploadedBy: row.uploaded_by,
+    actingService: row.acting_service,
     tags: Array.isArray(row.tags) ? row.tags : [],
     attributes: row.attributes ?? {},
     derivatives: (row.derivatives as unknown as FileDerivatives) ?? {},
@@ -70,6 +71,11 @@ export function mapFileRow(row: Selectable<FilesTable>): FileRecord {
     updatedAt: toDate(row.updated_at),
     deletedAt: toNullableDate(row.deleted_at),
     expiresAt: toNullableDate(row.expires_at),
+    claimed: Boolean(row.claimed),
+    claimedAt: toNullableDate(row.claimed_at),
+    unclaimedExpiresAt: toNullableDate(row.unclaimed_expires_at),
+    retainUntil: toNullableDate(row.retain_until),
+    held: Boolean(row.held),
   };
 }
 
@@ -124,6 +130,7 @@ export function mapAuditRow(row: Selectable<AuditLogTable>): AuditLogEntry {
     outcome: row.outcome,
     actorId: row.actor_id,
     actorType: row.actor_type,
+    actingService: row.acting_service,
     roles: Array.isArray(row.roles) ? row.roles : [],
     namespace: row.namespace,
     tenantId: row.tenant_id,
@@ -131,6 +138,9 @@ export function mapAuditRow(row: Selectable<AuditLogTable>): AuditLogEntry {
     ipAddress: row.ip_address,
     userAgent: row.user_agent,
     correlationId: row.correlation_id,
+    traceId: row.trace_id,
+    actSub: row.act_sub,
+    supportGrantId: row.support_grant_id,
     details: row.details ?? {},
   };
 }

@@ -14,6 +14,9 @@ import { HealthController } from './health.controller.js';
 import { HealthService } from './health.service.js';
 
 import { StorageModule } from '../storage/storage.module.js';
+import { DatabaseModule } from '../db/database.module.js';
+import { AuthModule } from '../auth/auth.module.js';
+import { AuthorizationModule } from '../authz/authorization.module.js';
 
 import { AuditService } from './audit.service.js';
 import { AuditController } from './audit.controller.js';
@@ -42,7 +45,10 @@ interface SerializedRes {
 @Global()
 @Module({
   imports: [
+    DatabaseModule,
     StorageModule,
+    AuthModule,
+    AuthorizationModule,
     PinoLoggerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [AppConfigService],

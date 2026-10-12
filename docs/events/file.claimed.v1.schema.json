@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:esma:events:file.claimed.v1.schema.json",
+  "title": "FileClaimedEventV1",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "occurredAt",
+    "organizationId",
+    "producer",
+    "actor",
+    "data"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "type": "string", "const": "file.claimed.v1" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "organizationId": { "type": "string" },
+    "producer": { "type": "string", "const": "esma-upload-service" },
+    "traceId": { "type": ["string", "null"] },
+    "correlationId": { "type": ["string", "null"] },
+    "actor": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "enum": ["USER", "SERVICE", "SYSTEM"] },
+        "id": { "type": "string" },
+        "actingService": { "type": ["string", "null"] }
+      }
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "fileId",
+        "namespace",
+        "ownerType",
+        "ownerId",
+        "kind"
+      ],
+      "properties": {
+        "fileId": { "type": "string" },
+        "namespace": { "type": "string" },
+        "ownerType": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "kind": { "type": "string" }
+      }
+    }
+  }
+}

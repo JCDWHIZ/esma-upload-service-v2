@@ -2,16 +2,16 @@
   "status": 404,
   "contentType": "application/problem+json",
   "body": {
-    "code": "NOT_FOUND",
+    "code": "not_found",
     "correlationId": "unknown",
     "detail": "File not found",
-    "error": "NOT_FOUND",
+    "error": "not_found",
     "errors": [],
     "message": "File not found",
     "status": 404,
     "statusCode": 404,
     "title": "Not found",
-    "type": "<URL>"
+    "type": "urn:esma:files:error:not_found"
   },
   "bodyShape": {
     "code": "string",

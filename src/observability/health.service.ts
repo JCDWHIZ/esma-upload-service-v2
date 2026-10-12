@@ -1,11 +1,13 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import * as net from 'node:net';
 import { AppConfigService } from '../config/config.service.js';
 import { StorageRegistry } from '../storage/registry.js';
 import type { StorageTopology } from '../storage/topology.js';
 import type { DriverHealth, ProviderName } from '../storage/types.js';
 import { DatabaseService } from '../db/database.service.js';
+import { MESSAGE_BROKER, type IMessageBroker } from '../events/broker.interface.js';
 
 export interface HealthCheck {
   status: 'ok' | 'error';
@@ -17,6 +19,9 @@ export interface ReadinessChecks {
   stagingDir: HealthCheck;
   storageConfig: HealthCheck;
   database?: HealthCheck;
+  migrations?: HealthCheck;
+  events?: HealthCheck;
+  clamav?: HealthCheck;
 }
 
 @Injectable()
@@ -28,6 +33,9 @@ export class HealthService {
     private readonly storageRegistry: StorageRegistry,
     @Optional()
     private readonly db?: DatabaseService,
+    @Optional()
+    @Inject(MESSAGE_BROKER)
+    private readonly broker?: IMessageBroker,
   ) {}
 
   live(): { status: string } {
@@ -36,10 +44,7 @@ export class HealthService {
 
   async ready(): Promise<{ status: 'ok' | 'error'; checks: ReadinessChecks }> {
     const checks = await this.runReadinessChecks();
-    const healthy =
-      checks.stagingDir.status === 'ok' &&
-      checks.storageConfig.status === 'ok' &&
-      (!checks.database || checks.database.status === 'ok');
+    const healthy = Object.values(checks).every((c) => !c || c.status === 'ok');
 
     return {
       status: healthy ? 'ok' : 'error',
@@ -68,10 +73,110 @@ export class HealthService {
     const checks: ReadinessChecks = { stagingDir, storageConfig };
 
     if (this.db) {
-      checks.database = await this.checkDatabase();
+      const [dbCheck, migCheck] = await Promise.all([
+        this.checkDatabase(),
+        this.checkMigrations(),
+      ]);
+      checks.database = dbCheck;
+      checks.migrations = migCheck;
+    }
+
+    if (this.broker && this.config.eventsEnabled) {
+      checks.events = await this.checkEvents();
+    }
+
+    if (this.config.isProduction()) {
+      checks.clamav = await this.checkClamav();
     }
 
     return checks;
+  }
+
+  private async checkMigrations(): Promise<HealthCheck> {
+    try {
+      if (!this.db) {
+        return { status: 'ok' };
+      }
+      const hasPending = await this.db.hasPendingMigrations();
+      if (hasPending) {
+        return {
+          status: 'error',
+          message: 'Pending database migrations detected',
+        };
+      }
+      return { status: 'ok' };
+    } catch (err) {
+      return {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Migration check failed',
+      };
+    }
+  }
+
+  private async checkEvents(): Promise<HealthCheck> {
+    try {
+      if (!this.broker) {
+        return { status: 'ok' };
+      }
+      const ok = await this.broker.healthCheck();
+      return ok
+        ? { status: 'ok' }
+        : { status: 'error', message: 'Message broker health check failed' };
+    } catch (err) {
+      return {
+        status: 'error',
+        message: `Message broker unreachable: ${String(err)}`,
+      };
+    }
+  }
+
+  private async checkClamav(): Promise<HealthCheck> {
+    return new Promise<HealthCheck>((resolve) => {
+      const socket = net.createConnection({
+        host: this.config.clamavHost,
+        port: this.config.clamavPort,
+      });
+
+      let resolved = false;
+      const finish = (check: HealthCheck) => {
+        if (!resolved) {
+          resolved = true;
+          socket.destroy();
+          resolve(check);
+        }
+      };
+
+      socket.setTimeout(3000);
+      socket.on('timeout', () =>
+        finish({ status: 'error', message: 'ClamAV connection timed out' }),
+      );
+      socket.on('error', (err) =>
+        finish({
+          status: 'error',
+          message: `ClamAV unreachable at ${this.config.clamavHost}:${this.config.clamavPort}: ${err.message}`,
+        }),
+      );
+
+      socket.on('connect', () => {
+        socket.write('zPING\0');
+      });
+
+      let response = '';
+      socket.on('data', (chunk) => {
+        response += chunk.toString('utf-8');
+        if (response.includes('PONG')) {
+          finish({ status: 'ok' });
+        }
+      });
+
+      socket.on('end', () => {
+        finish(
+          response.includes('PONG')
+            ? { status: 'ok' }
+            : { status: 'error', message: 'Unexpected response from ClamAV' },
+        );
+      });
+    });
   }
 
   private async checkDatabase(): Promise<HealthCheck> {

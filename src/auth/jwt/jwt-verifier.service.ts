@@ -23,6 +23,7 @@ export class JwtVerifierService {
   private remoteJwks?: JWTVerifyGetKey;
   private jwksUri: string;
   private expectedIssuer?: string;
+  private requiredAudience?: string;
   private clockToleranceSeconds: number;
   private allowedAlgorithms: string[];
 
@@ -30,8 +31,12 @@ export class JwtVerifierService {
     const config = this.configService.get();
     this.jwksUri = config.IDENTITY_JWKS_URI;
     this.expectedIssuer = config.IDENTITY_ISSUER;
+    // UR-01.4: audience check — empty string disables check (non-prod only)
+    const rawAud = config.JWT_REQUIRED_AUDIENCE ?? 'esma-files';
+    this.requiredAudience = rawAud.trim() === '' ? undefined : rawAud.trim();
     this.clockToleranceSeconds = config.JWT_CLOCK_TOLERANCE_SECONDS ?? 5;
-    this.allowedAlgorithms = (config.JWT_ALGORITHMS ?? 'HS256,RS256')
+    // UR-01: default is RS256; HS256 only when explicitly in JWT_ALGORITHMS AND JWT_SECRET is set
+    this.allowedAlgorithms = (config.JWT_ALGORITHMS ?? 'RS256')
       .split(',')
       .map((a) => a.trim().toUpperCase());
 
@@ -196,11 +201,19 @@ export class JwtVerifierService {
     }
 
     try {
-      const verifyOptions: { clockTolerance: number; issuer?: string } = {
+      const verifyOptions: {
+        clockTolerance: number;
+        issuer?: string;
+        audience?: string;
+      } = {
         clockTolerance: this.clockToleranceSeconds,
       };
       if (this.expectedIssuer) {
         verifyOptions.issuer = this.expectedIssuer;
+      }
+      // UR-01.4: enforce audience claim when configured
+      if (this.requiredAudience) {
+        verifyOptions.audience = this.requiredAudience;
       }
 
       const { payload } = await jwtVerify(jwt, this.remoteJwks, verifyOptions);
@@ -212,6 +225,15 @@ export class JwtVerifierService {
         (err as { code?: string })?.code === 'ERR_JWT_EXPIRED'
       ) {
         throw new UnauthenticatedError('Token has expired');
+      }
+      // UR-01: audience claim mismatch is an authentication failure
+      if (
+        message.includes('audience') ||
+        (err as { code?: string })?.code === 'ERR_JWT_CLAIM_VALIDATION_FAILED'
+      ) {
+        throw new UnauthenticatedError(
+          `Token audience validation failed: expected "${this.requiredAudience}"`,
+        );
       }
       throw new UnauthenticatedError(
         `JWKS token verification failed: ${message}`,
@@ -330,6 +352,14 @@ export class JwtVerifierService {
       email: payload['email'] as string | undefined,
       access: accessClaims,
       platformAdmin: payload['platformAdmin'] as boolean | undefined,
+      sid: payload['sid'] as string | undefined,
+      permissionVersion:
+        payload['permissionVersion'] !== undefined
+          ? Number(payload['permissionVersion'])
+          : undefined,
+      supportAccess: payload['supportAccess'] as boolean | undefined,
+      supportGrantId: payload['supportGrantId'] as string | undefined,
+      act: payload['act'] as { sub?: string } | undefined,
       ...payload,
     };
   }

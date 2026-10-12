@@ -1,14 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
   AuthenticatedHttpRequest,
   ContextResolver,
   RequestContext,
+  RequestContextActor,
   VerifiedTokenClaims,
   freezeContext,
   parseAttributes,
 } from '../context.js';
 import {
-  TenantMismatchError,
+  NamespaceNotAllowedError,
+  OrganizationMismatchError,
+  OrganizationRequiredError,
   UnauthenticatedError,
   ValidationError,
 } from '../../core/errors/app-error.js';
@@ -20,9 +23,14 @@ import {
   UploadPermissions,
 } from '../../authz/permissions.js';
 import { ApiClient } from '../../core/types.js';
+import { AppConfigService } from '../../config/config.service.js';
 
 @Injectable()
 export class GenericContextResolver implements ContextResolver {
+  constructor(
+    @Optional() private readonly configService?: AppConfigService,
+  ) {}
+
   resolve(req: AuthenticatedHttpRequest): Promise<RequestContext> {
     try {
       const rawClient =
@@ -52,22 +60,51 @@ export class GenericContextResolver implements ContextResolver {
 
         const token = rawToken as VerifiedTokenClaims;
 
-        // Handle JWT token authentication in generic context
+        // Parse scopes
+        const scopes = [
+          ...(typeof token.scope === 'string' ? token.scope.split(' ') : []),
+          ...(Array.isArray(token.scopes) ? token.scopes : []),
+        ]
+          .map((s) => (typeof s === 'string' ? s.trim() : ''))
+          .filter(Boolean);
+
+        const isClientCredentials = token.grant_type === 'client_credentials';
+        const isServicePrincipal =
+          isClientCredentials && scopes.includes('internal.files');
+
+        // Handle namespace selection: header X-Namespace is primary
+        const headerNamespace = req.headers?.['x-namespace'];
         const namespace =
-          typeof req.headers?.['x-namespace'] === 'string' &&
-          req.headers['x-namespace'].trim().length > 0
-            ? req.headers['x-namespace'].trim()
-            : ((token.namespace as string | undefined) ?? 'generic');
+          typeof headerNamespace === 'string' &&
+          headerNamespace.trim().length > 0
+            ? headerNamespace.trim()
+            : ((token.namespace as string | undefined) ?? 'generic-default');
         assertSafeSegment(namespace, 'namespace');
 
-        const tokenTenantId: string | undefined =
-          typeof token.organizationId === 'string'
-            ? token.organizationId
-            : typeof token.schoolId === 'string'
-              ? token.schoolId
-              : typeof token.tenantId === 'string'
-                ? token.tenantId
-                : undefined;
+        // Check service client allowed namespaces (UR-02.5)
+        if (isServicePrincipal) {
+          const clientId = (token.azp ?? token.sub ?? 'unknown-service') as string;
+          let allowedMap: Record<string, string[]> = {
+            'esma-storage-client': ['*'],
+          };
+          try {
+            const rawConfigMap =
+              this.configService?.raw?.SERVICE_CLIENT_NAMESPACES;
+            if (rawConfigMap) {
+              allowedMap = JSON.parse(rawConfigMap);
+            }
+          } catch {
+            // fallback
+          }
+          const allowedList = allowedMap[clientId] ?? [];
+          const hasAccess =
+            allowedList.includes('*') || allowedList.includes(namespace);
+          if (!hasAccess) {
+            throw new NamespaceNotAllowedError(
+              `Service client "${clientId}" is not authorized to access namespace "${namespace}"`,
+            );
+          }
+        }
 
         const rawTokenRoles = [
           ...(Array.isArray(token.roles)
@@ -99,8 +136,15 @@ export class GenericContextResolver implements ContextResolver {
         const directPerms = Array.isArray(token.permissions)
           ? token.permissions
           : [];
-        const rawPerms =
-          globalPerms.length > 0 ? globalPerms : [...orgPerms, ...directPerms];
+        const clientPerms = Array.isArray(token.access?.client?.permissions)
+          ? token.access.client.permissions
+          : [];
+
+        const rawPerms = isServicePrincipal
+          ? clientPerms
+          : globalPerms.length > 0
+            ? globalPerms
+            : [...orgPerms, ...directPerms];
         const permissions = normalizePermissions(rawPerms);
 
         const isPlatformAdmin = permissions.some((p) =>
@@ -116,34 +160,54 @@ export class GenericContextResolver implements ContextResolver {
             UploadPermissions.TENANTS_USAGE_VIEW,
             UploadPermissions.AUDIT_VIEW,
             UploadPermissions.FILES_BULK_DELETE,
+            'platform.files.admin',
           ].includes(p),
         );
 
-        const rawHeaderTenant = req.headers?.['x-tenant-id'];
+        // Header resolution: accept X-Organization-Id or legacy x-tenant-id
+        const rawHeaderOrg = (req.headers?.['x-organization-id'] ??
+          req.headers?.['x-tenant-id']) as string | undefined;
+
         let tenantId: string;
 
-        if (
-          typeof rawHeaderTenant === 'string' &&
-          rawHeaderTenant.trim().length > 0
-        ) {
-          const headerTenant = rawHeaderTenant.trim();
-          if (tokenTenantId && !isPlatformAdmin) {
-            if (headerTenant !== tokenTenantId) {
-              throw new TenantMismatchError(
-                `Header x-tenant-id (${headerTenant}) does not match token tenant ID (${tokenTenantId})`,
-                { code: 'TENANT_MISMATCH' },
+        if (isServicePrincipal) {
+          // UR-02: X-Organization-Id is required for service principals
+          if (!rawHeaderOrg || rawHeaderOrg.trim().length === 0) {
+            throw new OrganizationRequiredError(
+              'Header X-Organization-Id is required for service principals',
+            );
+          }
+          tenantId = rawHeaderOrg.trim();
+        } else {
+          // User token
+          const tokenTenantId: string | undefined =
+            typeof token.organizationId === 'string'
+              ? token.organizationId
+              : typeof token.schoolId === 'string'
+                ? token.schoolId
+                : typeof token.tenantId === 'string'
+                  ? token.tenantId
+                  : undefined;
+
+          if (rawHeaderOrg && rawHeaderOrg.trim().length > 0 && tokenTenantId) {
+            if (rawHeaderOrg.trim() !== tokenTenantId && !isPlatformAdmin) {
+              throw new OrganizationMismatchError(
+                `Header X-Organization-Id (${rawHeaderOrg.trim()}) does not match token organizationId (${tokenTenantId})`,
               );
             }
           }
-          tenantId = headerTenant;
-        } else if (tokenTenantId) {
-          tenantId = tokenTenantId;
-        } else if (isPlatformAdmin) {
-          tenantId = 'system';
-        } else {
-          throw new ValidationError(
-            'Header x-tenant-id or token tenant claim is required for generic context',
-          );
+
+          if (tokenTenantId) {
+            tenantId = tokenTenantId;
+          } else if (rawHeaderOrg && rawHeaderOrg.trim().length > 0) {
+            tenantId = rawHeaderOrg.trim();
+          } else if (isPlatformAdmin) {
+            tenantId = 'system';
+          } else {
+            throw new ValidationError(
+              'Header X-Organization-Id or token organizationId is required',
+            );
+          }
         }
         assertSafeSegment(tenantId, 'tenantId');
 
@@ -176,11 +240,20 @@ export class GenericContextResolver implements ContextResolver {
             ? req.headers['user-agent']
             : undefined;
 
-        const jwtContext: RequestContext = {
-          namespace,
-          tenantId,
-          subTenantId,
-          actor: {
+        let actor: RequestContextActor;
+        if (isServicePrincipal) {
+          const clientId = (token.azp ?? token.sub ?? 'service-client') as string;
+          actor = {
+            id: clientId,
+            type: 'service',
+            actingService: clientId,
+            roles: [],
+            permissions,
+            scopes,
+            isPlatformAdmin: false,
+          };
+        } else {
+          actor = {
             id:
               typeof token.sub === 'string'
                 ? token.sub
@@ -190,14 +263,29 @@ export class GenericContextResolver implements ContextResolver {
             type: 'user',
             roles: rawTokenRoles,
             permissions,
-            scopes: Array.isArray(token.scopes)
-              ? (token.scopes as unknown[]).filter(
-                  (s): s is string => typeof s === 'string',
-                )
-              : [],
+            scopes,
             isPlatformAdmin,
-          },
+            actSub: token.act?.sub,
+            supportGrantId: token.supportGrantId,
+          };
+        }
+
+        const rawTraceparent = req.headers?.['traceparent'];
+        let traceId: string | undefined;
+        if (typeof rawTraceparent === 'string') {
+          const parts = rawTraceparent.split('-');
+          if (parts.length >= 4 && parts[1]?.length === 32) {
+            traceId = parts[1];
+          }
+        }
+
+        const jwtContext: RequestContext = {
+          namespace,
+          tenantId,
+          subTenantId,
+          actor,
           correlationId,
+          traceId,
           ipAddress,
           userAgent,
           attributes,
@@ -206,6 +294,7 @@ export class GenericContextResolver implements ContextResolver {
         return Promise.resolve(freezeContext(jwtContext));
       }
 
+      // API Client Resolution
       const namespace = client.namespace;
       if (!namespace || typeof namespace !== 'string') {
         throw new ValidationError(
@@ -221,17 +310,15 @@ export class GenericContextResolver implements ContextResolver {
           typeof headerNamespace !== 'string' ||
           headerNamespace.trim() !== namespace
         ) {
-          throw new TenantMismatchError(
+          throw new OrganizationMismatchError(
             `Header x-namespace (${String(headerNamespace)}) does not match client namespace (${namespace})`,
-            {
-              code: 'TENANT_MISMATCH',
-            },
           );
         }
       }
 
-      // Tenant resolution and authorization
-      const rawHeaderTenantId = req.headers?.['x-tenant-id'];
+      // Tenant resolution: accept X-Organization-Id or legacy x-tenant-id
+      const rawHeaderTenantId = (req.headers?.['x-organization-id'] ??
+        req.headers?.['x-tenant-id']) as string | undefined;
       let tenantId: string;
 
       if (
@@ -246,12 +333,12 @@ export class GenericContextResolver implements ContextResolver {
       ) {
         tenantId = client.tenantIds[0];
       } else {
-        throw new ValidationError(
-          'Header x-tenant-id is required for generic context',
+        throw new OrganizationRequiredError(
+          'Header X-Organization-Id is required for generic context',
         );
       }
 
-      assertSafeSegment(tenantId, 'x-tenant-id');
+      assertSafeSegment(tenantId, 'X-Organization-Id');
 
       // Tenant boundary check
       if (!client.allowAnyTenant) {
@@ -259,11 +346,8 @@ export class GenericContextResolver implements ContextResolver {
           ? client.tenantIds
           : [];
         if (!allowedTenants.includes(tenantId)) {
-          throw new TenantMismatchError(
+          throw new OrganizationMismatchError(
             `API client '${client.name ?? client.id}' is not authorized to access tenant '${tenantId}'`,
-            {
-              code: 'TENANT_MISMATCH',
-            },
           );
         }
       }
@@ -302,6 +386,7 @@ export class GenericContextResolver implements ContextResolver {
         actor: {
           id: String(client.id),
           type: 'service',
+          actingService: String(client.name ?? client.id),
           roles: [],
           permissions: [],
           scopes: Array.isArray(client.scopes) ? client.scopes : [],

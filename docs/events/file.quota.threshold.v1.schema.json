@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:esma:events:file.quota.threshold.v1.schema.json",
+  "title": "FileQuotaThresholdEventV1",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "occurredAt",
+    "organizationId",
+    "producer",
+    "actor",
+    "data"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "type": "string", "const": "file.quota.threshold.v1" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "organizationId": { "type": "string" },
+    "producer": { "type": "string", "const": "esma-upload-service" },
+    "traceId": { "type": ["string", "null"] },
+    "correlationId": { "type": ["string", "null"] },
+    "actor": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "enum": ["USER", "SERVICE", "SYSTEM"] },
+        "id": { "type": "string" },
+        "actingService": { "type": ["string", "null"] }
+      }
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "thresholdPercent",
+        "usedBytes",
+        "quotaBytes"
+      ],
+      "properties": {
+        "thresholdPercent": {
+          "type": "integer",
+          "enum": [80, 95, 100]
+        },
+        "usedBytes": { "type": "integer", "minimum": 0 },
+        "quotaBytes": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

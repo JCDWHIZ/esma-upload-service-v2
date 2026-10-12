@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { FilesController } from './files.controller.js';
-import { HealthController } from './health.controller.js';
 import { FilesService } from './files.service.js';
 import { UploadService } from './upload.service.js';
 import { FileReadService } from './file-read.service.js';
@@ -21,10 +20,13 @@ import { IngestModule } from '../ingest/ingest.module.js';
 import { ReplicaSelector } from './replica-selector.js';
 
 import { IdempotencyService } from './idempotency.service.js';
+import { ClaimService } from './claim.service.js';
+
+import { AdminModule } from '../admin/admin.module.js';
 
 @Module({
-  imports: [AuthorizationModule, AuthModule, IngestModule, EventsModule],
-  controllers: [FilesController, HealthController],
+  imports: [AuthorizationModule, AuthModule, IngestModule, EventsModule, AdminModule],
+  controllers: [FilesController],
   providers: [
     FilesService,
     UploadService,
@@ -35,6 +37,7 @@ import { IdempotencyService } from './idempotency.service.js';
     HardDeleteService,
     FileQueryService,
     PresignedUploadService,
+    ClaimService,
     KeyService,
     DatabaseQuotaGate,
     IdempotencyService,
@@ -53,6 +56,7 @@ import { IdempotencyService } from './idempotency.service.js';
     HardDeleteService,
     FileQueryService,
     PresignedUploadService,
+    ClaimService,
     KeyService,
     IdempotencyService,
     QUOTA_GATE,

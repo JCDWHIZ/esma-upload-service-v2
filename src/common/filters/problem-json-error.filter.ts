@@ -34,6 +34,7 @@ export class ProblemJsonErrorFilter implements ExceptionFilter {
       message: canonical.detail,
       correlationId: canonical.correlationId,
       errors: canonical.errors,
+      ...(canonical.extensions ?? {}),
     });
   }
 }

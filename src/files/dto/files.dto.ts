@@ -135,6 +135,16 @@ export const fileUploadMetadataSchema = z.object({
       if (val === 'false' || val === '0') return false;
       return undefined;
     }),
+  waitForScan: z
+    .union([z.number(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined || val === null || val === '') return undefined;
+      const num =
+        typeof val === 'number' ? Math.floor(val) : parseInt(String(val), 10);
+      if (isNaN(num)) return undefined;
+      return Math.min(30, Math.max(0, num));
+    }),
 });
 
 export class FileUploadBodyDto {
@@ -332,6 +342,13 @@ export class FileUploadMultiStatusResponseDto {
 // ============================================================================
 
 export const fileListQuerySchema = z.object({
+  namespace: z.string().trim().optional(),
+  ownerType: z.string().trim().optional(),
+  ownerId: z.string().trim().optional(),
+  kind: z.string().trim().optional(),
+  claimed: z
+    .union([z.boolean(), z.string().transform((v) => v === 'true')])
+    .optional(),
   folder: z.string().trim().optional(),
   subTenantId: z.string().trim().optional(),
   mimetype: z.string().trim().optional(),
@@ -353,6 +370,26 @@ export const fileListQuerySchema = z.object({
       return n;
     }),
 });
+
+export const claimFileDtoSchema = z.object({
+  ownerType: z.string().min(1).max(64),
+  ownerId: z.string().min(1).max(64),
+  kind: z.string().min(1).max(64).optional(),
+});
+
+export class ClaimFileDto {
+  @ApiProperty({ description: 'Owning entity type', example: 'SUPPORT_TICKET' })
+  ownerType!: string;
+
+  @ApiProperty({ description: 'Owning entity ID', example: 'ticket-123' })
+  ownerId!: string;
+
+  @ApiPropertyOptional({
+    description: 'Kind within owner',
+    example: 'attachment',
+  })
+  kind?: string;
+}
 
 export class FileListQueryDto {
   @ApiPropertyOptional({

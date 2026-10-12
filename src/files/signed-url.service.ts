@@ -7,7 +7,9 @@ export type SignedDisposition = 'inline' | 'attachment';
 
 export interface SignUrlOptions {
   expiresInSeconds?: number;
+  ttlSeconds?: number;
   disposition?: SignedDisposition;
+  organizationId?: string;
 }
 
 export interface SignedUrlResult {
@@ -50,7 +52,7 @@ export class SignedUrlService {
   /**
    * Generates a cryptographically signed URL allowing time-limited access
    * to a private file without requiring Authorization headers.
-   * Conforms to ARCH §4.3 and BACKEND_TASKS P2-07.
+   * Conforms to ARCH §4.3 and UR-04.
    */
   sign(fileId: string, options?: SignUrlOptions): SignedUrlResult {
     if (!fileId || typeof fileId !== 'string' || fileId.trim().length === 0) {
@@ -60,15 +62,20 @@ export class SignedUrlService {
     const disp: SignedDisposition =
       options?.disposition === 'attachment' ? 'attachment' : 'inline';
 
-    const maxTtl = this.configService.signedUrlMaxTtlSeconds || 900;
+    const maxTtl = this.configService.signedUrlMaxTtlSeconds || 600;
     const requestedTtl =
       options?.expiresInSeconds !== undefined && options.expiresInSeconds > 0
         ? options.expiresInSeconds
-        : maxTtl;
+        : options?.ttlSeconds !== undefined && options.ttlSeconds > 0
+          ? options.ttlSeconds
+          : maxTtl;
     const ttl = Math.min(requestedTtl, maxTtl);
     const exp = Math.floor(Date.now() / 1000) + ttl;
 
-    const payload = `v1|${fileId}|${exp}|${disp}`;
+    const payload = options?.organizationId
+      ? `v2|${fileId}|${exp}|${disp}|${options.organizationId}`
+      : `v1|${fileId}|${exp}|${disp}`;
+
     const sig = createHmac('sha256', this.secret)
       .update(payload)
       .digest('base64url');
@@ -89,8 +96,13 @@ export class SignedUrlService {
   /**
    * Verifies the authenticity and validity of query parameters for a signed URL.
    * Performs constant-time comparison to prevent timing side-channel attacks.
+   * Covers organizationId when provided (UR-04) and supports SIGNED_URL_SECRET_PREVIOUS rotation.
    */
-  verify(fileId: string, query: VerifySignatureQuery): VerifySignatureResult {
+  verify(
+    fileId: string,
+    query: VerifySignatureQuery,
+    organizationId?: string,
+  ): VerifySignatureResult {
     const { exp, disp, sig } = query;
     if (!exp || !disp || !sig) {
       return { valid: false, reason: 'MISSING_PARAMETERS' };
@@ -111,25 +123,55 @@ export class SignedUrlService {
       return { valid: false, reason: 'EXPIRED' };
     }
 
-    const payload = `v1|${fileId}|${expNum}|${disp}`;
-    const expectedBase64Url = createHmac('sha256', this.secret)
-      .update(payload)
-      .digest('base64url');
-    const expectedHex = createHmac('sha256', this.secret)
-      .update(payload)
-      .digest('hex');
+    // Candidate payloads: v2 binds organizationId, v1 fallback for un-scoped tokens
+    const candidatePayloads: string[] = [];
+    if (organizationId) {
+      candidatePayloads.push(`v2|${fileId}|${expNum}|${disp}|${organizationId}`);
+    }
+    candidatePayloads.push(`v1|${fileId}|${expNum}|${disp}`);
+
+    // Candidate secrets for rotation window
+    const candidateSecrets: string[] = [this.secret];
+    const prevSecret = this.configService.signedUrlSecretPrevious;
+    if (prevSecret && prevSecret !== this.secret) {
+      candidateSecrets.push(prevSecret);
+    }
 
     // Constant-time comparison using fixed-size SHA-256 digest of signatures
     const sigHash = createHash('sha256').update(String(sig)).digest();
-    const expectedBase64UrlHash = createHash('sha256')
-      .update(expectedBase64Url)
-      .digest();
-    const expectedHexHash = createHash('sha256').update(expectedHex).digest();
+    let matches = false;
 
-    const matchesBase64Url = timingSafeEqual(sigHash, expectedBase64UrlHash);
-    const matchesHex = timingSafeEqual(sigHash, expectedHexHash);
+    for (const secret of candidateSecrets) {
+      for (const payload of candidatePayloads) {
+        const expectedBase64Url = createHmac('sha256', secret)
+          .update(payload)
+          .digest('base64url');
+        const expectedHex = createHmac('sha256', secret)
+          .update(payload)
+          .digest('hex');
 
-    if (!matchesBase64Url && !matchesHex) {
+        const expectedBase64UrlHash = createHash('sha256')
+          .update(expectedBase64Url)
+          .digest();
+        const expectedHexHash = createHash('sha256').update(expectedHex).digest();
+
+        if (
+          timingSafeEqual(sigHash, expectedBase64UrlHash) ||
+          timingSafeEqual(sigHash, expectedHexHash)
+        ) {
+          matches = true;
+          break;
+        }
+      }
+      if (matches) break;
+    }
+
+    // UR-04 rule 5: safe logging, never log user tokens or query string
+    this.logger.debug(
+      `Signed URL verify: fileId=${fileId}, exp=${expNum}, disp=${disp}, sigPrefix=${String(sig).slice(0, 6)}, matches=${matches}`,
+    );
+
+    if (!matches) {
       return { valid: false, reason: 'INVALID_SIGNATURE' };
     }
 

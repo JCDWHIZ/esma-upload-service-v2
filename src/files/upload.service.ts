@@ -15,10 +15,13 @@ import {
 import {
   AppError,
   ForbiddenError,
+  NamespaceNotAllowedError,
   PolicyViolationError,
   QuotaExceededError,
   RetryableError,
   StorageUnavailableError,
+  TooManyPendingUploadsError,
+  ValidationError,
 } from '../core/errors/app-error.js';
 import { AuthorizationService } from '../authz/authorization.service.js';
 import { StorageRegistry } from '../storage/registry.js';
@@ -45,6 +48,11 @@ import {
 } from './quota-gate.interface.js';
 import { MetricsService } from '../observability/metrics.service.js';
 
+import { ClamAvScanner } from '../ingest/clamav.scanner.js';
+
+import { TenantQuotaService } from '../admin/tenant-quota.service.js';
+import { DomainEventPublisher } from '../events/domain-event.publisher.js';
+
 export interface UploadMetrics {
   primaryFailovers: number;
 }
@@ -56,6 +64,8 @@ export interface UploadOptions {
   attributes?: Record<string, string>;
   atomic?: boolean;
   idempotencyKey?: string;
+  waitForScan?: number;
+  retentionDays?: number;
 }
 
 export type UploadOutcome =
@@ -103,6 +113,12 @@ export class UploadService {
     private readonly storagePlacement?: StoragePlacementService,
     @Optional()
     private readonly metricsService?: MetricsService,
+    @Optional()
+    private readonly clamAvScanner?: ClamAvScanner,
+    @Optional()
+    private readonly tenantQuotaService?: TenantQuotaService,
+    @Optional()
+    private readonly domainEventPublisher?: DomainEventPublisher,
   ) {}
 
   public getMetrics(): Readonly<UploadMetrics> {
@@ -226,7 +242,102 @@ export class UploadService {
       throw new ForbiddenError(decision.reason);
     }
 
-    // 3. Reserve quota through QuotaGate seam
+    // UR-29.2: User token namespace & extra permission checks
+    if (ctx.actor.type === 'user') {
+      const USER_ALLOWED_NAMESPACES = new Set([
+        'imports',
+        'student-documents',
+        'support-attachments',
+        'case-evidence',
+        'branding',
+        'coursework-submissions',
+        'learning-media',
+        'thrift-documents',
+        'generic-default',
+        'generic',
+        'esma-tenant',
+        'esma-admin',
+      ]);
+      if (!USER_ALLOWED_NAMESPACES.has(ctx.namespace)) {
+        throw new NamespaceNotAllowedError(
+          `User principal is not authorized to upload to namespace "${ctx.namespace}"`,
+        );
+      }
+
+      // Extra permission demanded by namespace if configured
+      const userNamespacePerms = this.configService?.userNamespacePermissions;
+      const extraRequiredPerm = userNamespacePerms?.[ctx.namespace];
+      if (extraRequiredPerm) {
+        const actorPerms = ctx.actor.permissions ?? [];
+        const actorScopes = ctx.actor.scopes ?? [];
+        const hasExtra =
+          actorPerms.includes(extraRequiredPerm) ||
+          actorPerms.includes('*') ||
+          actorScopes.includes('*');
+        if (!hasExtra) {
+          throw new NamespaceNotAllowedError(
+            `Principal lacks required permission "${extraRequiredPerm}" for namespace "${ctx.namespace}"`,
+          );
+        }
+      }
+
+      // UR-29.6: Abuse limits per user (max unclaimed files and bytes)
+      let count = 0;
+      let totalBytes = 0;
+      if (typeof this.fileRepo.countUnclaimedForUser === 'function') {
+        const stats = await this.fileRepo.countUnclaimedForUser(
+          ctx.tenantId,
+          ctx.actor.id,
+        );
+        count = stats.count;
+        totalBytes = stats.totalBytes;
+      }
+      const maxPendingFiles =
+        this.configService?.unclaimedMaxFilesPerUser ?? 50;
+      const maxPendingBytes =
+        this.configService?.unclaimedMaxBytesPerUser ?? 524288000;
+      if (count >= maxPendingFiles || totalBytes + file.size > maxPendingBytes) {
+        throw new TooManyPendingUploadsError(
+          `User pending unclaimed upload quota exceeded (max ${maxPendingFiles} files or ${maxPendingBytes} bytes)`,
+        );
+      }
+    }
+
+    // UR-14: Retention defaults and maximums
+    let retainUntil: Date | null = null;
+    const requestedRetentionDays = options?.retentionDays;
+
+    if (requestedRetentionDays !== undefined) {
+      if (typeof requestedRetentionDays !== 'number' || requestedRetentionDays <= 0) {
+        throw new ValidationError('retentionDays must be a positive integer', {
+          code: 'validation_failed',
+        });
+      }
+      if (
+        policy.maxRetentionDays !== undefined &&
+        requestedRetentionDays > policy.maxRetentionDays
+      ) {
+        throw new ValidationError(
+          `Requested retentionDays (${requestedRetentionDays}) exceeds namespace maximum of ${policy.maxRetentionDays} days`,
+          {
+            code: 'validation_failed',
+            detail: `Requested: ${requestedRetentionDays}d, maximum: ${policy.maxRetentionDays}d`,
+          },
+        );
+      }
+      retainUntil = new Date(Date.now() + requestedRetentionDays * 86400 * 1000);
+    } else if (policy.defaultRetentionDays !== undefined) {
+      retainUntil = new Date(Date.now() + policy.defaultRetentionDays * 86400 * 1000);
+    }
+
+    // 3. Reserve quota through TenantQuotaService (UR-13) & QuotaGate seam
+    if (this.tenantQuotaService) {
+      await this.tenantQuotaService.checkUploadQuota(
+        ctx.tenantId,
+        file.size,
+        ctx,
+      );
+    }
     await this.quotaGate.reserve(ctx, file.size);
 
     // Check duplicate content hash per tenant (P6-03)
@@ -494,6 +605,29 @@ export class UploadService {
           })),
         );
 
+        // UR-30.4 & UR-29.1: Determine claim state
+        const CLAIM_REQUIRED_NAMESPACES = new Set([
+          'imports',
+          'student-documents',
+          'support-attachments',
+          'case-evidence',
+          'branding',
+          'coursework-submissions',
+          'learning-media',
+          'thrift-documents',
+        ]);
+        const isClaimRequired = CLAIM_REQUIRED_NAMESPACES.has(ctx.namespace);
+        let isClaimed = true;
+        let claimedAt: Date | null = new Date();
+        let unclaimedExpiresAt: Date | null = null;
+
+        if (ctx.actor.type === 'user' && isClaimRequired) {
+          isClaimed = false;
+          claimedAt = null;
+          const ttlHours = this.configService?.unclaimedTtlHours ?? 24;
+          unclaimedExpiresAt = new Date(Date.now() + ttlHours * 3600 * 1000);
+        }
+
         // Insert into files table
         const inserted = await this.fileRepo.insert(
           {
@@ -510,15 +644,21 @@ export class UploadService {
             sha256: file.sha256,
             visibility,
             status: 'ACTIVE',
-            scanStatus: policy.requireVirusScan ? 'PENDING' : 'NOT_REQUIRED',
+            scanStatus: policy.requireVirusScan ? 'PENDING' : 'SKIPPED',
             replicationStatus: derivedReplicationStatus,
             primaryProvider: primaryDriver.name,
             uploadedBy: ctx.actor.id,
+            actingService: ctx.actor.actingService ?? null,
             tags: options?.tags ?? [],
             attributes: options?.attributes ?? {},
             legacyPublicId,
             idempotencyKey: options?.idempotencyKey ?? null,
             correlationId: ctx.correlationId,
+            claimed: isClaimed,
+            claimedAt,
+            unclaimedExpiresAt,
+            retainUntil,
+            held: false,
           },
           trx,
         );
@@ -544,6 +684,28 @@ export class UploadService {
             },
           });
           await this.outboxWriter.enqueue(trx, uploadedEnvelope);
+
+          // Public domain event file.uploaded.v1 (UR-11)
+          if (this.domainEventPublisher) {
+            await this.domainEventPublisher.publish(trx, {
+              eventType: 'file.uploaded.v1',
+              organizationId: ctx.tenantId,
+              context: ctx,
+              data: {
+                fileId,
+                namespace: ctx.namespace,
+                originalFilename: file.originalName,
+                mimetype: file.detectedMime,
+                sizeBytes: file.size,
+                sha256: file.sha256,
+                visibility,
+                status: 'ACTIVE',
+                scanStatus: policy.requireVirusScan ? 'PENDING' : 'SKIPPED',
+                claimed: isClaimed,
+                retainUntil: retainUntil ? retainUntil.toISOString() : null,
+              },
+            });
+          }
 
           // 2. file.replicate event per planned secondary
           for (const secondaryName of plannedSecondaries) {
@@ -624,6 +786,109 @@ export class UploadService {
       );
     }
 
+    // UR-05: waitForScan support (hold upload response until scan completes or timeout elapses)
+    if (
+      options?.waitForScan &&
+      options.waitForScan > 0 &&
+      policy.requireVirusScan &&
+      fileRecord.scanStatus === 'PENDING'
+    ) {
+      const waitSeconds = Math.min(30, Math.max(0, options.waitForScan));
+      const deadline = Date.now() + waitSeconds * 1000;
+
+      if (this.clamAvScanner) {
+        try {
+          const downloadStream = await primaryDriver.downloadStream(uploadResult.ref);
+          const scanRes = await this.clamAvScanner.scanStream(downloadStream.stream);
+          const newScanStatus = scanRes.clean ? 'CLEAN' : 'INFECTED';
+          const newFileStatus = scanRes.clean ? 'ACTIVE' : 'QUARANTINED';
+
+          const db = this.databaseService?.getDb();
+          if (db) {
+            await db.transaction().execute(async (trx) => {
+              const current = await this.fileRepo.findById(fileId, trx);
+              if (current && current.status !== 'DELETED') {
+                await this.fileRepo.updateStatus(
+                  fileId,
+                  current.version,
+                  {
+                    status: newFileStatus,
+                    scanStatus: newScanStatus,
+                  },
+                  trx,
+                );
+
+                if (this.configService.eventsEnabled) {
+                  const scannedEnvelope = createEnvelope({
+                    eventType: EVENT_TYPES.FILE_SCANNED,
+                    partitionKey: fileId,
+                    context: ctx,
+                    payload: {
+                      fileId,
+                      result: newScanStatus,
+                      threat: scanRes.threat,
+                    },
+                  });
+                  await this.outboxWriter.enqueue(trx, scannedEnvelope);
+
+                  if (this.domainEventPublisher) {
+                    await this.domainEventPublisher.publish(trx, {
+                      eventType: 'file.scanned.v1',
+                      organizationId: ctx.tenantId,
+                      context: ctx,
+                      data: {
+                        fileId,
+                        scanStatus: newScanStatus,
+                        threat: scanRes.threat ?? null,
+                        scannedAt: new Date().toISOString(),
+                      },
+                    });
+                  }
+                }
+              }
+            });
+          }
+
+          fileRecord = (await this.fileRepo.findById(fileId)) ?? {
+            ...fileRecord,
+            status: newFileStatus,
+            scanStatus: newScanStatus,
+          };
+        } catch (scanErr: unknown) {
+          this.logger.warn(`waitForScan ClamAV scan failed: ${String(scanErr)}`);
+          const scanStatusOnFailure =
+            this.configService.scanFailMode === 'open' ? 'CLEAN' : 'ERROR';
+          const db = this.databaseService?.getDb();
+          if (db) {
+            await db.transaction().execute(async (trx) => {
+              const current = await this.fileRepo.findById(fileId, trx);
+              if (current && current.status !== 'DELETED') {
+                await this.fileRepo.updateStatus(
+                  fileId,
+                  current.version,
+                  { scanStatus: scanStatusOnFailure },
+                  trx,
+                );
+              }
+            }).catch(() => {});
+          }
+          fileRecord = (await this.fileRepo.findById(fileId)) ?? {
+            ...fileRecord,
+            scanStatus: scanStatusOnFailure,
+          };
+        }
+      } else {
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 100));
+          const latest = await this.fileRepo.findById(fileId);
+          if (latest && latest.scanStatus !== 'PENDING') {
+            fileRecord = latest;
+            break;
+          }
+        }
+      }
+    }
+
     const manifest = toManifest(
       fileRecord,
       allReplicas,
@@ -674,8 +939,6 @@ export class UploadService {
           );
         }
       }
-
-      await this.quotaGate.release(ctx, item.size).catch(() => {});
     }
   }
 }

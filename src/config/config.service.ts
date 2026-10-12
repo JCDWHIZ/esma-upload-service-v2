@@ -88,15 +88,37 @@ export class AppConfigService {
   get corsAllowedOrigins(): string {
     return this.config.CORS_ALLOWED_ORIGINS;
   }
+  get corsEnabled(): boolean {
+    if (this.config.CORS_ENABLED !== undefined) {
+      return this.config.CORS_ENABLED;
+    }
+    return !this.isProduction();
+  }
   get swaggerEnabled(): boolean {
     return this.config.SWAGGER_ENABLED;
   }
   get instanceCountHint(): number {
     return this.config.INSTANCE_COUNT_HINT;
   }
+  get unclaimedTtlHours(): number {
+    return this.config.UNCLAIMED_TTL_HOURS;
+  }
+  get unclaimedMaxFilesPerUser(): number {
+    return this.config.UNCLAIMED_MAX_FILES_PER_USER;
+  }
+  get unclaimedMaxBytesPerUser(): number {
+    return this.config.UNCLAIMED_MAX_BYTES_PER_USER;
+  }
+  get userNamespacePermissions(): Record<string, string> {
+    try {
+      return JSON.parse(this.config.USER_NAMESPACE_PERMISSIONS);
+    } catch {
+      return {};
+    }
+  }
 
   // --- Auth ---
-  get jwtSecret(): string {
+  get jwtSecret(): string | undefined {
     return this.config.JWT_SECRET;
   }
   get jwtAlgorithms(): string {
@@ -113,6 +135,9 @@ export class AppConfigService {
   }
   get signedUrlSecret(): string {
     return this.config.SIGNED_URL_SECRET;
+  }
+  get signedUrlSecretPrevious(): string | undefined {
+    return this.config.SIGNED_URL_SECRET_PREVIOUS;
   }
   get signedUrlMaxTtlSeconds(): number {
     return this.config.SIGNED_URL_MAX_TTL_SECONDS;
@@ -406,5 +431,8 @@ export class AppConfigService {
   }
   get defaultFailedAuthLimitPerMin(): number {
     return this.config.DEFAULT_FAILED_AUTH_LIMIT_PER_MIN;
+  }
+  get defaultTenantQuotaBytes(): number {
+    return this.config.DEFAULT_TENANT_QUOTA_BYTES;
   }
 }

@@ -27,6 +27,7 @@ export interface AuditRecordOptions {
   readonly outcome: AuditOutcome;
   readonly actorId: string;
   readonly actorType: string;
+  readonly actingService?: string | null;
   readonly roles?: string[];
   readonly namespace: string;
   readonly tenantId?: string | null;
@@ -34,6 +35,9 @@ export interface AuditRecordOptions {
   readonly ipAddress?: string | null;
   readonly userAgent?: string | null;
   readonly correlationId?: string;
+  readonly traceId?: string | null;
+  readonly actSub?: string | null;
+  readonly supportGrantId?: string | null;
   readonly details?: Record<string, unknown>;
 }
 
@@ -121,6 +125,7 @@ export class AuditService implements AuditSink, OnModuleInit, OnModuleDestroy {
       outcome: opts.outcome,
       actorId: opts.actorId,
       actorType: opts.actorType,
+      actingService: opts.actingService ?? null,
       roles: opts.roles ?? [],
       namespace: opts.namespace,
       tenantId: opts.tenantId ?? null,
@@ -128,6 +133,9 @@ export class AuditService implements AuditSink, OnModuleInit, OnModuleDestroy {
       ipAddress: opts.ipAddress ?? null,
       userAgent: opts.userAgent ?? null,
       correlationId: opts.correlationId ?? uuidv7(),
+      traceId: opts.traceId ?? null,
+      actSub: opts.actSub ?? null,
+      supportGrantId: opts.supportGrantId ?? null,
       details: this.sanitizeDetails(opts.details ?? {}),
     };
 
@@ -158,6 +166,16 @@ export class AuditService implements AuditSink, OnModuleInit, OnModuleDestroy {
     }
 
     return saved;
+  }
+
+  /**
+   * Convenience alias for recordSync to log audit events.
+   */
+  async log(
+    opts: AuditRecordOptions | NewAuditLogEntry,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<AuditLogEntry> {
+    return this.recordSync(opts, trx);
   }
 
   /**

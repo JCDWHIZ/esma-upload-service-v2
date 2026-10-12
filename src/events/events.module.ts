@@ -14,6 +14,7 @@ import { ConfigModule } from '../config/config.module.js';
 import type { IMessageBroker } from './broker.interface.js';
 
 import { DeadLetterService } from './dead-letter.service.js';
+import { DomainEventPublisher } from './domain-event.publisher.js';
 
 @Module({
   imports: [DatabaseModule, ConfigModule],
@@ -81,6 +82,7 @@ import { DeadLetterService } from './dead-letter.service.js';
     OutboxWriter,
     OutboxRelay,
     OutboxRetentionService,
+    DomainEventPublisher,
   ],
   exports: [
     EventsService,
@@ -91,6 +93,7 @@ import { DeadLetterService } from './dead-letter.service.js';
     OutboxWriter,
     OutboxRelay,
     OutboxRetentionService,
+    DomainEventPublisher,
   ],
 })
 export class EventsModule {}

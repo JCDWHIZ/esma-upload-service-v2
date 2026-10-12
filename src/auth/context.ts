@@ -30,6 +30,14 @@ export interface VerifiedTokenClaims {
   email?: string;
   access?: TokenAccessClaims;
   platformAdmin?: boolean;
+  grant_type?: string;
+  scope?: string;
+  azp?: string;
+  sid?: string;
+  permissionVersion?: number;
+  supportAccess?: boolean;
+  supportGrantId?: string;
+  act?: { sub?: string; [key: string]: unknown };
   [key: string]: unknown;
 }
 
@@ -51,6 +59,9 @@ export interface RequestContextActor {
   readonly isPlatformAdmin?: boolean;
   readonly branchGrants?: readonly string[];
   readonly isSchoolAdmin?: boolean;
+  readonly actingService?: string;
+  readonly actSub?: string;
+  readonly supportGrantId?: string;
 }
 
 export interface RequestContext {
@@ -59,6 +70,7 @@ export interface RequestContext {
   readonly subTenantId?: string;
   readonly actor: RequestContextActor;
   readonly correlationId: string;
+  readonly traceId?: string;
   readonly ipAddress: string;
   readonly userAgent?: string;
   readonly attributes: Readonly<Record<string, string>>;

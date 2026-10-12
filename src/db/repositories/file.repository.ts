@@ -40,16 +40,22 @@ export class FileRepository extends BaseRepository {
         sha256: data.sha256 ?? null,
         visibility: data.visibility,
         status: data.status ?? 'ACTIVE',
-        scan_status: data.scanStatus ?? 'NOT_REQUIRED',
+        scan_status: data.scanStatus ?? 'SKIPPED',
         replication_status: data.replicationStatus ?? 'NOT_REQUIRED',
         primary_provider: data.primaryProvider,
         uploaded_by: data.uploadedBy,
+        acting_service: data.actingService ?? null,
         tags: data.tags ?? [],
         attributes: data.attributes ?? {},
         legacy_public_id: data.legacyPublicId ?? null,
         idempotency_key: data.idempotencyKey ?? null,
         correlation_id: data.correlationId,
         expires_at: data.expiresAt ?? null,
+        claimed: data.claimed ?? true,
+        claimed_at: data.claimedAt !== undefined ? data.claimedAt : data.claimed === false ? null : new Date(),
+        unclaimed_expires_at: data.unclaimedExpiresAt ?? null,
+        retain_until: data.retainUntil ?? null,
+        held: data.held ?? false,
       })
       .returningAll()
       .executeTakeFirstOrThrow();
@@ -122,12 +128,15 @@ export class FileRepository extends BaseRepository {
     limit = 20,
     trx?: Transaction<Database> | Kysely<Database>,
   ): Promise<PaginatedResult<FileRecord>> {
-    const safeLimit = Math.max(1, Math.min(limit, 100));
+    const safeLimit = Math.max(1, Math.min(limit, 200));
     let query = this.getExecutor(trx)
       .selectFrom('files')
       .selectAll()
-      .where('namespace', '=', filter.namespace)
       .where('tenant_id', '=', filter.tenantId);
+
+    if (filter.namespace !== undefined) {
+      query = query.where('namespace', '=', filter.namespace);
+    }
 
     if (filter.subTenantId !== undefined) {
       if (filter.subTenantId === null) {
@@ -170,6 +179,28 @@ export class FileRepository extends BaseRepository {
       query = query.where(
         sql<boolean>`${sql.ref('tags')} @> ${filter.tags}::text[]`,
       );
+    }
+
+    if (filter.ownerType !== undefined) {
+      query = query.where(
+        sql<boolean>`${sql.ref('attributes')}->>'ownerType' = ${filter.ownerType}`,
+      );
+    }
+
+    if (filter.ownerId !== undefined) {
+      query = query.where(
+        sql<boolean>`${sql.ref('attributes')}->>'ownerId' = ${filter.ownerId}`,
+      );
+    }
+
+    if (filter.kind !== undefined) {
+      query = query.where(
+        sql<boolean>`${sql.ref('attributes')}->>'kind' = ${filter.kind}`,
+      );
+    }
+
+    if (filter.claimed !== undefined) {
+      query = query.where('claimed', '=', filter.claimed);
     }
 
     if (cursor) {
@@ -246,6 +277,21 @@ export class FileRepository extends BaseRepository {
     }
     if (updates.derivatives !== undefined) {
       updateValues.derivatives = updates.derivatives;
+    }
+    if (updates.claimed !== undefined) {
+      updateValues.claimed = updates.claimed;
+    }
+    if (updates.claimedAt !== undefined) {
+      updateValues.claimed_at = updates.claimedAt;
+    }
+    if (updates.unclaimedExpiresAt !== undefined) {
+      updateValues.unclaimed_expires_at = updates.unclaimedExpiresAt;
+    }
+    if (updates.retainUntil !== undefined) {
+      updateValues.retain_until = updates.retainUntil;
+    }
+    if (updates.held !== undefined) {
+      updateValues.held = updates.held;
     }
 
     const result = await this.getExecutor(trx)
@@ -388,5 +434,105 @@ export class FileRepository extends BaseRepository {
       .executeTakeFirst();
 
     return Number(result.numDeletedRows);
+  }
+
+  async findByOwner(
+    tenantId: string,
+    ownerType: string,
+    ownerId: string,
+    namespace?: string,
+    limit = 1000,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<FileRecord[]> {
+    let query = this.getExecutor(trx)
+      .selectFrom('files')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where(
+        sql<boolean>`${sql.ref('attributes')}->>'ownerType' = ${ownerType}`,
+      )
+      .where(sql<boolean>`${sql.ref('attributes')}->>'ownerId' = ${ownerId}`)
+      .where('status', '<>', 'DELETED')
+      .where('status', '<>', 'DELETING');
+
+    if (namespace) {
+      query = query.where('namespace', '=', namespace);
+    }
+
+    const rows = await query
+      .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc')
+      .limit(limit)
+      .execute();
+    return rows.map(mapFileRow);
+  }
+
+  async countUnclaimedForUser(
+    tenantId: string,
+    uploadedBy: string,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<{ count: number; totalBytes: number }> {
+    const executor = trx ?? this.defaultDb;
+    if (!executor) {
+      return { count: 0, totalBytes: 0 };
+    }
+    const result = await executor
+      .selectFrom('files')
+      .select([
+        (eb) => eb.fn.count<string>('id').as('count'),
+        (eb) =>
+          eb.fn
+            .coalesce(eb.fn.sum<string>('size_bytes'), sql<string>`'0'`)
+            .as('totalBytes'),
+      ])
+      .where('tenant_id', '=', tenantId)
+      .where('uploaded_by', '=', uploadedBy)
+      .where('claimed', '=', false)
+      .where('status', 'in', ['ACTIVE', 'PENDING_UPLOAD'])
+      .executeTakeFirst();
+
+    return {
+      count: result ? Number(result.count) : 0,
+      totalBytes: result ? Number(result.totalBytes) : 0,
+    };
+  }
+
+  async findExpiredUnclaimed(
+    now: Date,
+    limit = 100,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<FileRecord[]> {
+    const rows = await this.getExecutor(trx)
+      .selectFrom('files')
+      .selectAll()
+      .where('claimed', '=', false)
+      .where('unclaimed_expires_at', '<=', now)
+      .where('status', '<>', 'DELETED')
+      .where('status', '<>', 'DELETING')
+      .orderBy('unclaimed_expires_at', 'asc')
+      .limit(limit)
+      .execute();
+
+    return rows.map(mapFileRow);
+  }
+
+  async findExpiredRetained(
+    now: Date,
+    limit = 100,
+    trx?: Transaction<Database> | Kysely<Database>,
+  ): Promise<FileRecord[]> {
+    const rows = await this.getExecutor(trx)
+      .selectFrom('files')
+      .selectAll()
+      .where('retain_until', 'is not', null)
+      .where('retain_until', '<=', now)
+      .where('held', '=', false)
+      .where('status', '<>', 'DELETED')
+      .where('status', '<>', 'DELETING')
+      .orderBy('retain_until', 'asc')
+      .limit(limit)
+      .execute();
+
+    return rows.map(mapFileRow);
   }
 }

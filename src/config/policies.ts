@@ -33,6 +33,9 @@ export interface UploadPolicy {
   readonly derivatives?: readonly DerivativeName[];
   readonly fieldRules?: Readonly<Record<string, FieldRule>>;
   readonly tombstoneRetentionDays?: number;
+  readonly defaultRetentionDays?: number;
+  readonly maxRetentionDays?: number;
+  readonly allowedPrincipals?: readonly ('user' | 'service')[];
 }
 
 export interface PolicyValidationIssue {
@@ -86,7 +89,6 @@ export const VALID_CLOUDINARY_REPLICATIONS: readonly CloudinaryReplication[] =
   Object.freeze(['never', 'public-only', 'always']);
 
 export const FORBIDDEN_MIME_PATTERNS: readonly RegExp[] = Object.freeze([
-  /^image\/svg/i,
   /^text\/html/i,
   /^text\/xml/i,
   /^application\/xml/i,
@@ -124,7 +126,9 @@ export const ESMA_ADMIN_ALLOWED_MIMES: readonly string[] = Object.freeze([
  * All safe MIME types registered in MIME_TO_EXT (excluding non-canonical aliases like image/jpg).
  */
 export const GENERIC_DEFAULT_ALLOWED_MIMES: readonly string[] = Object.freeze(
-  Object.keys(MIME_TO_EXT).filter((mime) => mime !== 'image/jpg'),
+  Object.keys(MIME_TO_EXT).filter(
+    (mime) => mime !== 'image/jpg' && mime !== 'image/svg+xml',
+  ),
 );
 
 /**
@@ -193,7 +197,17 @@ export function validatePolicy(policy: UploadPolicy): PolicyValidationIssue[] {
         continue;
       }
 
-      // Check forbidden dangerous types (SVG, HTML, Executables)
+      // Check SVG: allowed only in branding namespace
+      if (/^image\/svg/i.test(mime) && policy.namespace !== 'branding') {
+        issues.push({
+          namespace: ns,
+          field: 'allowedMimeTypes',
+          message: `Dangerous MIME type is forbidden outside branding: "${mime}"`,
+        });
+        continue;
+      }
+
+      // Check forbidden dangerous types (HTML, Executables, Scripts)
       if (FORBIDDEN_MIME_PATTERNS.some((pat) => pat.test(mime))) {
         issues.push({
           namespace: ns,
@@ -387,10 +401,280 @@ export function validatePolicy(policy: UploadPolicy): PolicyValidationIssue[] {
 }
 
 /**
- * Built-in default policies for ESMA upload services.
+ * Built-in default policies for ESMA upload services (UR-03 Catalogue & legacy aliases).
  */
 export const DEFAULT_POLICIES: Readonly<Record<string, UploadPolicy>> =
   Object.freeze({
+    // ── UR-03: Modern Namespace Catalogue (§4.3) ──────────────────────────────
+    imports: deepFreeze<UploadPolicy>({
+      namespace: 'imports',
+      maxFileSizeBytes: 25 * 1024 * 1024,
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'text/csv',
+        'application/vnd.oasis.opendocument.spreadsheet',
+      ],
+      defaultVisibility: 'private',
+      allowedVisibilities: ['private'],
+      cloudinaryReplication: 'never',
+      cloudinaryRootFolder: 'imports',
+      requireVirusScan: true,
+      allowedPrincipals: ['user', 'service'],
+      defaultRetentionDays: 14,
+      maxRetentionDays: 30,
+    }),
+
+    'generated-documents': deepFreeze<UploadPolicy>({
+      namespace: 'generated-documents',
+      maxFileSizeBytes: 200 * 1024 * 1024,
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: [
+        'application/pdf',
+        'application/zip',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/csv',
+        'application/json',
+        'text/plain',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ],
+      defaultVisibility: 'private',
+      allowedVisibilities: ['private'],
+      cloudinaryReplication: 'never',
+      cloudinaryRootFolder: 'generated-documents',
+      requireVirusScan: false,
+      allowedPrincipals: ['service'],
+      defaultRetentionDays: 90,
+      maxRetentionDays: 365,
+    }),
+
+    'student-documents': deepFreeze<UploadPolicy>({
+      namespace: 'student-documents',
+      maxFileSizeBytes: 20 * 1024 * 1024,
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ],
+      defaultVisibility: 'private',
+      allowedVisibilities: ['private', 'tenant'],
+      cloudinaryReplication: 'never',
+      cloudinaryRootFolder: 'student-documents',
+      requireVirusScan: true,
+      allowedPrincipals: ['user', 'service'],
+      derivatives: ['thumb', 'medium'],
+    }),
+
+    'support-attachments': deepFreeze<UploadPolicy>({
+      namespace: 'support-attachments',
+      maxFileSizeBytes: 10 * 1024 * 1024,
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+        'application/pdf',
+        'text/plain',
+        'text/x-log',
+        'text/csv',
+        'application/zip',
+      ],
+      defaultVisibility: 'private',
+      allowedVisibilities: ['private'],
+      cloudinaryReplication: 'never',
+      cloudinaryRootFolder: 'support-attachments',
+      requireVirusScan: true,
+      allowedPrincipals: ['user', 'service'],
+      defaultRetentionDays: 180,
+      maxRetentionDays: 365,
+    }),
+
+    'case-evidence': deepFreeze<UploadPolicy>({
+      namespace: 'case-evidence',
+      maxFileSizeBytes: 50 * 1024 * 1024,
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: [
+        'image/jpeg',
+        'image/png',
+        'application/pdf',
+        'audio/mpeg',
+        'audio/mp4',
+        'audio/x-m4a',
+        'audio/wav',
+        'video/mp4',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ],
+      defaultVisibility: 'private',
+      allowedVisibilities: ['private'],
+      cloudinaryReplication: 'never',
+      cloudinaryRootFolder: 'case-evidence',
+      requireVirusScan: true,
+      allowedPrincipals: ['user', 'service'],
+      defaultRetentionDays: 730,
+    }),
+
+    branding: deepFreeze<UploadPolicy>({
+      namespace: 'branding',
+      maxFileSizeBytes: 5 * 1024 * 1024,
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: [
+        'image/png',
+        'image/jpeg',
+        'image/webp',
+        'image/svg+xml',
+      ],
+      defaultVisibility: 'public',
+      allowedVisibilities: ['public', 'tenant', 'private'],
+      cloudinaryReplication: 'public-only',
+      cloudinaryRootFolder: 'branding',
+      requireVirusScan: true,
+      allowedPrincipals: ['user', 'service'],
+      derivatives: ['thumb', 'medium'],
+    }),
+
+    'coursework-submissions': deepFreeze<UploadPolicy>({
+      namespace: 'coursework-submissions',
+      maxFileSizeBytes: 50 * 1024 * 1024,
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'image/jpeg',
+        'image/png',
+        'application/zip',
+        'text/plain',
+      ],
+      defaultVisibility: 'private',
+      allowedVisibilities: ['private'],
+      cloudinaryReplication: 'never',
+      cloudinaryRootFolder: 'coursework-submissions',
+      requireVirusScan: true,
+      allowedPrincipals: ['user', 'service'],
+      defaultRetentionDays: 365,
+      maxRetentionDays: 730,
+    }),
+
+    'learning-media': deepFreeze<UploadPolicy>({
+      namespace: 'learning-media',
+      maxFileSizeBytes: 500 * 1024 * 1024,
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+        'audio/mpeg',
+        'audio/mp4',
+        'audio/x-m4a',
+        'video/mp4',
+        'video/webm',
+        'application/pdf',
+      ],
+      defaultVisibility: 'tenant',
+      allowedVisibilities: ['private', 'tenant'],
+      cloudinaryReplication: 'never',
+      cloudinaryRootFolder: 'learning-media',
+      requireVirusScan: true,
+      allowedPrincipals: ['user', 'service'],
+    }),
+
+    'session-recordings': deepFreeze<UploadPolicy>({
+      namespace: 'session-recordings',
+      maxFileSizeBytes: 5 * 1024 * 1024 * 1024, // 5 GiB
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: [
+        'video/mp4',
+        'video/webm',
+        'video/x-matroska',
+        'audio/mp4',
+        'audio/x-m4a',
+      ],
+      defaultVisibility: 'private',
+      allowedVisibilities: ['private'],
+      cloudinaryReplication: 'never',
+      cloudinaryRootFolder: 'session-recordings',
+      requireVirusScan: true,
+      allowedPrincipals: ['service'],
+      defaultRetentionDays: 180,
+      maxRetentionDays: 365,
+    }),
+
+    'tenant-exports': deepFreeze<UploadPolicy>({
+      namespace: 'tenant-exports',
+      maxFileSizeBytes: 5 * 1024 * 1024 * 1024, // 5 GiB
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: [
+        'application/zip',
+        'application/octet-stream',
+        'application/x-encrypted',
+        'application/json',
+      ],
+      defaultVisibility: 'private',
+      allowedVisibilities: ['private'],
+      cloudinaryReplication: 'never',
+      cloudinaryRootFolder: 'tenant-exports',
+      requireVirusScan: false,
+      allowedPrincipals: ['service'],
+      defaultRetentionDays: 14,
+      maxRetentionDays: 30,
+    }),
+
+    'platform-archives': deepFreeze<UploadPolicy>({
+      namespace: 'platform-archives',
+      maxFileSizeBytes: 1 * 1024 * 1024 * 1024, // 1 GiB
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: [
+        'application/json',
+        'application/x-ndjson',
+        'application/gzip',
+        'application/zip',
+        'application/x-parquet',
+      ],
+      defaultVisibility: 'private',
+      allowedVisibilities: ['private'],
+      cloudinaryReplication: 'never',
+      cloudinaryRootFolder: 'platform-archives',
+      requireVirusScan: false,
+      allowedPrincipals: ['service'],
+      defaultRetentionDays: 2555,
+    }),
+
+    'thrift-documents': deepFreeze<UploadPolicy>({
+      namespace: 'thrift-documents',
+      maxFileSizeBytes: 10 * 1024 * 1024,
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png'],
+      defaultVisibility: 'private',
+      allowedVisibilities: ['private'],
+      cloudinaryReplication: 'never',
+      cloudinaryRootFolder: 'thrift-documents',
+      requireVirusScan: true,
+      allowedPrincipals: ['user', 'service'],
+      defaultRetentionDays: 365,
+      maxRetentionDays: 1095,
+    }),
+
+    // ── Legacy / Facade Namespaces ─────────────────────────────────────────────
+    'generic-default': deepFreeze<UploadPolicy>({
+      namespace: 'generic-default',
+      maxFileSizeBytes: 20 * 1024 * 1024,
+      maxFilesPerRequest: 10,
+      allowedMimeTypes: GENERIC_DEFAULT_ALLOWED_MIMES,
+      defaultVisibility: 'private',
+      allowedVisibilities: ['private', 'tenant', 'public'],
+      cloudinaryReplication: 'public-only',
+      cloudinaryRootFolder: 'uploads',
+      requireVirusScan: false,
+      fieldRules: {},
+    }),
+
     'esma-tenant': deepFreeze<UploadPolicy>({
       namespace: 'esma-tenant',
       maxFileSizeBytes: 20 * 1024 * 1024,
@@ -408,6 +692,7 @@ export const DEFAULT_POLICIES: Readonly<Record<string, UploadPolicy>> =
         documents: { maxCount: 10 },
       },
     }),
+
     'esma-admin': deepFreeze<UploadPolicy>({
       namespace: 'esma-admin',
       maxFileSizeBytes: 20 * 1024 * 1024,
@@ -424,17 +709,5 @@ export const DEFAULT_POLICIES: Readonly<Record<string, UploadPolicy>> =
         gallery_images: { maxCount: 5 },
         documents: { maxCount: 3 },
       },
-    }),
-    'generic-default': deepFreeze<UploadPolicy>({
-      namespace: 'generic-default',
-      maxFileSizeBytes: 20 * 1024 * 1024,
-      maxFilesPerRequest: 10,
-      allowedMimeTypes: GENERIC_DEFAULT_ALLOWED_MIMES,
-      defaultVisibility: 'private',
-      allowedVisibilities: ['private', 'tenant', 'public'],
-      cloudinaryReplication: 'public-only',
-      cloudinaryRootFolder: 'uploads',
-      requireVirusScan: false,
-      fieldRules: {},
     }),
   });

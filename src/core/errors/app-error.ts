@@ -59,6 +59,21 @@ export class UnauthenticatedError extends AppError {
   }
 }
 
+export class BadRequestError extends AppError {
+  constructor(
+    message = 'Bad request',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super({
+      message,
+      code: 'validation_failed',
+      status: 400,
+      expose: true,
+      ...options,
+    });
+  }
+}
+
 export class ForbiddenError extends AppError {
   constructor(
     message = 'You do not have permission to perform this action',
@@ -74,25 +89,195 @@ export class ForbiddenError extends AppError {
   }
 }
 
-export class TenantMismatchError extends ForbiddenError {
+export class OrganizationRequiredError extends AppError {
   constructor(
-    message = 'Caller tenant does not match requested resource tenant',
+    message = 'Header X-Organization-Id is required for service principals',
     options?: Partial<AppErrorOptions>,
   ) {
-    super(message, {
-      code: 'TENANT_MISMATCH',
+    super({
+      message,
+      code: 'organization_required',
+      status: 400,
+      expose: true,
       ...options,
     });
   }
 }
 
-export class QuotaExceededError extends ForbiddenError {
+export class OrganizationMismatchError extends ForbiddenError {
   constructor(
-    message = 'Tenant storage quota has been exceeded',
+    message = 'Header X-Organization-Id does not match token organizationId',
     options?: Partial<AppErrorOptions>,
   ) {
     super(message, {
-      code: 'QUOTA_EXCEEDED',
+      code: 'organization_mismatch',
+      status: 403,
+      ...options,
+    });
+  }
+}
+
+export class TenantMismatchError extends OrganizationMismatchError {
+  constructor(
+    message = 'Caller tenant does not match requested resource tenant',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'organization_mismatch',
+      ...options,
+    });
+  }
+}
+
+export class NamespaceUnknownError extends AppError {
+  constructor(
+    message = 'Requested namespace is not recognized in the catalogue',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super({
+      message,
+      code: 'namespace_unknown',
+      status: 400,
+      expose: true,
+      ...options,
+    });
+  }
+}
+
+export class NamespaceNotAllowedError extends ForbiddenError {
+  constructor(
+    message = 'Principal is not authorized to access this namespace',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'namespace_not_allowed',
+      status: 403,
+      ...options,
+    });
+  }
+}
+
+export class TokenRevokedError extends UnauthenticatedError {
+  constructor(
+    message = 'Token session has been revoked',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'token_revoked',
+      status: 401,
+      ...options,
+    });
+  }
+}
+
+export class TokenStaleError extends UnauthenticatedError {
+  constructor(
+    message = 'Token permission version is stale',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'token_stale',
+      status: 401,
+      ...options,
+    });
+  }
+}
+
+export class TenantPurgingError extends ForbiddenError {
+  constructor(
+    message = 'Organization is currently undergoing a purge operation',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'tenant_purging',
+      status: 403,
+      ...options,
+    });
+  }
+}
+
+export class LegalHoldError extends AppError {
+  constructor(
+    message = 'File or tenant is under legal hold and cannot be deleted or purged',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super({
+      message,
+      code: 'legal_hold',
+      status: 409,
+      expose: true,
+      ...options,
+    });
+  }
+}
+
+export class AlreadyClaimedError extends AppError {
+  constructor(
+    message = 'File is already claimed by another owner',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super({
+      message,
+      code: 'already_claimed',
+      status: 409,
+      expose: true,
+      ...options,
+    });
+  }
+}
+
+export class TooManyPendingUploadsError extends AppError {
+  constructor(
+    message = 'Too many unclaimed pending uploads for this user',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super({
+      message,
+      code: 'too_many_pending_uploads',
+      status: 429,
+      expose: true,
+      headers: { 'Retry-After': '60', ...(options?.headers ?? {}) },
+      ...options,
+    });
+  }
+}
+
+export class QuotaExceededError extends AppError {
+  public readonly quotaBytes?: number;
+  public readonly usedBytes?: number;
+  public readonly requestedBytes?: number;
+
+  constructor(
+    message = 'Tenant storage quota has been exceeded',
+    options?: {
+      quotaBytes?: number;
+      usedBytes?: number;
+      requestedBytes?: number;
+    } & Partial<AppErrorOptions>,
+  ) {
+    super({
+      message,
+      code: 'quota_exceeded',
+      status: 507,
+      expose: true,
+      ...options,
+    });
+    this.quotaBytes = options?.quotaBytes;
+    this.usedBytes = options?.usedBytes;
+    this.requestedBytes = options?.requestedBytes;
+  }
+}
+
+export class TenantSuspendedError extends AppError {
+  constructor(
+    message = 'Organization is suspended from uploading files',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super({
+      message,
+      code: 'tenant_suspended',
+      status: 403,
+      expose: true,
       ...options,
     });
   }
@@ -105,6 +290,32 @@ export class FileQuarantinedError extends ForbiddenError {
   ) {
     super(message, {
       code: 'FILE_QUARANTINED',
+      ...options,
+    });
+  }
+}
+
+export class FileInfectedError extends FileQuarantinedError {
+  constructor(
+    message = 'File has been identified as infected and quarantined',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'file_infected',
+      status: 422,
+      ...options,
+    });
+  }
+}
+
+export class ScanUnavailableError extends FileQuarantinedError {
+  constructor(
+    message = 'Virus scanner is unavailable and fail-closed policy is active',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'scan_unavailable',
+      status: 503,
       ...options,
     });
   }
@@ -229,6 +440,20 @@ export class FileNotReadyError extends ConflictError {
   ) {
     super(message, {
       code: 'FILE_NOT_READY',
+      ...options,
+    });
+  }
+}
+
+export class ScanPendingError extends FileNotReadyError {
+  constructor(
+    message = 'File virus scan is currently pending',
+    options?: Partial<AppErrorOptions>,
+  ) {
+    super(message, {
+      code: 'scan_pending',
+      status: 409,
+      headers: { 'Retry-After': '2', ...(options?.headers ?? {}) },
       ...options,
     });
   }

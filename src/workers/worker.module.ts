@@ -11,6 +11,8 @@ import { ScanWorker } from './scan.worker.js';
 import { SweeperService } from './sweeper.service.js';
 import { DlqWorker } from './dlq.worker.js';
 import { ProcessingWorker } from './processing.worker.js';
+import { TenantPurgeService } from './tenant-purge.service.js';
+import { TenantExportService } from './tenant-export.service.js';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { ProcessingWorker } from './processing.worker.js';
     ProcessingWorker,
     SweeperService,
     DlqWorker,
+    TenantPurgeService,
+    TenantExportService,
   ],
   exports: [
     WorkerService,
@@ -36,6 +40,8 @@ import { ProcessingWorker } from './processing.worker.js';
     ProcessingWorker,
     SweeperService,
     DlqWorker,
+    TenantPurgeService,
+    TenantExportService,
   ],
 })
 export class WorkerModule {}
